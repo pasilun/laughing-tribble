@@ -52,10 +52,18 @@ vercel
 
 ### 2. Configure GitHub Secrets
 Add these secrets in GitHub Settings → Secrets and variables → Actions:
+
+**Required for workflows:**
 - `EMAIL_USERNAME` — Your email username for daily digest
 - `EMAIL_PASSWORD` — Your email app password
-- `SLACK_WEBHOOK_URL` — Optional, for Slack notifications
-- `ANTHROPIC_API_KEY` — For AI agents (later phases)
+- `VERCEL_TOKEN` — Vercel API token (get from vercel.com/tokens)
+- `VERCEL_ORG_ID` — Your Vercel organization ID (get from vercel.com/account/tokens)
+
+**Required for AI agents:**
+- `ANTHROPIC_API_KEY` — For Claude AI agents (get from console.anthropic.com)
+
+**Optional:**
+- `SLACK_WEBHOOK_URL` — For Slack notifications
 - `OPENAI_API_KEY` — Alternative AI provider
 
 ### 3. Test the Greeting Feature

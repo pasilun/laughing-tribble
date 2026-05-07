@@ -41,6 +41,16 @@ jobs:
       - name: Install Playwright
         run: npx playwright install --with-deps
 
+      - name: Deploy preview to Vercel
+        id: deploy
+        run: |
+          # Install Vercel CLI
+          npm i -g vercel
+
+          # Deploy to Vercel (uses VERCEL_TOKEN and VERCEL_ORG_ID secrets)
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --yes)
+          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+
       - name: Run Verification Agent
         uses: anthropic/claude-action@v1
         id: verify
@@ -88,17 +98,30 @@ jobs:
         run: exit 1
 
   verify-golden-cases:
-    if: |
-      contains(github.event.pull_request.changed_files, 'tjansteman') ||
-      contains(github.event.pull_request.changed_files, 'review')
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for tjansteman changes
+        id: check
+        run: |
+          # Get list of changed files
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
+          
+          # Check if any changed files contain 'tjansteman' or 'review'
+          if echo "$CHANGED_FILES" | grep -E "(tjansteman|review)"; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Run golden case tests
+        if: steps.check.outputs.should_run == 'true'
         run: |
-          # Run tests against all golden cases
           npm run test:golden-cases
 
       - name: Comment golden case results
