@@ -5,56 +5,59 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'specs/**'
-  workflow_run:
-    workflows: ["Spec Agent"]
-    types: [completed]
 
 jobs:
   dev:
-    if: |
-      github.event.workflow_run?.conclusion == 'success' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.changed_files, 'specs/'))
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Get PR number
-        id: pr
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-          else
-            # Extract PR number from the workflow run
-            echo "number=$(echo ${{ github.event.workflow_run.head_branch }} | grep -oP 'pr-\K\d+')" >> $GITHUB_OUTPUT
-          fi
-
       - name: Find spec file
         id: spec
         run: |
-          # Get the most recently modified spec file (excluding template)
-          SPEC_FILE=$(find specs -name "*.md" -not -name "_template.md" -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-)
+          SPEC_FILE=$(git diff origin/${{ github.base_ref }}...HEAD --name-only | grep '^specs/[^_].*\.md$' | head -n 1)
+          if [ -z "$SPEC_FILE" ]; then
+            SPEC_FILE=$(find specs -name "*.md" -not -name "_template.md" -type f | sort | tail -n 1)
+          fi
           echo "file=$SPEC_FILE" >> $GITHUB_OUTPUT
-          echo "name=$(basename $SPEC_FILE .md)" >> $GITHUB_OUTPUT
+          echo "Found spec: $SPEC_FILE"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
 
       - name: Run Dev Agent
         env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SPEC_FILE: ${{ steps.spec.outputs.file }}
         run: |
-          npx opencode dev-agent \
-            --spec-file "${{ steps.spec.outputs.file }}" \
-            --spec-name "${{ steps.spec.outputs.name }}" \
-            --pr-number "${{ steps.pr.outputs.number }}" \
-            --system-prompt "agents/dev/system-prompt.md"
+          claude --dangerously-skip-permissions -p "
+          Read agents/dev/system-prompt.md for your role and rules.
+
+          Your task: implement the feature described in ${SPEC_FILE}.
+
+          Steps:
+          1. Read ${SPEC_FILE} to understand all acceptance criteria
+          2. Explore app/ and components/ to understand existing patterns
+          3. Implement the feature using Next.js App Router + TypeScript + Tailwind CSS
+          4. Write or update e2e tests in e2e/ that cover each acceptance criterion
+          5. Do NOT commit or push — just write the code files"
 
       - name: Typecheck
         run: npm run typecheck
@@ -62,8 +65,18 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
+      - name: Commit and push implementation
+        run: |
+          git config user.name "Dev Agent"
+          git config user.email "dev-agent@github-actions.bot"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit — feature may already be implemented"
+          else
+            SPEC_NAME=$(basename "${{ steps.spec.outputs.file }}" .md)
+            git commit -m "feat: implement ${SPEC_NAME}"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
 
       - name: Comment results
         if: always()
@@ -73,12 +86,8 @@ jobs:
             const status = '${{ job.status }}';
             const emoji = status === 'success' ? '✅' : '❌';
             github.rest.issues.createComment({
-              issue_number: ${{ steps.pr.outputs.number }},
+              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `${emoji} Dev agent: ${status}`
-            })
-
-      - name: Fail on errors
-        if: failure()
-        run: exit 1
+            });

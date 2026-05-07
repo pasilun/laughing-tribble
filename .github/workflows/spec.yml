@@ -8,31 +8,97 @@ jobs:
   create-spec:
     if: github.event.label.name == 'feature-request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Determine spec filename
+        id: naming
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          LAST_NUM=$(find specs -name "[0-9][0-9][0-9]-*.md" | sort | tail -n 1 | xargs basename 2>/dev/null | grep -oP '^\d+' || echo "0")
+          NEXT_NUM=$(printf "%03d" $((10#$LAST_NUM + 1)))
+          SLUG=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-' | cut -c1-40)
+          echo "file=specs/${NEXT_NUM}-${SLUG}.md" >> $GITHUB_OUTPUT
+          echo "branch=spec/issue-${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+
+      - name: Create feature branch
+        run: |
+          git checkout -b "${{ steps.naming.outputs.branch }}"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Write issue body to file
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: echo "$ISSUE_BODY" > /tmp/issue-body.txt
+
       - name: Run Spec Agent
         env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          SPEC_FILE: ${{ steps.naming.outputs.file }}
         run: |
-          npx opencode spec-agent \
-            --issue-number "${{ github.event.issue.number }}" \
-            --issue-title "${{ github.event.issue.title }}" \
-            --issue-body "${{ github.event.issue.body }}" \
-            --spec-template "specs/_template.md" \
-            --system-prompt "agents/spec/system-prompt.md"
+          claude --dangerously-skip-permissions -p "
+          Read agents/spec/system-prompt.md for your role and rules.
+
+          Create a spec file at ${SPEC_FILE} for this GitHub issue:
+          - Issue number: ${ISSUE_NUMBER}
+          - Issue title: ${ISSUE_TITLE}
+          - Full description: read from /tmp/issue-body.txt
+
+          Follow specs/_template.md exactly.
+          Make ALL acceptance criteria browser-observable and testable with Playwright.
+          Write the file and nothing else — do not commit or push."
+
+      - name: Verify spec file was created
+        run: |
+          if [ ! -f "${{ steps.naming.outputs.file }}" ]; then
+            echo "Error: Spec file was not created at ${{ steps.naming.outputs.file }}"
+            exit 1
+          fi
+
+      - name: Commit and push spec
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "Spec Agent"
+          git config user.email "spec-agent@github-actions.bot"
+          git add specs/
+          git commit -m "spec: add spec for issue #${{ github.event.issue.number }}"
+          git push origin "${{ steps.naming.outputs.branch }}"
+
+      - name: Create draft PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "spec: ${{ github.event.issue.title }}" \
+            --body "Closes #${{ github.event.issue.number }}
+
+          Generated spec for issue #${{ github.event.issue.number }}. Review the acceptance criteria, then merge to trigger the dev agent." \
+            --base main \
+            --head "${{ steps.naming.outputs.branch }}" \
+            --draft
 
       - name: Comment on issue
-        if: success()
         uses: actions/github-script@v7
         with:
           script: |
@@ -40,5 +106,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '📝 Spec agent has created a draft PR. Review the spec and merge it to start development.'
-            })
+              body: '📝 Spec agent created a draft PR. Review the acceptance criteria and merge it to start development.'
+            });

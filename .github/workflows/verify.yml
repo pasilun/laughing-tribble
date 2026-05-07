@@ -1,19 +1,23 @@
 name: Verification Agent
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
   workflow_run:
     workflows: ["Dev Agent"]
     types: [completed]
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
   verify:
-    if: github.event.workflow_run?.conclusion == 'success' || github.event_name == 'pull_request'
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.event.pull_request.head.sha }}
 
       - name: Get PR number
         id: pr
@@ -21,77 +25,58 @@ jobs:
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
           else
-            echo "number=$(echo ${{ github.event.workflow_run.head_branch }} | grep -oP 'pr-\K\d+')" >> $GITHUB_OUTPUT
+            PR_NUMBER=$(echo '${{ toJson(github.event.workflow_run.pull_requests) }}' | jq -r '.[0].number // empty')
+            echo "number=${PR_NUMBER}" >> $GITHUB_OUTPUT
           fi
-
-      - name: Find spec file
-        id: spec
-        run: |
-          SPEC_FILE=$(find specs -name "*.md" -not -name "_template.md" -type f | head -n 1)
-          echo "file=$SPEC_FILE" >> $GITHUB_OUTPUT
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright
-        run: npx playwright install --with-deps
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
 
-      - name: Deploy preview to Vercel
-        id: deploy
+      - name: Build app
+        run: npm run build
+
+      - name: Start app server
         run: |
-          # Install Vercel CLI
-          npm i -g vercel
+          npm start &
+          # Wait up to 60s for server to be ready
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000 > /dev/null 2>&1 && echo "Server ready" && break
+            sleep 2
+          done
 
-          # Deploy to Vercel (uses VERCEL_TOKEN and VERCEL_ORG_ID secrets)
-          DEPLOYMENT_URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --yes)
-          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
-
-      - name: Run Verification Agent
+      - name: Run Playwright tests
+        id: tests
         env:
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-        run: |
-          npx opencode verifier-agent \
-            --spec-file "${{ steps.spec.outputs.file }}" \
-            --preview-url "${{ steps.deploy.outputs.url }}" \
-            --system-prompt "agents/verifier/system-prompt.md" \
-            --output-file verification-result.json
-
-      - name: Parse verification result
-        id: result
-        run: |
-          VERDICT=$(cat verification-result.json | jq -r '.verdict')
-          echo "verdict=$VERDICT" >> $GITHUB_OUTPUT
-          echo "result=$(cat verification-result.json | jq -c .)" >> $GITHUB_OUTPUT
+          CI: 'true'
+          BASE_URL: 'http://localhost:3000'
+        run: npm test && echo "passed=true" >> $GITHUB_OUTPUT || echo "passed=false" >> $GITHUB_OUTPUT
 
       - name: Comment verification results
+        if: steps.pr.outputs.number != ''
         uses: actions/github-script@v7
         with:
           script: |
-            const result = JSON.parse('${{ steps.result.outputs.result }}');
-            const emoji = result.verdict === 'pass' ? '✅' : '❌';
-            let body = `${emoji} Verification: ${result.verdict}\n\n`;
-            body += `**Criteria:** ${result.criteria.filter(c => c.status === 'pass').length}/${result.criteria.length} passed\n\n`;
-            
-            result.criteria.forEach(c => {
-              if (c.status === 'fail') {
-                body += `❌ ${c.id}: ${c.evidence}\n`;
-              }
-            });
-
+            const passed = '${{ steps.tests.outputs.passed }}' === 'true';
+            const emoji = passed ? '✅' : '❌';
+            const verdict = passed ? 'pass' : 'fail';
             github.rest.issues.createComment({
               issue_number: ${{ steps.pr.outputs.number }},
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: body
+              body: `${emoji} Verification: ${verdict}`
             });
 
       - name: Fail if verification failed
-        if: steps.result.outputs.verdict != 'pass'
+        if: steps.tests.outputs.passed != 'true'
         run: exit 1
 
   verify-golden-cases:
@@ -106,23 +91,30 @@ jobs:
       - name: Check for tjansteman changes
         id: check
         run: |
-          # Get list of changed files
-          CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
-          
-          # Check if any changed files contain 'tjansteman' or 'review'
-          if echo "$CHANGED_FILES" | grep -E "(tjansteman|review)"; then
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          if echo "$CHANGED" | grep -qE "(tjansteman|review)"; then
             echo "should_run=true" >> $GITHUB_OUTPUT
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Setup Node.js
+        if: steps.check.outputs.should_run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: steps.check.outputs.should_run == 'true'
+        run: npm ci
+
       - name: Run golden case tests
         if: steps.check.outputs.should_run == 'true'
-        run: |
-          npm run test:golden-cases
+        run: npm run test:golden-cases
 
-      - name: Comment golden case results
-        if: failure()
+      - name: Comment golden case failure
+        if: failure() && steps.check.outputs.should_run == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -131,4 +123,4 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: '❌ Golden case tests failed. Tjänsteman behavior has changed unexpectedly.'
-            })
+            });
