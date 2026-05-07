@@ -1,0 +1,77 @@
+name: Auto Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  check_suite:
+    types: [completed]
+
+jobs:
+  auto-merge:
+    if: github.event.check_suite?.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get PR info
+        id: pr
+        run: |
+          # Find PR associated with this commit
+          PR_NUMBER=$(gh pr list --head ${{ github.event.pull_request.head.ref }} --json number --jq '.[0].number')
+          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Check merge conditions
+        id: check
+        run: |
+          # Check diff size
+          DIFF_LINES=$(git diff main...HEAD --stat | tail -n 1 | awk '{print $4}' || echo "0")
+          
+          # Check protected paths
+          PROTECTED=$(git diff main...HEAD --name-only | grep -E '^(fixtures/|agents/tjansteman/|CLAUDE\.md|\.github/workflows/)' || echo "")
+          
+          # Get checks status
+          CHECKS=$(gh pr checks ${{ steps.pr.outputs.number }} --json name,conclusion --jq '.[] | select(.conclusion != "success") | .name')
+          
+          if [ -n "$CHECKS" ]; then
+            echo "status=not_ready" >> $GITHUB_OUTPUT
+            echo "reason=Some checks have not passed" >> $GITHUB_OUTPUT
+          elif [ -n "$PROTECTED" ]; then
+            echo "status=blocked" >> $GITHUB_OUTPUT
+            echo "reason=Protected paths modified" >> $GITHUB_OUTPUT
+          elif [ "$DIFF_LINES" -gt 400 ]; then
+            echo "status=blocked" >> $GITHUB_OUTPUT
+            echo "reason=Diff too large ($DIFF_LINES lines)" >> $GITHUB_OUTPUT
+          else
+            echo "status=ready" >> $GITHUB_OUTPUT
+            echo "reason=All checks passed, diff within limits" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Merge PR
+        if: steps.check.outputs.status == 'ready'
+        run: |
+          gh pr merge ${{ steps.pr.outputs.number }} --squash --auto
+
+      - name: Comment merge result
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ steps.check.outputs.status }}';
+            const reason = '${{ steps.check.outputs.reason }}';
+            let emoji = '🔍';
+            
+            if (status === 'ready') {
+              emoji = '🚀';
+            } else if (status === 'blocked') {
+              emoji = '🚫';
+            } else if (status === 'not_ready') {
+              emoji = '⏳';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: ${{ steps.pr.outputs.number }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${emoji} Auto-merge: ${status}\n\n${reason}`
+            });

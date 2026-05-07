@@ -1,0 +1,60 @@
+name: Dev Agent
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths-ignore:
+      - 'specs/**'
+      - '.github/workflows/**'
+      - 'CLAUDE.md'
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Run Dev Agent (if needed)
+        if: failure() || github.event.pull_request.draft == true
+        uses: anthropic/claude-action@v1
+        with:
+          prompt: |
+            Review the PR and implement any missing work based on the spec.
+            PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}
+            ${{ github.event.pull_request.body }}
+
+            Find the relevant spec file and implement according to it.
+          system-prompt: agents/dev/system-prompt.md
+          max-tokens: 8000
+
+      - name: Comment results
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const emoji = status === 'success' ? '✅' : '❌';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${emoji} Dev agent: ${status}`
+            })

@@ -1,0 +1,84 @@
+name: Auto Revert
+
+on:
+  deployment_status:
+    types: [failure]
+
+jobs:
+  revert:
+    if: github.event.deployment_status.environment == 'production'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get deployment info
+        id: deploy
+        run: |
+          SHA="${{ github.event.deployment_status.deployment.sha }}"
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          
+          # Get the commit before this one
+          PREV_SHA=$(git log --format=%H -n 2 $SHA | tail -n 1)
+          echo "prev_sha=$PREV_SHA" >> $GITHUB_OUTPUT
+
+      - name: Run smoke tests
+        id: smoke
+        run: |
+          # Run a subset of golden cases as smoke tests
+          npm run test:smoke || echo "failed=true" >> $GITHUB_OUTPUT
+
+      - name: Revert deployment
+        if: steps.smoke.outputs.failed == 'true'
+        run: |
+          # Revert to previous commit
+          git revert --no-commit ${{ steps.deploy.outputs.sha }}
+          git commit -m "Auto-revert: Production smoke tests failed"
+          git push
+
+      - name: Create issue for investigation
+        if: steps.smoke.outputs.failed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Auto-revert: Production failure detected',
+              body: `
+                Deployment ${{ github.event.deployment_status.deployment.id }} failed.
+                
+                **Failed commit:** ${{ steps.deploy.outputs.sha }}
+                **Reverted to:** ${{ steps.deploy.outputs.prev_sha }}
+                
+                Smoke tests failed. Investigate urgently.
+              `,
+              labels: ['bug', 'urgent', 'production']
+            });
+            
+            // Ping Patrik (replace with actual username)
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.data.number,
+              body: '@patrik Production failure requires immediate attention.'
+            });
+
+      - name: Comment on reverted PR
+        if: steps.smoke.outputs.failed == 'true'
+        run: |
+          # Find PR that introduced this commit
+          PR_NUMBER=$(gh pr list --search ${{ steps.deploy.outputs.sha }} --json number --jq '.[0].number')
+          
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment $PR_NUMBER --body '🚨 This PR has been auto-reverted due to production failures. See the created issue for details.'
+          fi
+
+      - name: Notify via daily digest
+        if: steps.smoke.outputs.failed == 'true'
+        run: |
+          # Add to daily digest queue
+          echo "REVERT: ${{ steps.deploy.outputs.sha }} at $(date)" >> .digest-queue.txt
+          git add .digest-queue.txt
+          git commit -m "Record auto-revert in digest queue"
+          git push

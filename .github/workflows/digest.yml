@@ -1,0 +1,113 @@
+name: Daily Digest
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # 8 AM UTC
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get yesterday's merges
+        id: merges
+        run: |
+          YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
+          MERGES=$(gh pr list --search "merged:$YESTERDAY" --json number,title,mergedAt --jq '.[] | "- #" + (.number | tostring) + ": " + .title + " (" + .mergedAt + ")"')
+          echo "merges<<EOF" >> $GITHUB_OUTPUT
+          echo "$MERGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Get digest queue
+        id: queue
+        run: |
+          if [ -f .digest-queue.txt ]; then
+            echo "queue<<EOF" >> $GITHUB_OUTPUT
+            cat .digest-queue.txt >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            # Clear the queue
+            > .digest-queue.txt
+            git add .digest-queue.txt
+            git commit -m "Clear daily digest queue"
+            git push
+          else
+            echo "queue=No events to report" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get current stats
+        id: stats
+        run: |
+          TOTAL_PRS=$(gh pr list --json number --jq 'length')
+          OPEN_PRS=$(gh pr list --search "is:open" --json number --jq 'length')
+          MERGED_PRS=$(gh pr list --search "is:merged" --json number --jq 'length')
+          
+          echo "total=$TOTAL_PRS" >> $GITHUB_OUTPUT
+          echo "open=$OPEN_PRS" >> $GITHUB_OUTPUT
+          echo "merged=$MERGED_PRS" >> $GITHUB_OUTPUT
+
+      - name: Send email digest
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "🤖 Daily Dev Loop Digest - $(date +%Y-%m-%d)"
+          to: patrik@example.com  # Replace with actual email
+          from: "Laughing Tribble <devloop@laughing-tribble.com>"
+          body: |
+            ## Daily Summary
+            
+            **Date:** $(date +%Y-%m-%d)
+            
+            ### Yesterday's Merges
+            ${{ steps.merges.outputs.merges }}
+            
+            ### Events Queue
+            ${{ steps.queue.outputs.queue }}
+            
+            ### Repository Stats
+            - Total PRs: ${{ steps.stats.outputs.total }}
+            - Open PRs: ${{ steps.stats.outputs.open }}
+            - Merged PRs: ${{ steps.stats.outputs.merged }}
+            
+            ---
+            
+            *This is an automated digest from the Autonomous AI Dev Loop*
+
+      - name: Slack notification (optional)
+        if: env.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          payload: |
+            {
+              "text": "🤖 Daily Dev Loop Digest",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Yesterday's Merges*\n${{ steps.merges.outputs.merges }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Events Queue*\n${{ steps.queue.outputs.queue }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Stats*: ${{ steps.stats.outputs.merged }} merged, ${{ steps.stats.outputs.open }} open"
+                  }
+                }
+              ]
+            }
