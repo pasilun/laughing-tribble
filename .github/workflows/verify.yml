@@ -52,30 +52,27 @@ jobs:
           echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
 
       - name: Run Verification Agent
-        uses: anthropic/claude-action@v1
-        id: verify
-        with:
-          prompt: |
-            Verify the app against the spec at ${{ steps.spec.outputs.file }}
-
-            Preview URL: ${{ steps.deploy.outputs.url }}
-
-            Test ALL acceptance criteria in the spec.
-            Return a structured pass/fail report.
-          system-prompt: agents/verifier/system-prompt.md
-          max-tokens: 8000
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          npx opencode verifier-agent \
+            --spec-file "${{ steps.spec.outputs.file }}" \
+            --preview-url "${{ steps.deploy.outputs.url }}" \
+            --system-prompt "agents/verifier/system-prompt.md" \
+            --output-file verification-result.json
 
       - name: Parse verification result
         id: result
         run: |
-          RESULT='${{ steps.verify.outputs.result }}'
-          echo "verdict=$(echo $RESULT | jq -r '.verdict')" >> $GITHUB_OUTPUT
+          VERDICT=$(cat verification-result.json | jq -r '.verdict')
+          echo "verdict=$VERDICT" >> $GITHUB_OUTPUT
+          echo "result=$(cat verification-result.json | jq -c .)" >> $GITHUB_OUTPUT
 
       - name: Comment verification results
         uses: actions/github-script@v7
         with:
           script: |
-            const result = JSON.parse('${{ steps.verify.outputs.result }}');
+            const result = JSON.parse('${{ steps.result.outputs.result }}');
             const emoji = result.verdict === 'pass' ? '✅' : '❌';
             let body = `${emoji} Verification: ${result.verdict}\n\n`;
             body += `**Criteria:** ${result.criteria.filter(c => c.status === 'pass').length}/${result.criteria.length} passed\n\n`;

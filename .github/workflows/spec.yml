@@ -21,18 +21,15 @@ jobs:
         run: npm ci
 
       - name: Run Spec Agent
-        uses: anthropic/claude-action@v1
-        with:
-          prompt: |
-            Create a spec for this feature request:
-            Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
-            ${{ github.event.issue.body }}
-
-            Follow the template in specs/_template.md
-            Create a new spec file with a unique ID
-            Open a draft PR with just the spec
-          system-prompt: agents/spec/system-prompt.md
-          max-tokens: 4000
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          npx opencode spec-agent \
+            --issue-number "${{ github.event.issue.number }}" \
+            --issue-title "${{ github.event.issue.title }}" \
+            --issue-body "${{ github.event.issue.body }}" \
+            --spec-template "specs/_template.md" \
+            --system-prompt "agents/spec/system-prompt.md"
 
       - name: Comment on issue
         if: success()

@@ -60,7 +60,7 @@ Add these secrets in GitHub Settings → Secrets and variables → Actions:
 - `VERCEL_ORG_ID` — Your Vercel organization ID (get from vercel.com/account/tokens)
 
 **Required for AI agents:**
-- `ANTHROPIC_API_KEY` — For Claude AI agents (get from console.anthropic.com)
+- `OPENCODE_API_KEY` — For opencode AI agents (your opencode account API key)
 
 **Optional:**
 - `SLACK_WEBHOOK_URL` — For Slack notifications

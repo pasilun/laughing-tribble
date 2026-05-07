@@ -46,23 +46,15 @@ jobs:
           echo "name=$(basename $SPEC_FILE .md)" >> $GITHUB_OUTPUT
 
       - name: Run Dev Agent
-        uses: anthropic/claude-action@v1
-        id: dev
-        with:
-          prompt: |
-            Implement the feature according to the spec at ${{ steps.spec.outputs.file }}
-            
-            Spec: ${{ steps.spec.outputs.name }}
-            PR #${{ steps.pr.outputs.number }}
-            
-            1. Read the spec carefully
-            2. Explore the repo to understand the architecture
-            3. Implement the feature following existing patterns
-            4. Write tests if applicable
-            5. Ensure code passes typecheck and lint
-            6. Push your changes
-          system-prompt: agents/dev/system-prompt.md
-          max-tokens: 8000
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx opencode dev-agent \
+            --spec-file "${{ steps.spec.outputs.file }}" \
+            --spec-name "${{ steps.spec.outputs.name }}" \
+            --pr-number "${{ steps.pr.outputs.number }}" \
+            --system-prompt "agents/dev/system-prompt.md"
 
       - name: Typecheck
         run: npm run typecheck
@@ -84,7 +76,7 @@ jobs:
               issue_number: ${{ steps.pr.outputs.number }},
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `${emoji} Dev agent: ${status}\n\n${{ steps.dev.outputs.result }}`
+              body: `${emoji} Dev agent: ${status}`
             })
 
       - name: Fail on errors

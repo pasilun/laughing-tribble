@@ -18,7 +18,7 @@ This is a Swedish bygglov assistant built by an autonomous AI dev loop.
 
 ## The Autonomous AI Dev Loop
 
-The loop consists of three AI agents that collaborate via GitHub:
+The loop consists of three AI agents that collaborate via GitHub, all powered by opencode:
 
 ### 1. Spec Agent
 **Triggers:** Issue labeled with `feature-request`
@@ -128,7 +128,8 @@ NEVER edit these files:
 - **Database:** Prisma ORM
 - **Testing:** Playwright (e2e)
 - **Deploy:** Vercel
-- **Orchestration:** GitHub Actions + Claude GitHub Action
+- **Orchestration:** GitHub Actions + opencode CLI
+- **AI:** opencode (spec, dev, verifier agents)
 
 ## Commands
 
@@ -146,14 +147,21 @@ npm run test:golden-cases  # Run golden case tests
 
 1. **User creates issue:** "Add a button to change greeting color"
 2. **Label it:** `feature-request`
-3. **Spec agent runs:** Creates `/specs/002-color-button.md` with acceptance criteria
+3. **Spec agent runs (via opencode):** Creates `/specs/002-color-button.md` with acceptance criteria
 4. **Spec PR opens:** Draft PR with just the spec
 5. **User reviews and merges** the spec PR
-6. **Dev agent runs:** Implements the color button feature
+6. **Dev agent runs (via opencode):** Implements the color button feature
 7. **Dev agent pushes:** Code to the same branch
-8. **Verification agent runs:** Tests the preview deployment
+8. **Verification agent runs (via opencode):** Tests the preview deployment
 9. **If verification passes:** Auto-merge merges the PR
 10. **Daily digest:** Patrik receives email summary
+
+## AI Infrastructure
+
+**AI Provider:** opencode (your AI development platform)
+**Authentication:** `OPENCODE_API_KEY` GitHub secret
+**Invocation:** `npx opencode <agent-name>` in GitHub Actions
+**Orchestration:** GitHub Actions + opencode CLI
 
 ## Golden Cases
 
