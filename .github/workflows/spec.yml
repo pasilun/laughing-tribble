@@ -48,12 +48,12 @@ jobs:
 
       - name: Run Spec Agent
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           SPEC_FILE: ${{ steps.naming.outputs.file }}
         run: |
-          npx opencode run --dangerously-skip-permissions "
+          npx opencode run --model openrouter/zhipuai/glm-4 --dangerously-skip-permissions "
           Read agents/spec/system-prompt.md for your role and rules.
 
           Create a spec file at ${SPEC_FILE} for this GitHub issue:

@@ -47,7 +47,11 @@ The CI workflows use **opencode** (`npx opencode run`) as the AI agent runner â€
 npx opencode run --dangerously-skip-permissions "your prompt here"
 ```
 
-The API key secret is `OPENCODE_API_KEY`. The workflows pass it as `ANTHROPIC_API_KEY` in the environment, which is what opencode reads when using Claude models.
+The API key secret is `OPENROUTER_API_KEY`. The model is `openrouter/zhipuai/glm-4` (GLM-4 via OpenRouter). The correct non-interactive invocation is:
+
+```bash
+npx opencode run --model openrouter/zhipuai/glm-4 --dangerously-skip-permissions "your prompt here"
+```
 
 ## When You're Stuck
 
