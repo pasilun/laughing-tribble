@@ -41,7 +41,7 @@ jobs:
 
       - name: Run Dev Agent
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           SPEC_FILE: ${{ steps.spec.outputs.file }}
         run: |
           npx opencode run --dangerously-skip-permissions "

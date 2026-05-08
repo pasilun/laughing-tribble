@@ -47,7 +47,7 @@ The CI workflows use **opencode** (`npx opencode run`) as the AI agent runner â€
 npx opencode run --dangerously-skip-permissions "your prompt here"
 ```
 
-The API key secret is `ANTHROPIC_API_KEY` (opencode uses it when running Claude models).
+The API key secret is `OPENCODE_API_KEY`. The workflows pass it as `ANTHROPIC_API_KEY` in the environment, which is what opencode reads when using Claude models.
 
 ## When You're Stuck
 
