@@ -47,10 +47,10 @@ The CI workflows use **opencode** (`npx opencode run`) as the AI agent runner â€
 npx opencode run --dangerously-skip-permissions "your prompt here"
 ```
 
-The API key secret is `OPENROUTER_API_KEY`. The model is `openrouter/z-ai/glm-4.7` (GLM-4 via OpenRouter). The correct non-interactive invocation is:
+The API key secret is `ZHIPU_API_KEY`. The model is `zai-coding-plan/glm-4.7` (Z.AI Coding Plan direct API). The correct non-interactive invocation is:
 
 ```bash
-npx opencode-ai@latest run --model openrouter/z-ai/glm-4.7 --dangerously-skip-permissions "your prompt here"
+npx opencode-ai@latest run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "your prompt here"
 ```
 
 ## When You're Stuck

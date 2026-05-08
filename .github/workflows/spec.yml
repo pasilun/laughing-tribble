@@ -49,13 +49,13 @@ jobs:
 
       - name: Run Spec Agent
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           SPEC_FILE: ${{ steps.naming.outputs.file }}
         run: |
           # Capture stdout+stderr so we can use output as fallback
-          npx opencode-ai@latest run --model openrouter/z-ai/glm-4.7 \
+          npx opencode-ai@latest run --model zai-coding-plan/glm-4.7 \
             --dangerously-skip-permissions \
             "Read agents/spec/system-prompt.md for your role and rules.
             Create a spec file at ${SPEC_FILE} for GitHub issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
