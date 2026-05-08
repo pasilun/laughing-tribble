@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 
 export default function Home() {
   const [name, setName] = useState('')
@@ -14,6 +15,12 @@ export default function Home() {
           <h1 className="text-4xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
             {greeting}
           </h1>
+          <Link
+            href="/design"
+            className="px-6 py-3 bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900 rounded-lg font-medium hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
+          >
+            Kom igång
+          </Link>
           <div className="flex flex-col gap-2 w-full max-w-md">
             <label htmlFor="name-input" className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
               Ditt namn
