@@ -55,7 +55,7 @@ jobs:
           SPEC_FILE: ${{ steps.naming.outputs.file }}
         run: |
           # Capture stdout+stderr so we can use output as fallback
-          npx opencode-ai@latest run --model openrouter/z-ai/glm-5-turbo \
+          npx opencode-ai@latest run --model openrouter/z-ai/glm-4.7 \
             --dangerously-skip-permissions \
             "Read agents/spec/system-prompt.md for your role and rules.
             Create a spec file at ${SPEC_FILE} for GitHub issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}

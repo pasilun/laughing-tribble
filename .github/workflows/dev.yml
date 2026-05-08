@@ -44,7 +44,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           SPEC_FILE: ${{ steps.spec.outputs.file }}
         run: |
-          npx opencode-ai@latest run --model openrouter/z-ai/glm-5-turbo --dangerously-skip-permissions "
+          npx opencode-ai@latest run --model openrouter/z-ai/glm-4.7 --dangerously-skip-permissions "
           Read agents/dev/system-prompt.md for your role and rules.
 
           Your task: implement the feature described in ${SPEC_FILE}.
