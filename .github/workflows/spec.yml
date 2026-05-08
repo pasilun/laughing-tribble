@@ -41,9 +41,6 @@ jobs:
         run: |
           git checkout -b "${{ steps.naming.outputs.branch }}"
 
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
-
       - name: Write issue body to file
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
@@ -56,7 +53,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           SPEC_FILE: ${{ steps.naming.outputs.file }}
         run: |
-          claude --dangerously-skip-permissions -p "
+          npx opencode run --dangerously-skip-permissions "
           Read agents/spec/system-prompt.md for your role and rules.
 
           Create a spec file at ${SPEC_FILE} for this GitHub issue:

@@ -39,6 +39,16 @@ If verification fails, you'll receive a structured report showing which acceptan
 - **RAG:** pgvector (later phases)
 - **Testing:** Vitest or Jest
 
+## AI Tooling
+
+The CI workflows use **opencode** (`npx opencode run`) as the AI agent runner — not Claude Code CLI or any other tool. Do not change this. The correct non-interactive invocation is:
+
+```bash
+npx opencode run --dangerously-skip-permissions "your prompt here"
+```
+
+The API key secret is `ANTHROPIC_API_KEY` (opencode uses it when running Claude models).
+
 ## When You're Stuck
 
 - After 3-5 failed verification attempts on the same spec
