@@ -150,6 +150,25 @@ Ingested regulatory version pin - the single source of truth for which PBL versi
 - A stale rule in corpus is worse than no rule - hard pause on pin change to prevent shipping outdated advice.
 - Per-kommun config lives in `/agents/tjansteman/corpus/kommuner/<kommun>.md`
 
+## [2026-05-08] fix | CI Dev Loop Workflows
+
+**Action:** Repaired all four GitHub Actions workflows so the autonomous dev loop can run end-to-end.
+
+**Problems fixed:**
+
+- `dev.yml`: Broken `if:` condition used `contains(changed_files, 'specs/')` — `changed_files` is an integer, not a file list. Removed the condition (the `paths:` trigger already handles filtering). Replaced `npx opencode dev-agent` (non-existent subcommand) with `npx opencode run`. Added git commit + push step so implementation lands on the PR branch. Added `permissions: contents: write`.
+- `verify.yml`: Replaced Vercel deploy + `npx opencode verifier-agent` with a local Next.js build (`npm run build && npm start`) + Playwright test run. Fixed `workflow_run` PR-number extraction via `jq '.[0].number'`. Fixed golden-cases diff check (`origin/main` → `origin/$base_ref`).
+- `spec.yml`: Added branch creation, replaced `npx opencode spec-agent` with `npx opencode run`, added spec-file existence check, commit + push, and `gh pr create --draft`. Uses `env:` for GitHub expressions to avoid shell-quoting issues with issue body.
+- `merge.yml`: Changed trigger from `check_suite` (unreliable PR-number lookup) to `workflow_run: Verification Agent: completed`. Uses GitHub API for protected-path and diff-size checks.
+
+**Tooling decision:** `npx opencode run` is the correct headless invocation — the custom subcommands in the original workflows (`dev-agent`, `spec-agent`, `verifier-agent`) don't exist in the opencode package. API key secret: `OPENCODE_API_KEY` (passed as `ANTHROPIC_API_KEY` in env, which opencode reads for Claude models). Documented in CLAUDE.md under "AI Tooling" to prevent future regression.
+
+**Tests:** All 4 Playwright acceptance tests for spec `001-greeting` pass locally (11s).
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+- Updated: [[wiki-index]] (added Dev Loop Infrastructure section)
+
 ---
 
 **Log format:** Each entry starts with `## [YYYY-MM-DD] action | Description` for easy parsing with unix tools.
