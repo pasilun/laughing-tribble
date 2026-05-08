@@ -32,13 +32,16 @@ A catalog of all wiki entries for the bygglov assistant project.
 - [[detaljplan-ingestion]] - How to ingest and parse detaljplaner from kommuner
 - [[boverket-apis]] - Integration with Boverket open APIs: Planbestämmelsekatalogen, Ändamålskatalogen, ÖP-katalogen, Författnings-API
 
+## Dev Loop Infrastructure
+
+- [[dev-loop-workflows]] - GitHub Actions workflows: spec → dev → verify → auto-merge. Uses `npx opencode run` (headless). Secret: `OPENCODE_API_KEY`. ✓
+
 ## Agent Configuration
 
-(TODO - to be created)
-- [[spec-agent-prompt]] - System prompt for the spec agent
-- [[dev-agent-prompt]] - System prompt for the dev agent
-- [[verifier-agent-prompt]] - System prompt for the verifier agent
-- [[tjansteman-agent-prompt]] - System prompt for the tjänsteman agent (product-embedded)
+- [[spec-agent-prompt]] - System prompt for the spec agent (`agents/spec/system-prompt.md`) ✓
+- [[dev-agent-prompt]] - System prompt for the dev agent (`agents/dev/system-prompt.md`) ✓
+- [[verifier-agent-prompt]] - System prompt for the verifier agent (`agents/verifier/system-prompt.md`) ✓
+- [[tjansteman-agent-prompt]] - System prompt for the tjänsteman agent (product-embedded, protected path)
 
 ## UI & UX
 
@@ -59,5 +62,5 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 ---
 
-**Total entries:** 4 complete, 19 TODO
-**Last updated:** 2026-05-03
+**Total entries:** 8 complete, 17 TODO
+**Last updated:** 2026-05-08

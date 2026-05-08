@@ -39,6 +39,20 @@ If verification fails, you'll receive a structured report showing which acceptan
 - **RAG:** pgvector (later phases)
 - **Testing:** Vitest or Jest
 
+## AI Tooling
+
+The CI workflows use **opencode** (`npx opencode run`) as the AI agent runner — not Claude Code CLI or any other tool. Do not change this. The correct non-interactive invocation is:
+
+```bash
+npx opencode run --dangerously-skip-permissions "your prompt here"
+```
+
+The API key secret is `OPENROUTER_API_KEY`. The model is `openrouter/zhipuai/glm-4` (GLM-4 via OpenRouter). The correct non-interactive invocation is:
+
+```bash
+npx opencode-ai@latest run --model openrouter/zhipuai/glm-4 --dangerously-skip-permissions "your prompt here"
+```
+
 ## When You're Stuck
 
 - After 3-5 failed verification attempts on the same spec
