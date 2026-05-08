@@ -63,7 +63,7 @@ jobs:
           3. Implement the feature using Next.js App Router + TypeScript + Tailwind CSS
           4. Write or update e2e tests in e2e/ that cover each acceptance criterion
           5. Use your file write tool to write all code files to disk
-          6. Do NOT commit or push — just write the code files"
+          6. Do NOT run npm test, do NOT commit or push — just write the code files"
 
       - name: Typecheck
         run: npm run typecheck
