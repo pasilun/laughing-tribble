@@ -63,12 +63,21 @@ jobs:
 
           Follow specs/_template.md exactly.
           Make ALL acceptance criteria browser-observable and testable with Playwright.
-          Write the file and nothing else — do not commit or push."
+          Use your file write tool to write the spec to ${SPEC_FILE}." \
+          | tee /tmp/opencode-output.txt || true
+
+          # Fallback: if opencode output the spec as text instead of writing it,
+          # extract markdown content (from first heading onward) and write it
+          if [ ! -f "${SPEC_FILE}" ]; then
+            echo "Spec file not written by tool — using stdout output as fallback"
+            sed -n '/^# /,$ p' /tmp/opencode-output.txt > "${SPEC_FILE}"
+          fi
 
       - name: Verify spec file was created
         run: |
-          if [ ! -f "${{ steps.naming.outputs.file }}" ]; then
-            echo "Error: Spec file was not created at ${{ steps.naming.outputs.file }}"
+          if [ ! -f "${{ steps.naming.outputs.file }}" ] || [ ! -s "${{ steps.naming.outputs.file }}" ]; then
+            echo "Error: Spec file was not created or is empty at ${{ steps.naming.outputs.file }}"
+            cat /tmp/opencode-output.txt || true
             exit 1
           fi
 
