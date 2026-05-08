@@ -97,7 +97,7 @@ jobs:
           git config user.email "spec-agent@github-actions.bot"
           git add specs/
           git commit -m "spec: add spec for issue #${{ github.event.issue.number }}"
-          git push origin "${{ steps.naming.outputs.branch }}"
+          git push --force origin "${{ steps.naming.outputs.branch }}"
 
       - name: Create draft PR
         env:
