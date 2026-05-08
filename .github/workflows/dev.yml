@@ -1,10 +1,15 @@
 name: Dev Agent
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
     paths:
       - 'specs/**'
+  workflow_dispatch:
+    inputs:
+      spec_file:
+        description: 'Spec file path (e.g. specs/002-foo.md)'
+        required: false
 
 jobs:
   dev:
@@ -17,7 +22,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -32,7 +36,11 @@ jobs:
       - name: Find spec file
         id: spec
         run: |
-          SPEC_FILE=$(git diff origin/${{ github.base_ref }}...HEAD --name-only | grep '^specs/[^_].*\.md$' | head -n 1)
+          if [ -n "${{ inputs.spec_file }}" ]; then
+            SPEC_FILE="${{ inputs.spec_file }}"
+          else
+            SPEC_FILE=$(git diff HEAD~1 --name-only | grep '^specs/[^_].*\.md$' | head -n 1)
+          fi
           if [ -z "$SPEC_FILE" ]; then
             SPEC_FILE=$(find specs -name "*.md" -not -name "_template.md" -type f | sort | tail -n 1)
           fi
@@ -64,16 +72,25 @@ jobs:
         run: npm run lint
 
       - name: Commit and push implementation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          SPEC_NAME=$(basename "${{ steps.spec.outputs.file }}" .md)
+          BRANCH="feat/${SPEC_NAME}"
+          git checkout -b "$BRANCH"
           git config user.name "Dev Agent"
           git config user.email "dev-agent@github-actions.bot"
           git add -A
           if git diff --staged --quiet; then
             echo "No changes to commit — feature may already be implemented"
           else
-            SPEC_NAME=$(basename "${{ steps.spec.outputs.file }}" .md)
             git commit -m "feat: implement ${SPEC_NAME}"
-            git push origin HEAD:${{ github.head_ref }}
+            git push --force origin "$BRANCH"
+            gh pr create \
+              --title "feat: implement ${SPEC_NAME}" \
+              --body "Implements spec in ${{ steps.spec.outputs.file }}" \
+              --base main \
+              --head "$BRANCH" || true
           fi
 
       - name: Comment results
@@ -84,7 +101,7 @@ jobs:
             const status = '${{ job.status }}';
             const emoji = status === 'success' ? '✅' : '❌';
             github.rest.issues.createComment({
-              issue_number: context.issue.number,
+              issue_number: 15,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `${emoji} Dev agent: ${status}`
