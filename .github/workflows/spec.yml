@@ -53,33 +53,41 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           SPEC_FILE: ${{ steps.naming.outputs.file }}
         run: |
-          npx opencode-ai@latest run --model openrouter/zhipuai/glm-4 --dangerously-skip-permissions "
-          Read agents/spec/system-prompt.md for your role and rules.
+          # Capture stdout+stderr so we can use output as fallback
+          npx opencode-ai@latest run --model openrouter/zhipuai/glm-4 \
+            --dangerously-skip-permissions \
+            "Read agents/spec/system-prompt.md for your role and rules.
+            Create a spec file at ${SPEC_FILE} for GitHub issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
+            Full description: read /tmp/issue-body.txt
+            Follow specs/_template.md. All criteria must be browser-observable with Playwright.
+            Use your file write tool to write the spec to ${SPEC_FILE}." \
+            > /tmp/opencode-output.txt 2>&1 || true
 
-          Create a spec file at ${SPEC_FILE} for this GitHub issue:
-          - Issue number: ${ISSUE_NUMBER}
-          - Issue title: ${ISSUE_TITLE}
-          - Full description: read from /tmp/issue-body.txt
+          echo "=== opencode raw output ==="
+          cat /tmp/opencode-output.txt
+          echo "=== end output ==="
 
-          Follow specs/_template.md exactly.
-          Make ALL acceptance criteria browser-observable and testable with Playwright.
-          Use your file write tool to write the spec to ${SPEC_FILE}." \
-          | tee /tmp/opencode-output.txt || true
-
-          # Fallback: if opencode output the spec as text instead of writing it,
-          # extract markdown content (from first heading onward) and write it
-          if [ ! -f "${SPEC_FILE}" ]; then
-            echo "Spec file not written by tool — using stdout output as fallback"
-            sed -n '/^# /,$ p' /tmp/opencode-output.txt > "${SPEC_FILE}"
+          # Fallback: if opencode didn't use the write tool, extract content from output
+          if [ ! -s "${SPEC_FILE}" ]; then
+            echo "File not written by tool — trying stdout fallback..."
+            # Strip ANSI escape codes
+            sed 's/\x1B\[[0-9;]*[A-Za-z]//g' /tmp/opencode-output.txt > /tmp/clean-output.txt
+            # Extract from first markdown heading onward
+            sed -n '/^#[[:space:]]/,$ p' /tmp/clean-output.txt > "${SPEC_FILE}" || true
+            # Last resort: use full cleaned output
+            if [ ! -s "${SPEC_FILE}" ]; then
+              cp /tmp/clean-output.txt "${SPEC_FILE}"
+            fi
           fi
 
       - name: Verify spec file was created
         run: |
-          if [ ! -f "${{ steps.naming.outputs.file }}" ] || [ ! -s "${{ steps.naming.outputs.file }}" ]; then
-            echo "Error: Spec file was not created or is empty at ${{ steps.naming.outputs.file }}"
-            cat /tmp/opencode-output.txt || true
+          if [ ! -s "${{ steps.naming.outputs.file }}" ]; then
+            echo "Error: Spec file is missing or empty"
             exit 1
           fi
+          echo "Spec file created successfully:"
+          cat "${{ steps.naming.outputs.file }}"
 
       - name: Commit and push spec
         env:
