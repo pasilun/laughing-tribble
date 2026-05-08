@@ -50,7 +50,7 @@ npx opencode run --dangerously-skip-permissions "your prompt here"
 The API key secret is `OPENROUTER_API_KEY`. The model is `openrouter/zhipuai/glm-4` (GLM-4 via OpenRouter). The correct non-interactive invocation is:
 
 ```bash
-npx opencode run --model openrouter/zhipuai/glm-4 --dangerously-skip-permissions "your prompt here"
+npx opencode-ai@latest run --model openrouter/zhipuai/glm-4 --dangerously-skip-permissions "your prompt here"
 ```
 
 ## When You're Stuck
