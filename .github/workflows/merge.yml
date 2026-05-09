@@ -4,10 +4,17 @@ on:
   workflow_run:
     workflows: ["Verification Agent"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to merge (e.g. 18)'
+        required: true
 
 jobs:
   auto-merge:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -18,11 +25,33 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get PR number
+      - name: Resolve PR
         id: pr
-        run: |
-          PR_NUMBER=$(echo '${{ toJson(github.event.workflow_run.pull_requests) }}' | jq -r '.[0].number // empty')
-          echo "number=${PR_NUMBER}" >> $GITHUB_OUTPUT
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let number;
+            if (context.eventName === 'workflow_dispatch') {
+              number = parseInt('${{ inputs.pr_number }}');
+            } else {
+              const prs = JSON.parse('${{ toJson(github.event.workflow_run.pull_requests) }}');
+              if (prs.length > 0) {
+                number = prs[0].number;
+              } else {
+                // workflow_run via workflow_dispatch: find latest open feat/ PR
+                const { data: openPrs } = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  sort: 'updated',
+                  direction: 'desc',
+                });
+                const pr = openPrs.find(p => p.head.ref.startsWith('feat/'));
+                if (!pr) { core.setFailed('No open feat/ PR found'); return; }
+                number = pr.number;
+              }
+            }
+            core.setOutput('number', String(number));
 
       - name: Check merge conditions
         id: check
@@ -70,5 +99,5 @@ jobs:
               issue_number: ${{ steps.pr.outputs.number }},
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `${emoji} Auto-merge: ${status}\n\n${reason}`
+              body: `${emoji} Auto-merge: ${status}\n\n${reason}`,
             });
