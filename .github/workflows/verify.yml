@@ -27,10 +27,11 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            let number, sha;
+            let number, sha, branch;
             if (context.eventName === 'pull_request') {
               number = context.payload.pull_request.number;
               sha = context.payload.pull_request.head.sha;
+              branch = context.payload.pull_request.head.ref;
             } else if (context.eventName === 'workflow_dispatch') {
               number = parseInt('${{ inputs.pr_number }}');
               const { data: pr } = await github.rest.pulls.get({
@@ -39,6 +40,7 @@ jobs:
                 pull_number: number,
               });
               sha = pr.head.sha;
+              branch = pr.head.ref;
             } else {
               // workflow_run: find the latest open feat/ PR
               const { data: prs } = await github.rest.pulls.list({
@@ -52,9 +54,11 @@ jobs:
               if (!pr) { core.setFailed('No open feat/ PR found'); return; }
               number = pr.number;
               sha = pr.head.sha;
+              branch = pr.head.ref;
             }
             core.setOutput('number', String(number));
             core.setOutput('sha', sha);
+            core.setOutput('branch', branch);
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,33 +74,87 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Deploy preview to Vercel
+        id: preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          OUTPUT=$(npx vercel --token $VERCEL_TOKEN --yes 2>&1)
+          echo "$OUTPUT"
+          PREVIEW_URL=$(echo "$OUTPUT" | grep -oE 'https://[a-zA-Z0-9._-]+\.vercel\.app' | grep -v 'vercel\.com' | head -1)
+          echo "url=$PREVIEW_URL" >> $GITHUB_OUTPUT
+          echo "Preview URL: $PREVIEW_URL"
+
+      - name: Find spec file
+        id: spec
+        run: |
+          BRANCH="${{ steps.pr.outputs.branch }}"
+          SPEC_NAME="${BRANCH#feat/}"
+          SPEC_FILE=$(find specs -name "${SPEC_NAME}.md" -not -name "_template.md" | head -1)
+          if [ -z "$SPEC_FILE" ]; then
+            SPEC_FILE=$(find specs -name "*.md" -not -name "_template.md" | sort | tail -1)
+          fi
+          echo "file=$SPEC_FILE" >> $GITHUB_OUTPUT
+          echo "Found spec: $SPEC_FILE"
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Build app
-        run: npm run build
-
-      - name: Start app server
+      - name: Configure Playwright MCP for opencode
         run: |
-          npm start &
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:3000 > /dev/null 2>&1 && echo "Server ready" && break
-            sleep 2
-          done
+          mkdir -p ~/.config/opencode
+          cat > ~/.config/opencode/config.json << 'EOF'
+          {
+            "mcpServers": {
+              "playwright": {
+                "command": "npx",
+                "args": ["@playwright/mcp@latest", "--headless", "--no-sandbox"]
+              }
+            }
+          }
+          EOF
 
-      - name: Run Playwright tests
-        id: tests
+      - name: Run verifier agent
+        id: verify
         env:
-          CI: 'true'
-          BASE_URL: 'http://localhost:3000'
-        run: npm test && echo "passed=true" >> $GITHUB_OUTPUT || echo "passed=false" >> $GITHUB_OUTPUT
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          SPEC_FILE: ${{ steps.spec.outputs.file }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        run: |
+          OUTPUT=$(npx opencode-ai@latest run \
+            --model zai-coding-plan/glm-4.7 \
+            --dangerously-skip-permissions \
+            "Read agents/verifier/system-prompt.md for your role and rules.
+
+          Spec file: ${SPEC_FILE}
+          Preview URL: ${PREVIEW_URL}
+
+          Your task:
+          1. Read ${SPEC_FILE} to understand all acceptance criteria
+          2. Use Playwright MCP to open ${PREVIEW_URL} in a browser
+          3. Test each acceptance criterion against the live app exactly as a user would
+          4. Output your final verdict as a JSON block:
+             {\"verdict\": \"pass\", \"criteria\": [...]}
+             or {\"verdict\": \"fail\", \"criteria\": [...]}
+
+          Do not read the implementation code. Test only what you observe in the browser." 2>&1)
+
+          echo "$OUTPUT"
+
+          if echo "$OUTPUT" | grep -qE '"verdict"\s*:\s*"pass"'; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Comment verification results
         if: steps.pr.outputs.number != ''
         uses: actions/github-script@v7
         with:
           script: |
-            const passed = '${{ steps.tests.outputs.passed }}' === 'true';
+            const passed = '${{ steps.verify.outputs.passed }}' === 'true';
             const emoji = passed ? '✅' : '❌';
             const verdict = passed ? 'pass' : 'fail';
             github.rest.issues.createComment({
@@ -107,7 +165,7 @@ jobs:
             });
 
       - name: Fail if verification failed
-        if: steps.tests.outputs.passed != 'true'
+        if: steps.verify.outputs.passed != 'true'
         run: exit 1
 
   verify-golden-cases:
