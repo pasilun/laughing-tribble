@@ -39,14 +39,13 @@ test.describe('Greeting Color Toggle Feature', () => {
     await expect(greeting).toHaveClass(/text-red-600/)
   })
 
-  test('Scenario 3: Multiple toggles - four more clicks returns to default', async ({ page }) => {
+  test('Scenario 4: Multiple toggles - four clicks total returns to default', async ({ page }) => {
     const button = page.getByRole('button', { name: 'Byt färg' })
     const greeting = page.getByRole('heading', { level: 1 })
 
     await button.click()
     await expect(greeting).toHaveClass(/text-red-600/)
 
-    await button.click()
     await button.click()
     await button.click()
     await button.click()
