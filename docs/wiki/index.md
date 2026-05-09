@@ -34,7 +34,7 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 ## Dev Loop Infrastructure
 
-- [[dev-loop-workflows]] - GitHub Actions workflows: spec → dev → verify → auto-merge. Uses `npx opencode-ai@latest run --model zai-coding-plan/glm-4.7`. Secret: `ZHIPU_API_KEY`. Dev trigger: push to main with `paths: specs/**`. ✓
+- [[dev-loop-workflows]] - GitHub Actions workflows: spec → dev → verify → auto-merge → deploy. Uses `npx opencode-ai@latest run --model zai-coding-plan/glm-4.7`. Secrets: `ZHIPU_API_KEY`, `VERCEL_TOKEN`. Fully autonomous from issue label to production deploy. ✓
 
 ## Agent Configuration
 
