@@ -102,12 +102,34 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run Playwright tests against preview
+      - name: Generate verification tests from spec
+        env:
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          SPEC_FILE: ${{ steps.spec.outputs.file }}
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        run: |
+          npx opencode-ai@latest run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "
+          Read agents/verifier/system-prompt.md for your role and rules.
+
+          Spec file: ${SPEC_FILE}
+          Preview URL: ${PREVIEW_URL}
+
+          Your task: write a Playwright test file at e2e/_verify.spec.ts that independently
+          verifies every acceptance criterion in ${SPEC_FILE} against ${PREVIEW_URL}.
+
+          Rules:
+          - Do NOT read the existing e2e/ test files — derive all assertions from the spec only
+          - Use baseURL from the Playwright config (already set to ${PREVIEW_URL} via BASE_URL env)
+          - Cover every Given/When/Then scenario in the spec with a separate test
+          - Use page.goto('/path'), getByRole(), getByText(), expect().toBeVisible(), toHaveURL() etc.
+          - Write the file and stop — do not run it"
+
+      - name: Run verification tests against preview
         id: verify
         env:
           CI: 'true'
           BASE_URL: ${{ steps.preview.outputs.url }}
-        run: npm test && echo "passed=true" >> $GITHUB_OUTPUT || echo "passed=false" >> $GITHUB_OUTPUT
+        run: npx playwright test e2e/_verify.spec.ts && echo "passed=true" >> $GITHUB_OUTPUT || echo "passed=false" >> $GITHUB_OUTPUT
 
       - name: Comment verification results
         if: steps.pr.outputs.number != ''
