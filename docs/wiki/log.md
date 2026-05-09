@@ -229,6 +229,40 @@ Only manual steps required from phone: (1) create issue + label, (2) review and 
 - Updated: [[log]] (this entry)
 - Updated: [[wiki-index]] (updated Dev Loop Infrastructure entry)
 
+## [2026-05-09] feat | Independent verifier + dev retry loop
+
+**Action:** Replaced rubber-stamp verification with a genuinely independent verifier and a self-healing retry loop.
+
+**Problems found:**
+- `verify.yml` was running `npm test` against a local build — the dev agent's own tests, not independent verification
+- Vercel preview deployments were SSO-protected; Playwright in CI was testing Vercel's login page ("TermsPrivacy Policy" footer was Vercel's own auth page footer, not the app)
+- `workflow_run` does not fire after `workflow_dispatch`-triggered runs — broke the retry chain
+- `GITHUB_TOKEN` cannot dispatch other workflows without `actions: write` permission
+- `deploy.yml` triggered only on `push`, but auto-merge via `GITHUB_TOKEN` doesn't fire push events — so production never updated after loop merges
+
+**Changes:**
+
+- **verify.yml — independent verifier:** Removed `npm test`. Now: (1) deploys feature branch to Vercel preview via `vercel --yes`, (2) runs opencode verifier agent which reads the spec and writes `e2e/_verify.spec.ts` independently (never reads dev agent's test files), (3) runs that file against the preview URL. Added `actions: write` permission so verify can dispatch dev on failure.
+- **verify.yml — retry dispatch:** On failure, captures Playwright output and dispatches dev agent with `failure_report` input containing the exact failing assertions.
+- **dev.yml — failure context:** Added `failure_report` input. When set, prepends failure details to the agent prompt so it knows what to fix. Added `actions: write` permission. Added "Trigger verify on retry runs" step — after fixing, explicitly dispatches verify (needed because `workflow_run` doesn't chain from `workflow_dispatch`).
+- **dev.yml — iteration cap:** Counts commits on the feature branch vs main; stops at 4 to prevent infinite loops.
+- **deploy.yml — workflow_run trigger:** Added `workflow_run: Auto Merge: completed` trigger alongside `push`. Also added `workflow_dispatch` for manual kicks. Checkout explicitly uses `ref: main` to avoid deploying feature branch code.
+- **Vercel SSO disabled:** `ssoProtection` was set to `deploymentType: all_except_custom_domains` — blocked all CI access to preview URLs. Disabled via API (`PATCH /v9/projects/laughing-tribble { ssoProtection: null }`). Change is permanent.
+
+**Regression gap identified (open):** `_verify.spec.ts` is generated fresh each run and never committed. Once a feature merges, its independent verification tests are discarded. A future feature that regresses a previous one would only be caught by the dev-agent-written `e2e/*.spec.ts` files, not the independent verifier tests.
+
+**Full retry loop now works:**
+1. Verify fails → captures Playwright output → dispatches dev with failure report
+2. Dev reads failures → fixes implementation → pushes → dispatches verify
+3. Verify re-runs against new preview → pass → auto-merge → deploy
+4. Cap: 4 commits on branch before loop stops and escalates
+
+**Validated end-to-end:** spec 006 (footer with copyright) ran through 3 retry iterations before the SSO issue was diagnosed. Once SSO was disabled, verify passed on first run, auto-merge fired, footer is live on production.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+- Updated: [[wiki-index]]
+
 ---
 
 **Log format:** Each entry starts with `## [YYYY-MM-DD] action | Description` for easy parsing with unix tools.

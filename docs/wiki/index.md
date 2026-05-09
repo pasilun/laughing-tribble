@@ -34,7 +34,7 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 ## Dev Loop Infrastructure
 
-- [[dev-loop-workflows]] - GitHub Actions workflows: spec → dev → verify → auto-merge → deploy. Uses `npx opencode-ai@latest run --model zai-coding-plan/glm-4.7`. Secrets: `ZHIPU_API_KEY`, `VERCEL_TOKEN`. Fully autonomous from issue label to production deploy. ✓
+- [[dev-loop-workflows]] - GitHub Actions workflows: spec → dev → verify → auto-merge → deploy. Independent verifier generates its own tests from spec against Vercel preview. Retry loop: verify failure → dispatches dev with failure report → dev fixes → dispatches verify. Cap: 4 commits/branch. Secrets: `ZHIPU_API_KEY`, `VERCEL_TOKEN`. Vercel SSO disabled for previews. ✓
 
 ## Agent Configuration
 
@@ -63,4 +63,4 @@ A catalog of all wiki entries for the bygglov assistant project.
 ---
 
 **Total entries:** 8 complete, 17 TODO
-**Last updated:** 2026-05-08 (Z.AI provider fix, spec 002 / PR #18 end-to-end)
+**Last updated:** 2026-05-09 (independent verifier, retry loop, Vercel SSO fix)
