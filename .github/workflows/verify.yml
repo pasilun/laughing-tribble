@@ -129,7 +129,15 @@ jobs:
         env:
           CI: 'true'
           BASE_URL: ${{ steps.preview.outputs.url }}
-        run: npx playwright test e2e/_verify.spec.ts && echo "passed=true" >> $GITHUB_OUTPUT || echo "passed=false" >> $GITHUB_OUTPUT
+        run: |
+          npx playwright test e2e/_verify.spec.ts --reporter=line 2>&1 | tee /tmp/verify-output.txt
+          if grep -q "passed" /tmp/verify-output.txt && ! grep -q "failed" /tmp/verify-output.txt; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            # Extract failure summary (last 80 lines covers all test output)
+            tail -80 /tmp/verify-output.txt > /tmp/verify-failures.txt
+          fi
 
       - name: Comment verification results
         if: steps.pr.outputs.number != ''
@@ -145,6 +153,16 @@ jobs:
               repo: context.repo.repo,
               body: `${emoji} Verification: ${verdict}`,
             });
+
+      - name: Retry dev agent with failure report
+        if: steps.verify.outputs.passed != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FAILURE_REPORT=$(cat /tmp/verify-failures.txt)
+          gh workflow run dev.yml \
+            --field spec_file="${{ steps.spec.outputs.file }}" \
+            --field failure_report="${FAILURE_REPORT}"
 
       - name: Fail if tests failed
         if: steps.verify.outputs.passed != 'true'

@@ -10,6 +10,9 @@ on:
       spec_file:
         description: 'Spec file path (e.g. specs/002-foo.md)'
         required: false
+      failure_report:
+        description: 'Verification failure details from previous run'
+        required: false
 
 jobs:
   dev:
@@ -47,15 +50,43 @@ jobs:
           echo "file=$SPEC_FILE" >> $GITHUB_OUTPUT
           echo "Found spec: $SPEC_FILE"
 
+      - name: Check iteration count
+        id: iteration
+        run: |
+          SPEC_NAME=$(basename "${{ steps.spec.outputs.file }}" .md)
+          BRANCH="feat/${SPEC_NAME}"
+          git fetch origin "$BRANCH" 2>/dev/null || true
+          COUNT=$(git rev-list --count "origin/${BRANCH}" ^origin/main 2>/dev/null || echo "0")
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "Iteration count: $COUNT"
+          if [ "$COUNT" -ge 4 ]; then
+            echo "Max iterations reached (${COUNT} commits on branch). Stopping."
+            exit 1
+          fi
+
       - name: Run Dev Agent
         env:
           ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
           SPEC_FILE: ${{ steps.spec.outputs.file }}
+          FAILURE_REPORT: ${{ inputs.failure_report }}
         run: |
+          if [ -n "$FAILURE_REPORT" ]; then
+            CONTEXT="Previous verification attempt FAILED. You must fix these issues:
+
+          ${FAILURE_REPORT}
+
+          Study the failures carefully. Each failing test tells you exactly what the verifier
+          observed vs what it expected. Fix the implementation so all criteria pass."
+          else
+            CONTEXT="This is the first implementation attempt."
+          fi
+
           npx opencode-ai@latest run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "
           Read agents/dev/system-prompt.md for your role and rules.
 
           Your task: implement the feature described in ${SPEC_FILE}.
+
+          ${CONTEXT}
 
           Steps:
           1. Read ${SPEC_FILE} to understand all acceptance criteria
