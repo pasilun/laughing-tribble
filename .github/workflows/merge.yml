@@ -19,6 +19,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -100,4 +101,45 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `${emoji} Auto-merge: ${status}\n\n${reason}`,
+            });
+
+      - name: Label source issue as implemented
+        if: steps.check.outputs.status == 'ready'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Find spec file from impl PR body ("Implements spec in specs/NNN-...")
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ steps.pr.outputs.number }},
+            });
+            const specMatch = pr.body?.match(/specs\/[^\s]+\.md/);
+            if (!specMatch) return;
+            const specFile = specMatch[0];
+
+            // Find the commit that introduced the spec file
+            const { execSync } = require('child_process');
+            const specCommit = execSync(`git log --all --oneline -- "${specFile}" | tail -1 | awk '{print $1}'`).toString().trim();
+            if (!specCommit) return;
+
+            // Find the PR that contained that commit
+            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: specCommit,
+            });
+            if (!prs.length) return;
+            const specPrBody = prs[0].body || '';
+
+            // Extract issue number from "Closes #N" or "issue #N"
+            const issueMatch = specPrBody.match(/#(\d+)/);
+            if (!issueMatch) return;
+            const issueNumber = parseInt(issueMatch[1]);
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['implemented'],
             });
