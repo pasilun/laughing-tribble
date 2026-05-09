@@ -6,6 +6,7 @@ on:
   workflow_run:
     workflows: ["Auto Merge"]
     types: [completed]
+  workflow_dispatch:
 
 jobs:
   deploy:
