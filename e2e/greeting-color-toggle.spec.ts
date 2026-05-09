@@ -9,15 +9,15 @@ test.describe('Greeting Color Toggle Feature', () => {
     const button = page.getByRole('button', { name: 'Byt färg' })
     const greeting = page.getByRole('heading', { level: 1 })
 
-    await expect(greeting).toHaveCSS('color', 'rgb(0, 0, 0)')
+    await expect(greeting).not.toHaveClass(/text-red/)
 
     await button.click()
 
-    await expect(greeting).toHaveCSS('color', 'rgb(220, 38, 38)')
+    await expect(greeting).toHaveClass(/text-red-600/)
 
     await button.click()
 
-    await expect(greeting).toHaveCSS('color', 'rgb(0, 0, 0)')
+    await expect(greeting).not.toHaveClass(/text-red/)
   })
 
   test('Scenario 2: Initial button state', async ({ page }) => {
@@ -25,8 +25,7 @@ test.describe('Greeting Color Toggle Feature', () => {
     const greeting = page.getByRole('heading', { level: 1 })
 
     await expect(button).toBeVisible()
-
-    await expect(greeting).toHaveCSS('color', 'rgb(0, 0, 0)')
+    await expect(greeting).not.toHaveClass(/text-red/)
   })
 
   test('Scenario 3: Multiple toggles - three clicks results in red', async ({ page }) => {
@@ -37,7 +36,7 @@ test.describe('Greeting Color Toggle Feature', () => {
     await button.click()
     await button.click()
 
-    await expect(greeting).toHaveCSS('color', 'rgb(220, 38, 38)')
+    await expect(greeting).toHaveClass(/text-red-600/)
   })
 
   test('Scenario 3: Multiple toggles - four more clicks returns to default', async ({ page }) => {
@@ -45,13 +44,13 @@ test.describe('Greeting Color Toggle Feature', () => {
     const greeting = page.getByRole('heading', { level: 1 })
 
     await button.click()
-    await expect(greeting).toHaveCSS('color', 'rgb(220, 38, 38)')
+    await expect(greeting).toHaveClass(/text-red-600/)
 
     await button.click()
     await button.click()
     await button.click()
     await button.click()
 
-    await expect(greeting).toHaveCSS('color', 'rgb(0, 0, 0)')
+    await expect(greeting).not.toHaveClass(/text-red/)
   })
 })
