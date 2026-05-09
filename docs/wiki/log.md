@@ -169,6 +169,38 @@ Ingested regulatory version pin - the single source of truth for which PBL versi
 - Updated: [[log]] (this entry)
 - Updated: [[wiki-index]] (added Dev Loop Infrastructure section)
 
+## [2026-05-08] fix | Z.AI Direct API + Dev Loop End-to-End
+
+**Action:** Fixed model provider config and completed first full spec → dev loop run (spec 002).
+
+**Problems fixed:**
+
+- **Wrong provider for Z.AI models** — `openrouter/z-ai/glm-5-turbo` and `openrouter/z-ai/glm-4.7` both fail with `ProviderModelNotFoundError`. Z.AI models exist in opencode's registry but OpenRouter's live API doesn't serve them. Fix: switched to `zai-coding-plan/glm-4.7` (Z.AI Coding Plan direct endpoint) with secret `ZHIPU_API_KEY`. Updated both `spec.yml` and `dev.yml`.
+
+- **Dev agent trigger — GITHUB_TOKEN cross-workflow block** — `dev.yml` had `on: pull_request` which never fired: GitHub blocks cross-workflow triggers when the push comes from `GITHUB_TOKEN` (anti-loop protection). Fix: changed trigger to `on: push: branches: [main], paths: specs/**` so it fires when the spec PR is merged. Added `workflow_dispatch` with `spec_file` input for manual testing. Also removed `ref: ${{ github.head_ref }}` from checkout (not available on push events).
+
+- **Spec detection on push** — Dev agent now reads the changed spec via `git diff HEAD~1 --name-only`, falling back to `find specs` newest file. Manual dispatch accepts explicit `spec_file` input.
+
+- **Garbage spec file (spec 002)** — Previous run's fallback captured the error stack trace as spec content. Fixed by writing a proper spec for `002-add-a-start-button-to-the-homepage` and force-pushing `spec/issue-15`.
+
+- **ESLint failing on Playwright trace assets** — Playwright's `playwright-report/trace/assets/codeMirrorModule-*.js` bundles being linted. Fix: added `playwright-report/**` and `test-results/**` to `globalIgnores` in `eslint.config.mjs`.
+
+- **Dev agent running e2e tests** — Dev agent prompt told it to write tests but it also tried to run `npm test`, causing Playwright browser-not-installed errors. Fix: added "Do NOT run npm test" to the dev agent prompt. Running tests is the verifier's job.
+
+**First Phase 0 feature implemented end-to-end:**
+
+Spec 002 ("Kom igång" start button, `specs/002-add-a-start-button-to-the-homepage.md`) was implemented by the dev agent (opencode run `25578771536`):
+- `app/page.tsx` — added `<Link href="/design">Kom igång</Link>` below greeting
+- `app/design/page.tsx` — new placeholder /design page
+- `e2e/start-button.spec.ts` — 3 Playwright scenarios covering all acceptance criteria
+- Typecheck ✓, lint ✓, committed to `feat/002-add-a-start-button-to-the-homepage`, PR #18 opened
+
+**Known remaining issue:** "Comment results" step in `dev.yml` hardcoded `issue_number: 15` and `issues: write` permission is missing — cosmetic failure only, all substantive steps pass.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+- Updated: [[wiki-index]] (updated Dev Loop Infrastructure entry)
+
 ---
 
 **Log format:** Each entry starts with `## [YYYY-MM-DD] action | Description` for easy parsing with unix tools.
