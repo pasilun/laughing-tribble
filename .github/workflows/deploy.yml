@@ -3,12 +3,17 @@ name: Deploy to Vercel
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: ["Auto Merge"]
+    types: [completed]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Deploy to Vercel
         run: npx vercel --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
