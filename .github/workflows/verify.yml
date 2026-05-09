@@ -22,6 +22,7 @@ jobs:
     permissions:
       pull-requests: write
       actions: write
+      contents: write
     steps:
       - name: Resolve PR
         id: pr
@@ -138,6 +139,19 @@ jobs:
             echo "passed=false" >> $GITHUB_OUTPUT
             # Extract failure summary (last 80 lines covers all test output)
             tail -80 /tmp/verify-output.txt > /tmp/verify-failures.txt
+          fi
+
+      - name: Save verified tests for regression
+        if: steps.verify.outputs.passed == 'true'
+        run: |
+          SPEC_ID=$(basename "${{ steps.spec.outputs.file }}" .md)
+          cp e2e/_verify.spec.ts "e2e/_verified-${SPEC_ID}.spec.ts"
+          git config user.name "Verification Agent"
+          git config user.email "verify-agent@github-actions.bot"
+          git add "e2e/_verified-${SPEC_ID}.spec.ts"
+          if ! git diff --staged --quiet; then
+            git commit -m "test: save verified regression tests for ${SPEC_ID} [skip ci]"
+            git push origin HEAD:${{ steps.pr.outputs.branch }}
           fi
 
       - name: Comment verification results
