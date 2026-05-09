@@ -5,16 +5,6 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["arn1"],
-  "previewDeployment": {
-    "environmentVariables": {
-      "NEXT_PUBLIC_APP_ENV": "preview"
-    }
-  },
-  "production": {
-    "environmentVariables": {
-      "NEXT_PUBLIC_APP_ENV": "production"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
