@@ -102,52 +102,12 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Configure Playwright MCP for opencode
-        run: |
-          mkdir -p ~/.config/opencode
-          cat > ~/.config/opencode/config.json << 'EOF'
-          {
-            "mcpServers": {
-              "playwright": {
-                "command": "npx",
-                "args": ["@playwright/mcp@latest", "--headless", "--no-sandbox"]
-              }
-            }
-          }
-          EOF
-
-      - name: Run verifier agent
+      - name: Run Playwright tests against preview
         id: verify
         env:
-          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
-          SPEC_FILE: ${{ steps.spec.outputs.file }}
-          PREVIEW_URL: ${{ steps.preview.outputs.url }}
-        run: |
-          OUTPUT=$(npx opencode-ai@latest run \
-            --model zai-coding-plan/glm-4.7 \
-            --dangerously-skip-permissions \
-            "Read agents/verifier/system-prompt.md for your role and rules.
-
-          Spec file: ${SPEC_FILE}
-          Preview URL: ${PREVIEW_URL}
-
-          Your task:
-          1. Read ${SPEC_FILE} to understand all acceptance criteria
-          2. Use Playwright MCP to open ${PREVIEW_URL} in a browser
-          3. Test each acceptance criterion against the live app exactly as a user would
-          4. Output your final verdict as a JSON block:
-             {\"verdict\": \"pass\", \"criteria\": [...]}
-             or {\"verdict\": \"fail\", \"criteria\": [...]}
-
-          Do not read the implementation code. Test only what you observe in the browser." 2>&1)
-
-          echo "$OUTPUT"
-
-          if echo "$OUTPUT" | grep -qE '"verdict"\s*:\s*"pass"'; then
-            echo "passed=true" >> $GITHUB_OUTPUT
-          else
-            echo "passed=false" >> $GITHUB_OUTPUT
-          fi
+          CI: 'true'
+          BASE_URL: ${{ steps.preview.outputs.url }}
+        run: npm test && echo "passed=true" >> $GITHUB_OUTPUT || echo "passed=false" >> $GITHUB_OUTPUT
 
       - name: Comment verification results
         if: steps.pr.outputs.number != ''
@@ -164,7 +124,7 @@ jobs:
               body: `${emoji} Verification: ${verdict}`,
             });
 
-      - name: Fail if verification failed
+      - name: Fail if tests failed
         if: steps.verify.outputs.passed != 'true'
         run: exit 1
 
