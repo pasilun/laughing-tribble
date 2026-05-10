@@ -9,8 +9,6 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
-    "test:ui": "playwright test --ui",
-    "test:smoke": "playwright test --grep @smoke",
     "test:golden-cases": "playwright test --grep @golden-case"
   },
   "dependencies": {

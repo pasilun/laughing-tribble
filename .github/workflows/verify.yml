@@ -98,8 +98,10 @@ jobs:
           if [ -z "$SPEC_FILE" ]; then
             SPEC_FILE=$(find specs -name "*.md" -not -name "_template.md" | sort | tail -1)
           fi
+          SPEC_ID=$(basename "$SPEC_FILE" .md)
           echo "file=$SPEC_FILE" >> $GITHUB_OUTPUT
-          echo "Found spec: $SPEC_FILE"
+          echo "spec_id=$SPEC_ID" >> $GITHUB_OUTPUT
+          echo "Found spec: $SPEC_FILE (ID: $SPEC_ID)"
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -108,15 +110,17 @@ jobs:
         env:
           ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
           SPEC_FILE: ${{ steps.spec.outputs.file }}
+          SPEC_ID: ${{ steps.spec.outputs.spec_id }}
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
         run: |
+          TARGET_FILE="e2e/_verified-${SPEC_ID}.spec.ts"
           npx opencode-ai@latest run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "
           Read agents/verifier/system-prompt.md for your role and rules.
 
           Spec file: ${SPEC_FILE}
           Preview URL: ${PREVIEW_URL}
 
-          Your task: write a Playwright test file at e2e/_verify.spec.ts that independently
+          Your task: write a Playwright test file at ${TARGET_FILE} that independently
           verifies every acceptance criterion in ${SPEC_FILE} against ${PREVIEW_URL}.
 
           Rules:
@@ -124,15 +128,21 @@ jobs:
           - Use baseURL from the Playwright config (already set to ${PREVIEW_URL} via BASE_URL env)
           - Cover every Given/When/Then scenario in the spec with a separate test
           - Use page.goto('/path'), getByRole(), getByText(), expect().toBeVisible(), toHaveURL() etc.
-          - Write the file and stop — do not run it"
+          - Write the file to ${TARGET_FILE} and stop — do not run it"
+
+          if [ ! -s "${TARGET_FILE}" ]; then
+            echo "Error: Verifier agent did not write ${TARGET_FILE}"
+            exit 1
+          fi
 
       - name: Run verification tests against preview
         id: verify
         env:
           CI: 'true'
           BASE_URL: ${{ steps.preview.outputs.url }}
+          SPEC_ID: ${{ steps.spec.outputs.spec_id }}
         run: |
-          npx playwright test e2e/_verify.spec.ts --reporter=line 2>&1 | tee /tmp/verify-output.txt
+          npx playwright test "e2e/_verified-${SPEC_ID}.spec.ts" --reporter=line 2>&1 | tee /tmp/verify-output.txt
           if grep -q "passed" /tmp/verify-output.txt && ! grep -q "failed" /tmp/verify-output.txt; then
             echo "passed=true" >> $GITHUB_OUTPUT
           else
@@ -141,11 +151,11 @@ jobs:
             tail -80 /tmp/verify-output.txt > /tmp/verify-failures.txt
           fi
 
-      - name: Save verified tests for regression
+      - name: Commit verified tests for regression
         if: steps.verify.outputs.passed == 'true'
+        env:
+          SPEC_ID: ${{ steps.spec.outputs.spec_id }}
         run: |
-          SPEC_ID=$(basename "${{ steps.spec.outputs.file }}" .md)
-          cp e2e/_verify.spec.ts "e2e/_verified-${SPEC_ID}.spec.ts"
           git config user.name "Verification Agent"
           git config user.email "verify-agent@github-actions.bot"
           git add "e2e/_verified-${SPEC_ID}.spec.ts"
