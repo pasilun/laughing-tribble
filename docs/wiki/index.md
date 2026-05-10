@@ -36,6 +36,16 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 - [[dev-loop-workflows]] - GitHub Actions workflows: spec → dev → verify → auto-merge → deploy. Independent verifier generates its own tests from spec against Vercel preview. Retry loop: verify failure → dispatches dev with failure report → dev fixes → dispatches verify. Cap: 4 commits/branch. Secrets: `ZHIPU_API_KEY`, `VERCEL_TOKEN`. Vercel SSO disabled for previews. ✓
 
+  **Current behaviour notes (2026-05-10):**
+  - `deploy.yml` runs only on `workflow_run: Auto Merge` and `workflow_dispatch` — not on every push to main.
+  - `spec.yml` fails hard if the agent doesn't write the spec file via the write tool (stdout fallback removed).
+  - `verify.yml` writes tests directly to `e2e/_verified-<SPEC_ID>.spec.ts`; no intermediate `_verify.spec.ts` copy step.
+  - `e2e/_verify.spec.ts` is gitignored as a defensive measure.
+  - `app/layout.tsx` uses `lang="sv"` and product title "Bygglov-assistenten".
+
+  **TODO — PAT secret to simplify retry chain:**
+  The current `workflow_dispatch` retry chain (verify → dispatch dev → dev dispatches verify back) exists because GitHub blocks `workflow_run` events triggered by `GITHUB_TOKEN`. Adding a single PAT secret (e.g. `LOOP_PAT`) with `repo` + `actions:write` scope would allow a clean `workflow_run` chain instead, removing the explicit "Trigger verify on retry runs" dispatch step in `dev.yml`. Not urgent, but eliminates the round-trip complexity when the time comes.
+
 ## Agent Configuration
 
 - [[spec-agent-prompt]] - System prompt for the spec agent (`agents/spec/system-prompt.md`) ✓
@@ -63,4 +73,4 @@ A catalog of all wiki entries for the bygglov assistant project.
 ---
 
 **Total entries:** 8 complete, 17 TODO
-**Last updated:** 2026-05-09 (independent verifier, retry loop, Vercel SSO fix)
+**Last updated:** 2026-05-10 (bug fixes: lang=sv, deploy order, hardcoded issue# removed, gitignore; simplifications: deploy trigger, verifier two-step, spec fallback, dead scripts)

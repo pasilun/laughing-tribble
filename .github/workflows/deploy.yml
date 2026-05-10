@@ -1,8 +1,6 @@
 name: Deploy to Vercel
 
 on:
-  push:
-    branches: [main]
   workflow_run:
     workflows: ["Auto Merge"]
     types: [completed]
@@ -18,12 +16,6 @@ jobs:
         with:
           ref: main
 
-      - name: Deploy to Vercel
-        run: npx vercel --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -32,6 +24,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Deploy to Vercel
+        run: npx vercel --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
