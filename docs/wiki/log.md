@@ -263,6 +263,81 @@ Only manual steps required from phone: (1) create issue + label, (2) review and 
 - Updated: [[log]] (this entry)
 - Updated: [[wiki-index]]
 
+## [2026-05-09] feat | Regression suite — save verified tests + post-deploy gate
+
+**Action:** Added regression test persistence so independent verifier tests survive feature merges and guard production.
+
+**Problems addressed:**
+- Previously `_verify.spec.ts` was generated fresh per run and discarded after merge. A new feature that regressed a previous one would only be caught by dev-agent-written tests, not the independent verifier.
+
+**Changes:**
+- **verify.yml:** After passing, copies `e2e/_verify.spec.ts` to `e2e/_verified-<SPEC_ID>.spec.ts` and commits it to the feature branch. These accumulate in the repo as a persistent regression suite.
+- **deploy.yml:** After each production deploy, runs `npx playwright test e2e/_verified-*.spec.ts` against the live production URL. If any test fails, opens a GitHub issue titled "🔴 Regression detected on production". Skips gracefully if no verified test files exist yet.
+- Added `issues: write` permission to deploy job.
+
+**Decision:** Storing verified tests in the repo (rather than an artifact store) was chosen for simplicity — they're small, readable, and version-controlled alongside the features they cover.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+
+---
+
+## [2026-05-10] fix | Bug fixes and workflow simplifications
+
+**Action:** Batch of CI fixes and cleanup following the first full end-to-end loop run.
+
+**Changes:**
+
+- **deploy.yml:** Removed `on: push` trigger — deploy now fires only on `workflow_run: Auto Merge` and `workflow_dispatch`. Prevents double-deploys when commits land on main directly.
+- **spec.yml:** Removed stdout fallback — if the agent doesn't write the spec file via the write tool, the workflow fails hard rather than capturing the error trace as spec content (which produced garbage specs in earlier runs).
+- **verify.yml:** Writes tests directly to `e2e/_verified-<SPEC_ID>.spec.ts` in one step; removed the intermediate `_verify.spec.ts` copy step that was previously needed.
+- **.gitignore:** Added `e2e/_verify.spec.ts` as a defensive gitignore to prevent the ephemeral test file from being accidentally committed.
+- **app/layout.tsx:** Set `lang="sv"` (Swedish) and product title "Bygglov-assistenten" — was previously missing/wrong.
+- **package.json:** Removed 2 dead scripts that were no longer used.
+- **dev.yml:** Removed hardcoded `issue_number: 15` comment step (was a known cosmetic failure from the first loop run).
+- **Specs added:** `007-situationsplan.md` (situationsplan screen — fastighetskarta upload, draggable friggebod rectangle, distance-to-boundary display, PDF export) and `008-planritning.md` (dimensioned 2D floor plan SVG from user measurements, area calculation, PDF export).
+- **wiki/index.md:** Added "Current behaviour notes (2026-05-10)" block and PAT-secret TODO to the dev-loop entry.
+
+**Decisions:**
+- Deploy trigger simplified to workflow_run only — the previous push trigger was causing unnecessary deploys and making the deploy log noisy.
+- Spec stdout fallback removed — silent failures (agent prints to stdout instead of writing file) are worse than loud ones.
+
+**Pages updated:**
+- Updated: [[wiki-index]] (behaviour notes added inline to dev-loop entry)
+- Updated: [[log]] (this entry)
+
+---
+
+## [2026-05-10] spec | Specs 007 and 008 — situationsplan + planritning (via spec agent)
+
+**Action:** Spec agent (via `spec.yml`) created `specs/007-feat-situationsplan-screen-spec-007.md` for issue #30.
+
+**Specs in queue:**
+- `007-situationsplan`: Upload fastighetskarta, place draggable friggebod rectangle, compute distances to four property edges, export annotated PDF with north arrow and scale bar.
+- `008-planritning`: Enter friggebod dimensions (width × depth × wall height), render dimensioned SVG floor plan, compute area, export PDF.
+
+Both specs target Phase 1 product work (friggebod flow). Neither has been implemented yet as of this date.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+
+---
+
+## [2026-05-11] memo | Standing instruction — always update wiki with progress
+
+**Action:** Patrik added a standing instruction: always update `docs/wiki/log.md` with progress, decisions, and insights after each working session or significant change.
+
+**Scope:** This applies to any Dev Agent session working in this repo. Each session should add a log entry documenting:
+- What was implemented or changed
+- Key decisions made and the reasoning
+- Open issues or regressions found
+- Any architectural insights
+
+**Why:** The wiki log is the primary artifact for understanding why the codebase evolved the way it did. The commit messages record _what_ changed; the log records _why_.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+
 ---
 
 **Log format:** Each entry starts with `## [YYYY-MM-DD] action | Description` for easy parsing with unix tools.
