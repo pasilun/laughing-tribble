@@ -4,7 +4,7 @@
 `009a-design-chat-ui`
 
 ## Status
-`draft`
+`ready-for-dev`
 
 ## Description
 
