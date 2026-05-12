@@ -263,6 +263,160 @@ Only manual steps required from phone: (1) create issue + label, (2) review and 
 - Updated: [[log]] (this entry)
 - Updated: [[wiki-index]]
 
+## [2026-05-09] feat | Regression suite — save verified tests + post-deploy gate
+
+**Action:** Added regression test persistence so independent verifier tests survive feature merges and guard production.
+
+**Problems addressed:**
+- Previously `_verify.spec.ts` was generated fresh per run and discarded after merge. A new feature that regressed a previous one would only be caught by dev-agent-written tests, not the independent verifier.
+
+**Changes:**
+- **verify.yml:** After passing, copies `e2e/_verify.spec.ts` to `e2e/_verified-<SPEC_ID>.spec.ts` and commits it to the feature branch. These accumulate in the repo as a persistent regression suite.
+- **deploy.yml:** After each production deploy, runs `npx playwright test e2e/_verified-*.spec.ts` against the live production URL. If any test fails, opens a GitHub issue titled "🔴 Regression detected on production". Skips gracefully if no verified test files exist yet.
+- Added `issues: write` permission to deploy job.
+
+**Decision:** Storing verified tests in the repo (rather than an artifact store) was chosen for simplicity — they're small, readable, and version-controlled alongside the features they cover.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+
+---
+
+## [2026-05-10] fix | Bug fixes and workflow simplifications
+
+**Action:** Batch of CI fixes and cleanup following the first full end-to-end loop run.
+
+**Changes:**
+
+- **deploy.yml:** Removed `on: push` trigger — deploy now fires only on `workflow_run: Auto Merge` and `workflow_dispatch`. Prevents double-deploys when commits land on main directly.
+- **spec.yml:** Removed stdout fallback — if the agent doesn't write the spec file via the write tool, the workflow fails hard rather than capturing the error trace as spec content (which produced garbage specs in earlier runs).
+- **verify.yml:** Writes tests directly to `e2e/_verified-<SPEC_ID>.spec.ts` in one step; removed the intermediate `_verify.spec.ts` copy step that was previously needed.
+- **.gitignore:** Added `e2e/_verify.spec.ts` as a defensive gitignore to prevent the ephemeral test file from being accidentally committed.
+- **app/layout.tsx:** Set `lang="sv"` (Swedish) and product title "Bygglov-assistenten" — was previously missing/wrong.
+- **package.json:** Removed 2 dead scripts that were no longer used.
+- **dev.yml:** Removed hardcoded `issue_number: 15` comment step (was a known cosmetic failure from the first loop run).
+- **Specs added:** `007-situationsplan.md` (situationsplan screen — fastighetskarta upload, draggable friggebod rectangle, distance-to-boundary display, PDF export) and `008-planritning.md` (dimensioned 2D floor plan SVG from user measurements, area calculation, PDF export).
+- **wiki/index.md:** Added "Current behaviour notes (2026-05-10)" block and PAT-secret TODO to the dev-loop entry.
+
+**Decisions:**
+- Deploy trigger simplified to workflow_run only — the previous push trigger was causing unnecessary deploys and making the deploy log noisy.
+- Spec stdout fallback removed — silent failures (agent prints to stdout instead of writing file) are worse than loud ones.
+
+**Pages updated:**
+- Updated: [[wiki-index]] (behaviour notes added inline to dev-loop entry)
+- Updated: [[log]] (this entry)
+
+---
+
+## [2026-05-10] spec | Specs 007 and 008 — situationsplan + planritning (via spec agent)
+
+**Action:** Spec agent (via `spec.yml`) created `specs/007-feat-situationsplan-screen-spec-007.md` for issue #30.
+
+**Specs in queue:**
+- `007-situationsplan`: Upload fastighetskarta, place draggable friggebod rectangle, compute distances to four property edges, export annotated PDF with north arrow and scale bar.
+- `008-planritning`: Enter friggebod dimensions (width × depth × wall height), render dimensioned SVG floor plan, compute area, export PDF.
+
+Both specs target Phase 1 product work (friggebod flow). Neither has been implemented yet as of this date.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+
+---
+
+## [2026-05-11] memo | Standing instruction — always update wiki with progress
+
+**Action:** Patrik added a standing instruction: always update `docs/wiki/log.md` with progress, decisions, and insights after each working session or significant change.
+
+**Scope:** This applies to any Dev Agent session working in this repo. Each session should add a log entry documenting:
+- What was implemented or changed
+- Key decisions made and the reasoning
+- Open issues or regressions found
+- Any architectural insights
+
+**Why:** The wiki log is the primary artifact for understanding why the codebase evolved the way it did. The commit messages record _what_ changed; the log records _why_.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+
+---
+
+## [2026-05-12] plan | Product pivot — design conversation + triage, real project defined
+
+**Action:** Major planning session. Reshaped the high-level plan around Patrik's real project and a new core UX paradigm.
+
+### Real project defined
+
+The target build is a **combined sauna and yoga studio, 20m²**, on Patrik's country property outside Strängnäs. This replaces "friggebod" as the canonical test case throughout the plan.
+
+**Regulatory classification:**
+- `flow_type: komplementbyggnad`
+- 20m² fits within the lovfri pott (≤30m² per building inside detaljplan, ≤50m² outside)
+- Bucket is almost certainly **ANMALAN** — a sauna will have vatten/avlopp (T-011) or eldstad/rökkanal (T-010)
+- Strandskydd unknown — Patrik to confirm distance to water; if ≤300m → BYGGLOV + dispens, changes everything
+- Property is likely **utanför detaljplan** → pott limits are more generous (65m² total, 50m² single building)
+
+### Build strategy: slice-first
+
+Abandoned the "full flow before anything ships" approach. Instead: vertical slices, each end-to-end, starting with the highest-value screen.
+
+### Situationsplan research — WMS decision
+
+Researched map sources for the situationsplan screen:
+- **Min Karta (Lantmäteriet)** has a print/export function but it is non-obvious on mobile — Patrik tested it and couldn't figure it out. Rules out "user uploads" as the primary approach.
+- **Lantmäteriet open data (Feb 2025):** Fastighetsindelning WMS and OGC API became free as EU High Value Data. Endpoint: `maps.lantmateriet.se/fastighet/wms/v1.1`. OAuth2 via free account at opendata.lantmateriet.se.
+- **Topowebb WMTS** (background tiles): free with API key, endpoint `api.lantmateriet.se/open/topowebb-ccby/v1/wmts/token/{key}/`.
+- **Decision: integrate WMS directly** — user enters fastighetsbeteckning, map + property boundary loads automatically. No other site to visit. This is the right call for a phone-first product.
+- Auth setup guide written. Patrik needs to: register at opendata.lantmateriet.se, subscribe to Topowebb + Fastighetsindelning, get API key + OAuth2 client credentials.
+
+### Core UX pivot: design conversation + parametric model
+
+**Old approach:** form-driven input → generate drawings.
+
+**New approach:** LLM conversation → parametric model → derived drawings + triage.
+
+The design screen works as follows:
+1. User describes the project in natural language ("sauna and yoga studio, ~20m², pitched roof")
+2. Claude API (with tool use) extracts a strict **parametric BuildingModel**: `{ footprint: {length, width}, wallHeight, roof: {type, pitch}, bya, nockhöjd, purpose, installations, triageContext }`
+3. After each tool call: validate against regulatory limits (pott, nockhöjd) → if breach, inject constraint back → LLM adjusts or warns user. This is the **verification loop**.
+4. LLM also extracts triage context from conversation and asks follow-up questions when needed ("Ligger fastigheten inom detaljplan?"). No separate triage form.
+5. Live panels update as tools fire: **SVG floor plan** + **triage result panel**.
+
+**Key constraints:**
+- The parametric model is the truth — drawings are always derived from it, never drawn directly.
+- 2D SVG only for MVP — 3D view deferred.
+- All triage inputs come from conversation only (LLM asks if more detail needed).
+
+**Technology stack for this screen:**
+- Claude API with tool use (Anthropic SDK)
+- Vercel AI SDK `useChat` for streaming + tool call handling on client
+- SVG floor plan rendered from model (no canvas/Three.js needed)
+- Triage logic runs client-side or server-side against model state
+
+### Spec changes
+
+- **Spec 008 (planritning):** Superseded. The 2D floor plan is now derived from the BuildingModel, not entered manually. Spec 008 should not be implemented.
+- **Spec 007 (situationsplan):** Still valid but updated — building footprint dimensions come from BuildingModel, not manual entry. Lantmäteriet WMS replaces the "user uploads fastighetskarta" approach originally written.
+- **Spec 009 (design conversation):** New core spec. Highest priority. Covers: conversation UI, LLM tool-call system, parametric model schema, SVG floor plan, triage panel, validation loop.
+
+### Revised slice order
+
+1. **Spec 009:** Design conversation + parametric model + 2D floor plan + triage panel
+2. **Spec 007 (revised):** Situationsplan — place model footprint on Lantmäteriet WMS map, export PDF
+3. Fasadritning — derive facade drawings from model
+4. Kontrollplan — templated PDF for ANMALAN bucket
+5. Packet assembly + download
+
+### Open items
+
+- Patrik to confirm strandskydd distance (is the property within 300m of water?)
+- Patrik to register at opendata.lantmateriet.se and get API credentials (guide written in this session)
+- Verify Strängnäs e-tjänst format requirements before situationsplan spec is finalised
+- BYA vs BTA in pott calculation still unresolved (TODO in triage-rules wiki entry)
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+- TODO: update [[wiki-index]] with new spec-009 entry
+
 ---
 
 **Log format:** Each entry starts with `## [YYYY-MM-DD] action | Description` for easy parsing with unix tools.

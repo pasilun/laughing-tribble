@@ -15,6 +15,7 @@ A catalog of all wiki entries for the bygglov assistant project.
 ## Product Definitions
 
 - [[product-focus]] - First-class supported flows: komplementbyggnad, komplementbostadshus, tillbyggnad, eldstad, plank, mur
+- [[real-project]] - Canonical dogfood case: 20m² sauna + yoga studio (komplementbyggnad), Patrik's property utanför detaljplan outside Strängnäs. Bucket: ANMALAN (vatten/avlopp). Strandskydd TBD.
 
 ## Flow-Specific Rules
 
@@ -31,6 +32,7 @@ A catalog of all wiki entries for the bygglov assistant project.
 - [[packet-contract]] - Required documents per bucket: LOVFRI (byggherre-dokumentation), ANMALAN, BYGGLOV
 - [[detaljplan-ingestion]] - How to ingest and parse detaljplaner from kommuner
 - [[boverket-apis]] - Integration with Boverket open APIs: Planbestämmelsekatalogen, Ändamålskatalogen, ÖP-katalogen, Författnings-API
+- [[lantmateriet-wms]] - Lantmäteriet WMS/API integration: Topowebb WMTS (background tiles, free API key), Fastighetsindelning Direkt (property boundary GeoJSON, OAuth2, free as EU HVD since 2025-02). Auth setup: register at opendata.lantmateriet.se → Geotorget consumer → apimanager.lantmateriet.se for client credentials.
 
 ## Dev Loop Infrastructure
 
@@ -53,6 +55,12 @@ A catalog of all wiki entries for the bygglov assistant project.
 - [[verifier-agent-prompt]] - System prompt for the verifier agent (`agents/verifier/system-prompt.md`) ✓
 - [[tjansteman-agent-prompt]] - System prompt for the tjänsteman agent (product-embedded, protected path)
 
+## Core Product Screens
+
+- [[design-conversation-spec]] - Spec 009: LLM conversation → BuildingModel → SVG floor plan + triage panel. Claude API tool use extracts parametric model (footprint, roof, installations). Verification loop validates against regulatory limits after each tool call. Triage inputs come from conversation only — LLM asks follow-up questions. 2D SVG only for MVP. **Active — implement next.**
+- [[situationsplan-spec]] - Spec 007 (revised): Place BuildingModel footprint on Lantmäteriet WMS map, measure distances to boundary, export situationsplan PDF at 1:500. Depends on spec 009 (needs BuildingModel) and Lantmäteriet API credentials.
+- ~~[[planritning-spec]]~~ - Spec 008: **Superseded** by spec 009. Floor plan is now derived from BuildingModel, not entered manually. Do not implement.
+
 ## UI & UX
 
 (TODO - to be created)
@@ -72,5 +80,5 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 ---
 
-**Total entries:** 8 complete, 17 TODO
-**Last updated:** 2026-05-10 (bug fixes: lang=sv, deploy order, hardcoded issue# removed, gitignore; simplifications: deploy trigger, verifier two-step, spec fallback, dead scripts)
+**Total entries:** 9 complete, 18 TODO, 1 superseded
+**Last updated:** 2026-05-12 (product pivot: real project defined, design conversation + parametric model, spec 008 superseded, spec 009 active)
