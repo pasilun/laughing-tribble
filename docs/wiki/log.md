@@ -340,4 +340,83 @@ Both specs target Phase 1 product work (friggebod flow). Neither has been implem
 
 ---
 
+## [2026-05-12] plan | Product pivot — design conversation + triage, real project defined
+
+**Action:** Major planning session. Reshaped the high-level plan around Patrik's real project and a new core UX paradigm.
+
+### Real project defined
+
+The target build is a **combined sauna and yoga studio, 20m²**, on Patrik's country property outside Strängnäs. This replaces "friggebod" as the canonical test case throughout the plan.
+
+**Regulatory classification:**
+- `flow_type: komplementbyggnad`
+- 20m² fits within the lovfri pott (≤30m² per building inside detaljplan, ≤50m² outside)
+- Bucket is almost certainly **ANMALAN** — a sauna will have vatten/avlopp (T-011) or eldstad/rökkanal (T-010)
+- Strandskydd unknown — Patrik to confirm distance to water; if ≤300m → BYGGLOV + dispens, changes everything
+- Property is likely **utanför detaljplan** → pott limits are more generous (65m² total, 50m² single building)
+
+### Build strategy: slice-first
+
+Abandoned the "full flow before anything ships" approach. Instead: vertical slices, each end-to-end, starting with the highest-value screen.
+
+### Situationsplan research — WMS decision
+
+Researched map sources for the situationsplan screen:
+- **Min Karta (Lantmäteriet)** has a print/export function but it is non-obvious on mobile — Patrik tested it and couldn't figure it out. Rules out "user uploads" as the primary approach.
+- **Lantmäteriet open data (Feb 2025):** Fastighetsindelning WMS and OGC API became free as EU High Value Data. Endpoint: `maps.lantmateriet.se/fastighet/wms/v1.1`. OAuth2 via free account at opendata.lantmateriet.se.
+- **Topowebb WMTS** (background tiles): free with API key, endpoint `api.lantmateriet.se/open/topowebb-ccby/v1/wmts/token/{key}/`.
+- **Decision: integrate WMS directly** — user enters fastighetsbeteckning, map + property boundary loads automatically. No other site to visit. This is the right call for a phone-first product.
+- Auth setup guide written. Patrik needs to: register at opendata.lantmateriet.se, subscribe to Topowebb + Fastighetsindelning, get API key + OAuth2 client credentials.
+
+### Core UX pivot: design conversation + parametric model
+
+**Old approach:** form-driven input → generate drawings.
+
+**New approach:** LLM conversation → parametric model → derived drawings + triage.
+
+The design screen works as follows:
+1. User describes the project in natural language ("sauna and yoga studio, ~20m², pitched roof")
+2. Claude API (with tool use) extracts a strict **parametric BuildingModel**: `{ footprint: {length, width}, wallHeight, roof: {type, pitch}, bya, nockhöjd, purpose, installations, triageContext }`
+3. After each tool call: validate against regulatory limits (pott, nockhöjd) → if breach, inject constraint back → LLM adjusts or warns user. This is the **verification loop**.
+4. LLM also extracts triage context from conversation and asks follow-up questions when needed ("Ligger fastigheten inom detaljplan?"). No separate triage form.
+5. Live panels update as tools fire: **SVG floor plan** + **triage result panel**.
+
+**Key constraints:**
+- The parametric model is the truth — drawings are always derived from it, never drawn directly.
+- 2D SVG only for MVP — 3D view deferred.
+- All triage inputs come from conversation only (LLM asks if more detail needed).
+
+**Technology stack for this screen:**
+- Claude API with tool use (Anthropic SDK)
+- Vercel AI SDK `useChat` for streaming + tool call handling on client
+- SVG floor plan rendered from model (no canvas/Three.js needed)
+- Triage logic runs client-side or server-side against model state
+
+### Spec changes
+
+- **Spec 008 (planritning):** Superseded. The 2D floor plan is now derived from the BuildingModel, not entered manually. Spec 008 should not be implemented.
+- **Spec 007 (situationsplan):** Still valid but updated — building footprint dimensions come from BuildingModel, not manual entry. Lantmäteriet WMS replaces the "user uploads fastighetskarta" approach originally written.
+- **Spec 009 (design conversation):** New core spec. Highest priority. Covers: conversation UI, LLM tool-call system, parametric model schema, SVG floor plan, triage panel, validation loop.
+
+### Revised slice order
+
+1. **Spec 009:** Design conversation + parametric model + 2D floor plan + triage panel
+2. **Spec 007 (revised):** Situationsplan — place model footprint on Lantmäteriet WMS map, export PDF
+3. Fasadritning — derive facade drawings from model
+4. Kontrollplan — templated PDF for ANMALAN bucket
+5. Packet assembly + download
+
+### Open items
+
+- Patrik to confirm strandskydd distance (is the property within 300m of water?)
+- Patrik to register at opendata.lantmateriet.se and get API credentials (guide written in this session)
+- Verify Strängnäs e-tjänst format requirements before situationsplan spec is finalised
+- BYA vs BTA in pott calculation still unresolved (TODO in triage-rules wiki entry)
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+- TODO: update [[wiki-index]] with new spec-009 entry
+
+---
+
 **Log format:** Each entry starts with `## [YYYY-MM-DD] action | Description` for easy parsing with unix tools.
