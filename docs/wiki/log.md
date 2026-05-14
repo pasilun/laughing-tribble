@@ -419,4 +419,52 @@ The design screen works as follows:
 
 ---
 
+## [2026-05-12] fix | PAT-based retry chain — remove explicit verify re-dispatch
+
+**Action:** Fixed the verify→dev→verify retry chain so it chains correctly using LOOP_PAT.
+
+**Problem:** `verify.yml` was dispatching `dev.yml` using `GITHUB_TOKEN`. GitHub's anti-loop protection blocks `workflow_run` events from being triggered by `GITHUB_TOKEN`-dispatched workflow runs. This meant: verify fails → dispatches dev → dev finishes → `workflow_run: Dev Agent: completed` does NOT fire → verify never re-runs. The retry loop was silently broken.
+
+`dev.yml` had a workaround step "Trigger verify on retry runs" that explicitly dispatched verify after finishing. But it also used `GITHUB_TOKEN`, making it equally broken.
+
+**Changes:**
+- `verify.yml`: `GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` → `GITHUB_TOKEN: ${{ secrets.LOOP_PAT }}` in the "Retry dev agent with failure report" step. LOOP_PAT is a fine-grained PAT with Contents write, Pull requests write, Actions write scope. Dispatches made with a PAT are not subject to the anti-loop block.
+- `dev.yml`: Removed the entire "Trigger verify on retry runs" step. With LOOP_PAT triggering dev, the `workflow_run: Dev Agent: completed` event now fires correctly, so verify re-triggers automatically. The explicit re-dispatch was redundant and would have double-triggered verify.
+
+**PAT details:** Secret name `LOOP_PAT`, scope: Contents write + Pull requests write + Actions write. Added to repo secrets by Patrik.
+
+**Retry chain (fixed):**
+verify fails → dispatches dev with LOOP_PAT + failure_report → dev runs → `workflow_run: Dev Agent: completed` fires → verify re-runs automatically → up to iteration cap (4 commits on branch)
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+
+---
+
+## [2026-05-12] spec | Spec 009 split into five deliveries (009a–009e)
+
+**Action:** Split the large spec 009 (design conversation + parametric model) into five independently verifiable deliveries.
+
+**Reason:** Spec 009 was too large for a single dev loop iteration — it covered chat UI, LLM tool calls, SVG floor plan, triage panel, and validation loop all in one file. A single failing scenario would block everything. Split into five slices, each independently verifiable by Playwright.
+
+**New specs created:**
+
+- `specs/009a-design-chat-ui.md` — Streaming chat UI on `/design`. No model yet. 4 criteria: page loads with input, message streams, history persists, input clears on submit. Dependencies: `ANTHROPIC_API_KEY`, Vercel AI SDK.
+- `specs/009b-building-model-tools.md` — LLM tool calls extract BuildingModel from conversation. Summary panel shows model state. Tools: `set_building()`, `set_triage_context()`, `add_installation()`, `remove_installation()`. Computed: `bya`, `nockhöjd`.
+- `specs/009c-floor-plan-svg.md` — SVG floor plan derived from BuildingModel. Component: `<FloorPlanSVG model={buildingModel} />`. `data-testid` anchors for Playwright: `floor-plan-svg`, `dim-label-width`, `dim-label-length`.
+- `specs/009d-triage-panel.md` — `lib/triage.ts` pure function: `runTriage(model): TriageResult`. Buckets: LOVFRI / ANMÄLAN / BYGGLOV / null. `data-testid` anchors: `triage-bucket`, `triage-reasons`, `triage-incomplete`.
+- `specs/009e-validation-loop.md` — Constraint injection after tool calls. LLM proactively asks about `inomDetaljplan` and mentions vatten/avlopp for sauna. End-to-end: "bastu med dusch utanför detaljplan" → ANMÄLAN in ≤2 turns.
+
+**Spec 009 marked superseded** — `specs/009-design-conversation.md` status field changed to `superseded` with note pointing to 009a–009e.
+
+**Delivery order:** 009a → 009b → 009c → 009d → 009e. Each must pass verification before the next is kicked off.
+
+**009a kicked off:** Status set to `ready-for-dev` and pushed to main as a spec-file change, triggering the dev agent loop.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+- Updated: [[wiki-index]] (009a–009e entries added, 008+009 marked superseded)
+
+---
+
 **Log format:** Each entry starts with `## [YYYY-MM-DD] action | Description` for easy parsing with unix tools.
