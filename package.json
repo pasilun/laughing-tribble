@@ -12,6 +12,9 @@
     "test:golden-cases": "playwright test --grep @golden-case"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.77",
+    "@ai-sdk/react": "^3.0.184",
+    "ai": "^6.0.182",
     "next": "16.2.5",
     "react": "19.2.4",
     "react-dom": "19.2.4"
