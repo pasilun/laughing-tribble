@@ -2,6 +2,25 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
+## [2026-05-14] fix | ai@6 API migration — Vercel build failure resolved
+
+**Root cause:** `ai@6.0.182` removed `StreamTextResult.toDataStreamResponse()` (was v3/v4) and completely overhauled the `useChat` hook API. The route was calling the non-existent method, causing a TypeScript build error that failed the Vercel deploy.
+
+**Fix in `app/api/design/chat/route.ts`:**
+- `toDataStreamResponse()` → `toUIMessageStreamResponse()` (correct v6 method)
+- Added `convertToModelMessages(messages)` (async) to convert UIMessage `parts` format to `CoreMessage[]` for `streamText`
+
+**Fix in `app/design/page.tsx`:**
+- v6 `useChat` dropped `input`/`handleInputChange`/`handleSubmit`/`isLoading`
+- Now: `transport: new DefaultChatTransport({ api: '/api/design/chat' })` for URL config
+- Input managed via local `useState`; submit calls `sendMessage({ text })`
+- `status === 'submitted' || status === 'streaming'` replaces `isLoading`
+- Messages use `message.parts.filter(p => p.type === 'text').map(p => p.text)` instead of `message.content`
+
+**Commit:** `a94374e` — pushed to `claude/update-wiki-progress-5tcGa`
+
+---
+
 ## [2026-05-14] status | Session continuation — 009a marked complete, 009b pending ANTHROPIC_API_KEY
 
 **Context:** Continuing from earlier session (context compaction). All infrastructure changes from the previous session are confirmed on `main` (commit `b23152a`).
