@@ -2,6 +2,24 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
+## [2026-05-14] status | Session continuation — 009a marked complete, 009b pending ANTHROPIC_API_KEY
+
+**Context:** Continuing from earlier session (context compaction). All infrastructure changes from the previous session are confirmed on `main` (commit `b23152a`).
+
+**Actions taken:**
+- Synced `claude/update-wiki-progress-5tcGa` branch to `origin/main` (was 25 commits behind due to previous session pushing directly to main)
+- Marked `specs/009a-design-chat-ui.md` status as `complete` — PR #36 was auto-merged and hotfixes (toDataStreamResponse + useChat hook) were applied directly to main
+
+**009b trigger gate:**
+
+Before changing `specs/009b-building-model-tools.md` to `ready-for-dev`, Patrik must:
+1. **Add `ANTHROPIC_API_KEY` to Vercel Preview environment** (Dashboard → Settings → Environment Variables → check "Preview" scope). Without this, the interactive verifier cannot test real AI tool calls on preview deployments, and 009b will loop-fail.
+
+009b will implement: LLM tool calls that extract a structured `BuildingModel` from conversation, displayed as a summary panel (`data-testid="building-summary-panel"`, `data-testid="bya-value"`, etc.).
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+
 ## [2026-05-03] ingest | Triage Rules
 
 **Source:** `/docs/triage-rules.md`
