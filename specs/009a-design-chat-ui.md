@@ -45,6 +45,14 @@ A streaming chat interface on `/design` that lets the user converse with Claude 
 **Given** the user types a message and submits
 **Then** the text input is empty after submission
 
+## Verifier Hints
+
+- Navigate to `/design` — confirm heading contains "Design" or "Designa", `[data-testid="chat-input"]` is visible, and `[data-testid="send-button"]` is visible
+- Fill `[data-testid="chat-input"]` with "Hej, vad kan du hjälpa mig med?", click `[data-testid="send-button"]`, wait up to 15s for `[data-testid="assistant-message"]` to appear — it must contain **at least 20 characters** and must **NOT** contain "fel uppstod", "error", or "undefined"
+- To verify streaming: record text length of `[data-testid="assistant-message"]` immediately when it first appears, wait 800ms, record again — second reading must be ≥ first (text is growing or already complete)
+- After submit, `[data-testid="chat-input"]` must have value `""` (empty) — if the value is unchanged the send handler is broken
+- Send a second message after receiving a first response — **both** user messages and **both** assistant responses must be simultaneously visible in the page (history must not disappear between sends)
+
 ## Out of Scope
 
 - Tool calls or model extraction (spec 009b)
@@ -54,10 +62,10 @@ A streaming chat interface on `/design` that lets the user converse with Claude 
 
 ## Dependencies
 
-- `ANTHROPIC_API_KEY` set in `.env.local` and Vercel
+- `ANTHROPIC_API_KEY` set in `.env.local` and Vercel (both Production and Preview environments)
 - `ai` and `@ai-sdk/anthropic` packages — install with `npm install ai @ai-sdk/anthropic` if not present
-- Route: `POST /api/design/chat` using `streamText` from `ai`
-- Client: `useChat` hook from `ai/react`
+- Route: `POST /api/design/chat` using `streamText` from `ai`, returning `result.toDataStreamResponse()`
+- Client: `useChat` hook from `@ai-sdk/react` (not `ai/react`)
 - The `/design` page already exists with a placeholder heading (from spec 003)
 
 ## Notes
