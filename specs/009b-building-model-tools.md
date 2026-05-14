@@ -50,6 +50,14 @@ Extend the design chat (spec 009a) with LLM tool calls that extract a structured
 **Then** the model summary panel shows BYA "20.25 m²"
 **And** shows nockhöjd as a computed value (approximately 3.5m)
 
+## Verifier Hints
+
+- Send "Jag vill bygga en komplementbyggnad, 4.5 meter lång och 4.5 meter bred" and wait up to 15s for a model summary panel to appear; the panel must contain "4.5" at least twice (for length and width) and must NOT show "–" for both fields
+- After the panel shows 4.5m length, send "Ändra längden till 5 meter" — within 15s the panel must show "5" for length while still showing "4.5" for width; if both values change or neither changes, the tool call or state update is broken
+- Send "Den ska ha dusch och avlopp" — the panel must list both "vatten" and "avlopp" in an installations section; it must NOT remain empty or unchanged after this message
+- To verify computed BYA: with footprint 4.5 × 4.5, the panel must show "20.25" somewhere (BYA = length × width); if it shows a different number the computation is wrong
+- The model panel must update WITHOUT a page reload — verify by checking that the conversation messages remain visible after the panel updates
+
 ## Out of Scope
 
 - SVG floor plan (spec 009c)
