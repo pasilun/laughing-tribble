@@ -56,6 +56,14 @@ Close the design conversation loop: after each tool call, the API route validate
   - the triage panel shows "ANMÄLAN"
   - the floor plan SVG is visible with dimension labels
 
+## Verifier Hints
+
+- **Scenario 5 is the key integration test** — send the single message "Jag ska bygga en bastu med yogarum på 20 kvadratmeter utanför detaljplan, den ska ha dusch" and wait for up to 30s total (two turns); then assert ALL of: model panel shows a number close to 20, `[data-testid="triage-bucket"]` shows "ANMÄLAN", `[data-testid="floor-plan-svg"]` is visible
+- For nockhöjd warning (Scenario 1): first tell the AI "Det är inom detaljplan" to set inomDetaljplan=true; then send "Sadeltak med 45 graders lutning och vägghjöd 3 meter" — the assistant response text must contain "4.0" or "4,0" and must mention "detaljplan"; if it just updates the model without warning, constraint injection is broken
+- `[data-testid="triage-incomplete"]` must be visible after building is described but before inomDetaljplan is answered; it must disappear after the user confirms "Det är utanför detaljplan"
+- After describing "bastu" without mentioning water, the next assistant message must contain a question about vatten/avlopp in Swedish — check for "vatten", "avlopp", "dusch", or "badrum" in the response text
+- The model panel must update after each tool call WITHOUT a page reload — if a value appears only after a refresh, the real-time update is broken
+
 ## Out of Scope
 
 - Warnings for T-004 (strandskydd) — requires map data
