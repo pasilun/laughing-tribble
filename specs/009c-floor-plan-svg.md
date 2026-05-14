@@ -48,6 +48,14 @@ Render a dimensioned SVG floor plan derived from the BuildingModel (spec 009b). 
 **Then** no SVG floor plan is visible
 **And** a placeholder text such as "Beskriv din byggnad för att se en planritning" is shown in the floor plan area
 
+## Verifier Hints
+
+- Before sending any message: `[data-testid="floor-plan-svg"]` must NOT exist in the DOM; a placeholder text must be visible in the floor plan area
+- After sending "Jag vill bygga 4.5 meter lång och 4.5 meter bred": wait up to 15s for `[data-testid="floor-plan-svg"]` to appear; it must contain an SVG `<rect>` element
+- `[data-testid="dim-label-width"]` and `[data-testid="dim-label-length"]` must be visible and contain numeric text (e.g. "4.5 m") — if they are empty or missing the dimension rendering is broken
+- The page text near the SVG must contain "Byggnadsarea:" followed by a number — check that the number is approximately correct (4.5 × 4.5 = 20.25)
+- After changing width to 5m via chat, `[data-testid="dim-label-width"]` must update to show "5" within 5s WITHOUT a page reload; if the old value persists the reactive update is broken
+
 ## Out of Scope
 
 - Windows, doors, internal walls
