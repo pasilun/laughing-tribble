@@ -182,7 +182,7 @@ jobs:
       - name: Retry dev agent with failure report
         if: steps.verify.outputs.passed != 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.LOOP_PAT }}
         run: |
           FAILURE_REPORT=$(cat /tmp/verify-failures.txt)
           gh workflow run dev.yml \
