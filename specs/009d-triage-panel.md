@@ -50,6 +50,14 @@ A live triage panel on the design screen that runs the bucket-assignment rules a
 **When** the model state changes (new installation added via conversation)
 **Then** the triage panel updates in place to "ANMÄLAN" without a page reload
 
+## Verifier Hints
+
+- After describing only building size (no inomDetaljplan), `[data-testid="triage-bucket"]` must NOT be visible; `[data-testid="triage-incomplete"]` must be visible — if bucket appears before enough context is set, the triage logic is wrong
+- To get LOVFRI: send "Jag vill bygga en komplementbyggnad 4×4 meter, det är utanför detaljplan och inga installationer" — wait up to 20s for `[data-testid="triage-bucket"]` to show text containing "LOVFRI"; also check `[data-testid="triage-reasons"]` has at least one item
+- Then send "Den ska ha en eldstad" — within 15s `[data-testid="triage-bucket"]` must change to "ANMÄLAN" and `[data-testid="triage-reasons"]` must mention "eldstad" or "rökkanal"
+- The bucket change (LOVFRI → ANMÄLAN) must happen WITHOUT a page reload; verify by checking the conversation messages are still visible after the update
+- `[data-testid="triage-bucket"]` must NOT contain "null", "undefined", or be empty — if the LLM responds but the panel doesn't update, the tool call → state update chain is broken
+
 ## Out of Scope
 
 - Detaljplan conflict checks (T-005, T-006) — requires detaljplan data not yet available
