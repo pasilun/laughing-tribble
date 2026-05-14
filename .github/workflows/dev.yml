@@ -125,15 +125,3 @@ jobs:
               --base main \
               --head "$BRANCH" || true
           fi
-
-      - name: Trigger verify on retry runs
-        if: inputs.failure_report != ''
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SPEC_NAME=$(basename "${{ steps.spec.outputs.file }}" .md)
-          PR_NUMBER=$(gh pr list --head "feat/${SPEC_NAME}" --json number --jq '.[0].number')
-          if [ -n "$PR_NUMBER" ]; then
-            gh workflow run verify.yml --field pr_number="$PR_NUMBER"
-          fi
-
