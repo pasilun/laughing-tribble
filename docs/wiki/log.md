@@ -467,4 +467,78 @@ verify fails → dispatches dev with LOOP_PAT + failure_report → dev runs → 
 
 ---
 
+## [2026-05-14] feat | 009a delivered + bugs found + verifier architecture overhauled
+
+### 009a delivery
+
+PR #36 (`feat/009a-design-chat-ui`) was created by the dev agent and auto-merged at 13:53. The dev agent also had a self-healing lint/typecheck step added to `dev.yml` (captures errors, re-invokes agent with output, retries once before hard fail).
+
+### Bugs found in 009a after manual testing
+
+Patrik tested the live `/design` page and got no response. Two bugs in the shipped implementation:
+
+**Bug 1: Stream format mismatch**
+- Route returned `result.toTextStreamResponse()` — raw text stream
+- Client manually parsed SSE format (`data: {...}` lines) expecting `toDataStreamResponse()` format
+- Result: response element created but content never populated → blank response bubble
+- Fix: `toTextStreamResponse()` → `toDataStreamResponse()` in `app/api/design/chat/route.ts`
+
+**Bug 2: Form causes page reload (missing `e.preventDefault()`)**
+- Dev agent implemented a custom `handleSubmit` function without an event parameter
+- Attached to `<form onSubmit={handleSubmit}>` but never called `e.preventDefault()`
+- Result: clicking "Skicka" did a native GET form submission → page reload → chat history lost
+- Fix: rewrote `app/design/page.tsx` to use `useChat` hook from `@ai-sdk/react` — the hook's `handleSubmit` is a proper form event handler
+
+**Correct Vercel AI SDK v4+ pattern (permanent reference):**
+- Server: `import { streamText } from 'ai'` + `return result.toDataStreamResponse()`
+- Client: `import { useChat } from '@ai-sdk/react'` (NOT `ai/react`) with `api: '/api/design/chat'`
+- `useChat` handles: stream parsing, conversation history, input clearing, form event prevention
+
+**Infrastructure note:** `ANTHROPIC_API_KEY` must be set in Vercel under **both Production AND Preview** environments. Without it in Preview, the API route returns 500 and the verifier cannot test real chat responses.
+
+### Why the verifier missed both bugs
+
+The verifier generated a static Playwright test file from the spec without actually running the browser. The generated tests only checked surface-level UI (Scenario 1: page loads with input and button) and didn't properly assert streaming response content. The streaming scenarios likely "passed" because:
+- The form reload caused the test to see an empty input (Scenario 4: "input clears") — technically correct for the wrong reason
+- No assertion checked that the response contained meaningful text vs an error message
+
+**Root cause:** Static test file generation has no feedback loop. The verifier wrote tests it believed would work, but never observed actual browser behaviour.
+
+### Verifier architecture overhaul
+
+Complete redesign of the verification pipeline:
+
+**1. Interactive Playwright verification (verify.yml)**
+- Replaced: "Generate test file" + "Run `npx playwright test`" (two static steps)
+- New: single "Run Verification Agent (interactive)" step where the agent uses Playwright MCP to control a real browser, test each scenario live, write a verdict JSON to `/tmp/verify-result.json`, and also write a regression test file
+- Verdict parsed by a separate "Parse verdict" step; failures fed to dev agent as before
+
+**2. Playwright MCP (opencode.json)**
+- New file: `opencode.json` at project root configures `@playwright/mcp` as an MCP server
+- Command: `npx @playwright/mcp@latest --headless --no-sandbox`
+- opencode reads this config and provides browser tools to the agent: `browser_navigate`, `browser_click`, `browser_fill`, `browser_wait_for_selector`, `browser_take_screenshot`, `browser_evaluate`
+
+**3. Verifier system prompt (rewrite)**
+- Previous: described interactive MCP usage but workflow asked for a static file — mismatch
+- New: aligned with actual usage — explicit instructions to use Playwright tools, test each scenario live, check negative assertions (no error messages), handle streaming timing, write verdict JSON + regression file
+
+**4. Verifier Hints in specs (spec agent prompt + all 009 specs)**
+- Spec agent prompt now requires a `## Verifier Hints` section in every spec
+- Hints must include: exact `data-testid` selectors, at least one negative assertion, async/timing guidance
+- All five 009a–009e specs updated with specific Verifier Hints
+- Purpose: prevent false positives — the verifier must check that the response is real content, not an error state
+
+### Key learnings
+
+- **Static test generation ≠ verification.** A test that passes for the wrong reason (error message = "any text") is worse than no test. The agent must observe actual browser state.
+- **Verifier Hints are essential.** Without explicit guidance on what constitutes a false positive (e.g., "error message appearing"), the verifier will pass broken implementations.
+- **`useChat` from `@ai-sdk/react` is the correct hook.** It handles stream parsing, history, input clearing, and form event prevention — reimplementing any of this manually is error-prone.
+- **`ANTHROPIC_API_KEY` in Vercel Preview is not optional.** The verify pipeline deploys to Vercel preview. Without the key there, every chat verification fails silently.
+- **Self-healing lint in dev.yml.** Lint failures used to kill the dev workflow silently (no branch, no PR, loop dead). Now: lint/typecheck run with `continue-on-error`, output captured, agent re-invoked with errors, second pass is a hard gate.
+
+**Pages updated:**
+- Updated: [[log]] (this entry)
+
+---
+
 **Log format:** Each entry starts with `## [YYYY-MM-DD] action | Description` for easy parsing with unix tools.
