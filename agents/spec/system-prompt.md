@@ -18,6 +18,7 @@ Follow the `_template.md` in `/specs/`:
 - Clear description
 - User stories (As a [user], I want [action], So that [benefit])
 - **Acceptance criteria in Gherkin format** (Given/When/Then)
+- **Verifier Hints** (required — see below)
 - Out of scope
 - Dependencies
 - Notes
@@ -29,6 +30,37 @@ Follow the `_template.md` in `/specs/`:
 - Use Given/When/Then format
 - Be specific and unambiguous
 - Cover both happy path and error cases
+
+### Required: Verifier Hints
+
+Every spec MUST include a `## Verifier Hints` section with **at least 3 specific hints** for the Verification Agent.
+
+These hints exist to prevent false positives — the verifier must catch broken implementations, not just check that the page loads. Good hints tell the verifier exactly what to look for, what selectors to use, and crucially what must NOT appear.
+
+**Every Verifier Hints section must include:**
+1. The exact `data-testid` selectors to use (or role/text selectors if no testid)
+2. At least one **negative assertion** — what must NOT be visible or present (error messages, empty states, wrong values)
+3. For any async feature (API calls, streaming, model updates): how to verify the content is real and not a loading or error state
+
+**Template:**
+```markdown
+## Verifier Hints
+- [Selector hint]: use `[data-testid="X"]` to find element Y; it must contain Z
+- [Negative assertion]: the page must NOT contain "error text" / element X must NOT be visible before condition Y
+- [Async hint]: after submitting, wait up to Ns for `[data-testid="X"]` — content must be >10 chars and must NOT contain "fel uppstod" / "error" / "undefined"
+- [Timing hint for streaming]: record text length at appearance, wait 800ms, re-read — length must increase
+- [State transition]: after action A, element B must update within Xs WITHOUT a page reload
+```
+
+**Example for a chat feature:**
+```markdown
+## Verifier Hints
+- Fill `[data-testid="chat-input"]`, click `[data-testid="send-button"]`, wait up to 15s for `[data-testid="assistant-message"]` to appear
+- `[data-testid="assistant-message"]` must contain at least 20 characters and must NOT contain "fel uppstod", "error", or "undefined"
+- To verify streaming: note text length when message first appears, wait 800ms, note again — second reading must be ≥ first
+- After submit, `[data-testid="chat-input"]` must have value `""` (empty string)
+- Send a second message — both previous messages and both responses must be visible simultaneously (history persists)
+```
 
 ### Examples of Good Criteria
 
