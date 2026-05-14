@@ -106,7 +106,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Generate verification tests from spec
+      - name: Run Verification Agent (interactive)
         env:
           ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
           SPEC_FILE: ${{ steps.spec.outputs.file }}
@@ -119,36 +119,45 @@ jobs:
 
           Spec file: ${SPEC_FILE}
           Preview URL: ${PREVIEW_URL}
+          Spec ID: ${SPEC_ID}
 
-          Your task: write a Playwright test file at ${TARGET_FILE} that independently
-          verifies every acceptance criterion in ${SPEC_FILE} against ${PREVIEW_URL}.
+          Use your Playwright browser tools to interactively test every acceptance criterion
+          in ${SPEC_FILE} against ${PREVIEW_URL}. Navigate the live page, interact with it,
+          and verify each Given/When/Then scenario — including the Verifier Hints section.
 
-          Rules:
-          - Do NOT read the existing e2e/ test files — derive all assertions from the spec only
-          - Use baseURL from the Playwright config (already set to ${PREVIEW_URL} via BASE_URL env)
-          - Cover every Given/When/Then scenario in the spec with a separate test
-          - Use page.goto('/path'), getByRole(), getByText(), expect().toBeVisible(), toHaveURL() etc.
-          - Write the file to ${TARGET_FILE} and stop — do not run it"
+          When finished:
+          1. Write your verdict to /tmp/verify-result.json:
+             { \"passed\": true or false, \"failures\": [\"exact description of each failing scenario\"] }
+          2. Write a Playwright regression test file to ${TARGET_FILE} covering all scenarios
+             (use baseURL from Playwright config — do NOT hardcode the preview URL)"
 
-          if [ ! -s "${TARGET_FILE}" ]; then
-            echo "Error: Verifier agent did not write ${TARGET_FILE}"
-            exit 1
-          fi
-
-      - name: Run verification tests against preview
+      - name: Parse verdict
         id: verify
-        env:
-          CI: 'true'
-          BASE_URL: ${{ steps.preview.outputs.url }}
-          SPEC_ID: ${{ steps.spec.outputs.spec_id }}
         run: |
-          npx playwright test "e2e/_verified-${SPEC_ID}.spec.ts" --reporter=line 2>&1 | tee /tmp/verify-output.txt
-          if grep -q "passed" /tmp/verify-output.txt && ! grep -q "failed" /tmp/verify-output.txt; then
-            echo "passed=true" >> $GITHUB_OUTPUT
-          else
+          if [ ! -f /tmp/verify-result.json ]; then
             echo "passed=false" >> $GITHUB_OUTPUT
-            # Extract failure summary (last 80 lines covers all test output)
-            tail -80 /tmp/verify-output.txt > /tmp/verify-failures.txt
+            echo "Verifier agent did not write /tmp/verify-result.json" > /tmp/verify-failures.txt
+          else
+            PASSED=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('/tmp/verify-result.json'))
+    print('true' if d.get('passed') else 'false')
+except Exception as e:
+    print('false')
+" 2>/dev/null)
+            echo "passed=$PASSED" >> $GITHUB_OUTPUT
+            if [ "$PASSED" != "true" ]; then
+              python3 -c "
+import json
+try:
+    d = json.load(open('/tmp/verify-result.json'))
+    failures = d.get('failures', ['No failure details provided'])
+    print('\n'.join(failures))
+except Exception:
+    print(open('/tmp/verify-result.json').read())
+" > /tmp/verify-failures.txt 2>/dev/null || echo "Could not parse verify-result.json" > /tmp/verify-failures.txt
+            fi
           fi
 
       - name: Commit verified tests for regression
