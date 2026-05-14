@@ -1,17 +1,28 @@
 'use client'
 
 import { useChat } from '@ai-sdk/react'
-import { useEffect, useRef } from 'react'
+import { DefaultChatTransport } from 'ai'
+import { useEffect, useRef, useState } from 'react'
 
 export default function DesignPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: '/api/design/chat',
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({ api: '/api/design/chat' }),
   })
+  const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isLoading = status === 'submitted' || status === 'streaming'
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const text = input.trim()
+    if (!text) return
+    setInput('')
+    sendMessage({ text })
+  }
 
   return (
     <div className="flex flex-col h-screen bg-zinc-50 dark:bg-black font-sans">
@@ -42,7 +53,10 @@ export default function DesignPage() {
                 }`}
               >
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {message.content}
+                  {message.parts
+                    .filter((p) => p.type === 'text')
+                    .map((p) => (p as { type: 'text'; text: string }).text)
+                    .join('')}
                 </p>
               </div>
             </div>
@@ -67,7 +81,7 @@ export default function DesignPage() {
           <form onSubmit={handleSubmit} className="flex gap-3">
             <input
               value={input}
-              onChange={handleInputChange}
+              onChange={(e) => setInput(e.target.value)}
               placeholder="Beskriv vad du vill bygga..."
               disabled={isLoading}
               className="flex-1 px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 disabled:opacity-50"
