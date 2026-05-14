@@ -65,3 +65,4 @@ A streaming chat interface on `/design` that lets the user converse with Claude 
 - System prompt for this delivery: "Du är en hjälpsam assistent för bygglovsfrågor. Svara på svenska."
 - No tools wired yet — pure text conversation
 - Mobile: single column, input pinned to bottom
+- For Playwright streaming test: record text content at t=0 after first chunk appears, wait 500ms, record again — assert second snapshot is longer than first
