@@ -55,8 +55,8 @@ A streaming chat interface on `/design` that lets the user converse with Claude 
 ## Dependencies
 
 - `ANTHROPIC_API_KEY` set in `.env.local` and Vercel
-- `ai` (Vercel AI SDK) and `@ai-sdk/anthropic` packages installed
-- Route: `POST /api/design/chat` using `streamText`
+- `ai` and `@ai-sdk/anthropic` packages — install with `npm install ai @ai-sdk/anthropic` if not present
+- Route: `POST /api/design/chat` using `streamText` from `ai`
 - Client: `useChat` hook from `ai/react`
 - The `/design` page already exists with a placeholder heading (from spec 003)
 
