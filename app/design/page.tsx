@@ -1,17 +1,33 @@
 'use client'
 
 import { useChat } from '@ai-sdk/react'
-import { useEffect, useRef } from 'react'
+import { DefaultChatTransport } from 'ai'
+import { useEffect, useRef, useState } from 'react'
 
 export default function DesignPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const transport = new DefaultChatTransport({
     api: '/api/design/chat',
   })
+  
+  const { messages, sendMessage, status } = useChat({
+    transport,
+  })
+  
+  const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const isLoading = status === 'submitted' || status === 'streaming'
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (input.trim()) {
+      sendMessage({ text: input })
+      setInput('')
+    }
+  }
 
   return (
     <div className="flex flex-col h-screen bg-zinc-50 dark:bg-black font-sans">
@@ -21,32 +37,33 @@ export default function DesignPage() {
         </h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <main className="flex-1 overflow-y-auto p-6" role="main" data-testid="conversation">
         <div className="max-w-3xl mx-auto space-y-6">
-          {messages.length === 0 && (
-            <p className="text-zinc-600 dark:text-zinc-400 text-center py-8">
-              Beskriv ditt projekt så hjälper jag dig att komma igång
-            </p>
-          )}
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              data-testid={message.role === 'assistant' ? 'assistant-message' : undefined}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+          {messages.map((message) => {
+            const textContent = message.parts
+              .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+              .map((part) => part.text)
+              .join('')
+
+            return (
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                  message.role === 'user'
-                    ? 'bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900'
-                    : 'bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 border border-zinc-200 dark:border-zinc-700'
-                }`}
+                key={message.id}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {message.content}
-                </p>
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    message.role === 'user'
+                      ? 'bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900'
+                      : 'bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 border border-zinc-200 dark:border-zinc-700'
+                  }`}
+                >
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {textContent}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           {isLoading && (
             <div className="flex justify-start">
               <div className="bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 border border-zinc-200 dark:border-zinc-700">
@@ -60,14 +77,14 @@ export default function DesignPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
-      </div>
+      </main>
 
       <div className="flex-shrink-0 p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
         <div className="max-w-3xl mx-auto">
           <form onSubmit={handleSubmit} className="flex gap-3">
             <input
               value={input}
-              onChange={handleInputChange}
+              onChange={(e) => setInput(e.target.value)}
               placeholder="Beskriv vad du vill bygga..."
               disabled={isLoading}
               className="flex-1 px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 disabled:opacity-50"
