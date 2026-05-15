@@ -5,7 +5,7 @@ import { DefaultChatTransport } from 'ai'
 import { useEffect, useRef, useState } from 'react'
 
 export default function DesignPage() {
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({ api: '/api/design/chat' }),
   })
   const [input, setInput] = useState('')
@@ -74,6 +74,13 @@ export default function DesignPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
+      </div>
+
+      {/* debug banner — remove before launch */}
+      <div className="flex-shrink-0 px-6 py-2 bg-zinc-100 dark:bg-zinc-900 text-xs font-mono text-zinc-500 border-t border-zinc-200 dark:border-zinc-800 flex gap-4">
+        <span>status: <strong>{status}</strong></span>
+        <span>msgs: <strong>{messages.length}</strong></span>
+        {error && <span className="text-red-500">error: {error.message}</span>}
       </div>
 
       <div className="flex-shrink-0 p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
