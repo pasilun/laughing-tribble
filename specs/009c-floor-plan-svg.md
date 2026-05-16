@@ -4,7 +4,7 @@
 `009c-floor-plan-svg`
 
 ## Status
-`draft`
+`planned`
 
 ## Description
 

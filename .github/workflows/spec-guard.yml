@@ -1,0 +1,77 @@
+name: Spec Guard
+
+# Enforces the living-specification policy:
+#  - every spec has a valid Status (active|planned|superseded|obsolete)
+#  - every `active` spec declares a `## Regression Test` whose file exists
+# active spec <-> regression test is the actual drift defence.
+
+on:
+  pull_request:
+    paths:
+      - 'specs/**'
+      - 'e2e/**'
+  push:
+    branches: [main]
+    paths:
+      - 'specs/**'
+      - 'e2e/**'
+  workflow_dispatch:
+
+jobs:
+  spec-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate specs
+        run: |
+          fail=0
+          for f in specs/*.md; do
+            base=$(basename "$f")
+            [ "$base" = "_template.md" ] && continue
+
+            status=$(awk '
+              /^## Status/ { in_s=1; next }
+              in_s {
+                if ($0 ~ /^<!--/) { in_c=1 }
+                if (in_c) { if ($0 ~ /-->/) in_c=0; next }
+                if ($0 ~ /^[[:space:]]*$/) next
+                if (match($0, /`(active|planned|superseded|obsolete)`/)) {
+                  print substr($0, RSTART+1, RLENGTH-2); exit
+                }
+                exit
+              }' "$f")
+
+            if [ -z "$status" ]; then
+              echo "::error file=$f::missing or invalid Status (need active|planned|superseded|obsolete)"
+              fail=1
+              continue
+            fi
+
+            if [ "$status" = "active" ]; then
+              rt=$(awk '
+                /^## Regression Test/ { in_r=1; next }
+                in_r {
+                  if ($0 ~ /^<!--/) { in_c=1 }
+                  if (in_c) { if ($0 ~ /-->/) in_c=0; next }
+                  if ($0 ~ /^[[:space:]]*$/) next
+                  if (match($0, /`([^`]+)`/)) {
+                    print substr($0, RSTART+1, RLENGTH-2); exit
+                  }
+                  exit
+                }' "$f")
+
+              if [ -z "$rt" ]; then
+                echo "::error file=$f::active spec has no '## Regression Test' pointer"
+                fail=1
+              elif [ ! -f "$rt" ]; then
+                echo "::error file=$f::Regression Test '$rt' does not exist"
+                fail=1
+              else
+                echo "OK   $base -> active, $rt"
+              fi
+            else
+              echo "OK   $base -> $status"
+            fi
+          done
+          exit $fail

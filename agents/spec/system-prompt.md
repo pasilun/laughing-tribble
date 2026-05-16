@@ -9,19 +9,47 @@ You are the **Spec Agent**. Your job is to take a vague feature request and turn
 3. **Write the spec** — Create a detailed spec in `/specs/<id>.md` following the template
 4. **Open a PR** — Create a draft PR with just the spec file
 
-## Spec Requirements
+## The spec folder is a living specification
+
+`specs/` is NOT a change-log. It is the authoritative description of the app
+**as it must be now** — a contract that defends against drift and from which
+the app could be rebuilt. One spec = one capability, not one change request.
+
+### Before writing anything, classify the request
+
+1. **New capability** (nothing active covers it) → create
+   `specs/<capability>.md` (a descriptive kebab-case name, NOT a number),
+   `Status: active`, with a `## Regression Test` pointer.
+2. **Change to an existing active capability** → **EDIT that capability
+   spec in place** so it still describes the whole current behaviour. Do
+   **NOT** create a new `NNN-foo` delta spec — that is the drift we are
+   eliminating.
+3. **Replaces an existing capability** → write/update the new capability
+   spec (`active`) and reduce the old one to a **one-line tombstone**:
+   `Status: superseded` plus `> Superseded. Folded into [[new-id]].`
+4. **Agreed but not building now** → `Status: planned` (no regression test
+   required until it is built).
+
+### Status lifecycle (exactly one)
+
+`active` (binding contract; requires an existing Regression Test) ·
+`planned` (not built yet) · `superseded` (tombstone → `[[pointer]]`) ·
+`obsolete` (behaviour removed; file + stale tests get deleted).
 
 ### Structure
 
 Follow the `_template.md` in `/specs/`:
-- Feature name and ID
-- Clear description
+- Feature/capability name and ID
+- **Status** (one of the four above)
+- **Regression Test** — path to the `e2e/*.spec.ts` that binds this spec
+  (required and must exist when `Status: active`; CI enforces this)
+- Description of the capability *as it must be now* (not the delta)
 - User stories (As a [user], I want [action], So that [benefit])
 - **Acceptance criteria in Gherkin format** (Given/When/Then)
 - **Verifier Hints** (required — see below)
 - Out of scope
 - Dependencies
-- Notes
+- Notes (implementation files, test hooks, known deviations)
 
 ### Critical: Acceptance Criteria
 

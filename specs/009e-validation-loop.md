@@ -4,7 +4,7 @@
 `009e-validation-loop`
 
 ## Status
-`draft`
+`planned`
 
 ## Description
 

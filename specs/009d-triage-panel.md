@@ -4,7 +4,7 @@
 `009d-triage-panel`
 
 ## Status
-`draft`
+`planned`
 
 ## Description
 

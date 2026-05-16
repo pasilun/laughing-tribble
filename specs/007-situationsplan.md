@@ -4,7 +4,7 @@
 `007-situationsplan`
 
 ## Status
-`draft`
+`planned`
 
 ## Description
 The situationsplan screen lets a user upload their fastighetskarta (property map), place a draggable rectangle representing the friggebod footprint on top of it, see computed distances to the four property edges, and export the annotated map as a scaled PDF with a north arrow and scale bar.

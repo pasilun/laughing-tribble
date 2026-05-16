@@ -4,7 +4,7 @@
 `008-planritning`
 
 ## Status
-`draft`
+`planned`
 
 ## Description
 The planritning screen renders a dimensioned 2D floor plan for a friggebod based on user-supplied measurements. The user enters width, depth, and optionally wall height; the app draws an SVG floor plan with dimension arrows and displays the computed area. The plan can be exported as a PDF.

@@ -7,6 +7,9 @@
 `superseded`
 
 > **Superseded.** Split into five deliveries: 009a (chat UI), 009b (model tools), 009c (floor plan SVG), 009d (triage panel), 009e (validation loop). Do not implement this file.
+>
+> Status of the split: 009a is delivered and folded into the active
+> [[design-screen]] spec. 009b–009e are `planned` (not built yet).
 
 ## Description
 
