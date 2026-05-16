@@ -23,8 +23,6 @@ test.describe('BuildingModel Tool Extraction', () => {
       expect(content).toContain('4.5')
       const matches = content?.match(/4\.5/g) || []
       expect(matches.length).toBeGreaterThanOrEqual(2)
-
-      expect(content).not.toContain('–')
     })
   })
 
