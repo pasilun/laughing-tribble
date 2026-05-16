@@ -39,7 +39,10 @@ export async function POST(req: Request) {
               }
             },
             required: []
-          })
+          }),
+          execute: async (args) => {
+            return JSON.stringify(args)
+          }
         }
       },
       toolChoice: 'auto'

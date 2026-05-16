@@ -33,7 +33,9 @@ export default function DesignPage() {
         if (part.type === 'tool-call') {
           const toolCall = part as unknown as ToolCallPart
           if (toolCall.toolName === 'set_building') {
-            const args = toolCall.args
+            const args = typeof toolCall.args === 'string' 
+              ? JSON.parse(toolCall.args) 
+              : toolCall.args
             const newModel: BuildingModel = {
               ...(acc || {}),
             }
