@@ -38,8 +38,10 @@ The escalation cap depends on a small set of implicit invariants. A change to
    `feat/<spec>` branch and adds a commit; it must **never** force-push or
    recreate the branch from `main`.
 2. **Attempt count = commits on `feat/<spec>` ahead of `main`.** This is the
-   only counter. `gate` reads it; `0–4` → normal model, `5` → escalate
-   (gated by the `escalation` Environment), `≥6` → stop.
+   only counter. With `MAX = vars.LOOP_MAX_ATTEMPTS` (default 3): `gate`
+   sends `C < MAX` → normal model, `C == MAX` → escalate (gated by the
+   `escalation` Environment), `C > MAX` → stop. dev.yml and verify.yml must
+   read the same variable so the thresholds stay in sync.
 3. **Every dev run adds exactly one commit** — including an
    `--allow-empty` commit when the agent produced no changes — so the
    counter always advances and the loop always terminates.

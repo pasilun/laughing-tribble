@@ -188,26 +188,30 @@ jobs:
         run: |
           git fetch origin main 2>/dev/null || true
           C=$(git rev-list --count HEAD ^origin/main 2>/dev/null || echo "0")
-          echo "Attempts so far (commits ahead of main): $C"
+          MAX="${{ vars.LOOP_MAX_ATTEMPTS || '3' }}"
+          STOP_AT=$((MAX + 1))
+          echo "Attempt $C of $MAX (commits ahead of main: $C)"
           FAILURE_REPORT=$(cat /tmp/verify-failures.txt)
 
-          if [ "$C" -ge 6 ]; then
-            # 5 normal attempts + 1 escalated (glm-5.1) attempt all failed.
+          if [ "$C" -ge "$STOP_AT" ]; then
+            # MAX normal attempts + 1 escalated (glm-5.1) attempt all failed.
             gh issue create -R "$REPO" \
               --title "🆘 Dev loop exhausted on ${SPEC_FILE}" \
               --label bug \
-              --body "5 attempts plus the escalated (glm-5.1) attempt all failed verification on \`${BRANCH}\`.
+              --body "${MAX} attempts plus the escalated (glm-5.1) attempt all failed verification on \`${BRANCH}\`.
 
           Latest failures:
           \`\`\`
           ${FAILURE_REPORT}
           \`\`\`
           Human intervention required." || true
-            [ -n "$PR_NUMBER" ] && gh pr comment "$PR_NUMBER" --body "🆘 Exhausted 5 attempts + escalation. Opened an issue for human help." || true
+            [ -n "$PR_NUMBER" ] && gh pr comment "$PR_NUMBER" --body "🆘 Exhausted ${MAX} attempts + escalation. Opened an issue for human help." || true
             echo "Loop terminated — not re-dispatching."
           else
-            if [ "$C" -ge 5 ]; then
-              [ -n "$PR_NUMBER" ] && gh pr comment "$PR_NUMBER" --body "⚠️ 5 attempts failed. Escalating to the stronger model (glm-5.1) — **approve the queued Dev Agent run** in the Actions tab (Environment: \`escalation\`) to proceed." || true
+            if [ "$C" -ge "$MAX" ]; then
+              [ -n "$PR_NUMBER" ] && gh pr comment "$PR_NUMBER" --body "⚠️ Attempt ${C}/${MAX} failed — all ${MAX} normal attempts exhausted. Escalating to the stronger model (glm-5.1) — **approve the queued Dev Agent run** in the Actions tab (Environment: \`escalation\`) to proceed." || true
+            else
+              [ -n "$PR_NUMBER" ] && gh pr comment "$PR_NUMBER" --body "❌ Attempt ${C}/${MAX} failed verification — retrying." || true
             fi
             if ! gh workflow run dev.yml \
                  --field spec_file="${SPEC_FILE}" \

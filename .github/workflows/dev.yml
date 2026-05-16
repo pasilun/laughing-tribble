@@ -16,9 +16,10 @@ on:
 
 jobs:
   # Decides which attempt this is and which model to use. The feature branch
-  # is now cumulative (see the dev job), so commits-ahead-of-main is a real
-  # attempt counter: 0..4 -> normal (glm-4.7), 5 -> escalate (glm-5.1, gated
-  # by the "escalation" Environment), >=6 -> stop (handled by verify).
+  # is cumulative, so commits-ahead-of-main is a real attempt counter.
+  # With MAX = vars.LOOP_MAX_ATTEMPTS (default 3): C in 0..MAX-1 -> normal
+  # (glm-4.7); C == MAX -> escalate (glm-5.1, gated by the "escalation"
+  # Environment); C > MAX -> stop (handled by verify).
   gate:
     runs-on: ubuntu-latest
     outputs:
@@ -36,7 +37,9 @@ jobs:
         id: g
         run: |
           # ---- escalation tunables ----
-          MAX_NORMAL=5
+          # Tune the cap via the LOOP_MAX_ATTEMPTS repo variable (no code change).
+          MAX_NORMAL="${{ vars.LOOP_MAX_ATTEMPTS || '3' }}"
+          STOP_AT=$((MAX_NORMAL + 1))
           BASE_MODEL="zai-coding-plan/glm-4.7"
           ESC_MODEL="zai-coding-plan/glm-5.1"
           # -----------------------------
@@ -56,7 +59,7 @@ jobs:
           git fetch origin main 2>/dev/null || true
           C=$(git rev-list --count "origin/${BRANCH}" ^origin/main 2>/dev/null || echo "0")
 
-          if [ "$C" -ge 6 ]; then
+          if [ "$C" -ge "$STOP_AT" ]; then
             MODE="stop";     MODEL="$ESC_MODEL"
           elif [ "$C" -ge "$MAX_NORMAL" ]; then
             MODE="escalate"; MODEL="$ESC_MODEL"
