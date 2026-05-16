@@ -23,7 +23,8 @@ exists today. This section is orientation, not a contract.
 ## Planned / not built yet
 
 These are aspirational and live as `planned` specs (`specs/007`, `008`,
-`009b`–`009e`) and product notes under `docs/product/`:
+`009b`–`009e`) and the knowledge base under `docs/wiki/` (see
+`docs/wiki/index.md`):
 
 - Parametric design conversation → structured building model
 - Generated documentation (situationsplan, planritning, PDFs)
