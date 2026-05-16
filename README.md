@@ -12,6 +12,27 @@ This project demonstrates an autonomous AI development loop that:
 
 The product being built is a **Swedish bygglov assistant** that helps users create building permit applications for small structures (friggebod, attefall, etc.).
 
+## Repo map — app vs flow
+
+Two things live in this repo. They separate cleanly by directory:
+
+| | Paths | What it is |
+|---|---|---|
+| **App** (the product — grows prompt by prompt) | `app/`, `components/`, `public/` | The Next.js web app |
+| App config | `next.config.ts`, `postcss.config.mjs`, `tsconfig.json`, `eslint.config.mjs`, `package.json`, `vercel.json`, `app/globals.css` | Build/deploy of the app |
+| **Flow** (the autonomous loop — defends itself) | `.github/workflows/`, `.github/actions/`, `agents/`, `specs/`, `CLAUDE.md`, `AGENTS.md`, `opencode.json`, `docs/` | The machinery + contracts that build the app |
+| Boundary | `e2e/*.spec.ts` (app behaviour) · `e2e/_verified-*.spec.ts` (flow-generated regression) | Tests bind the two |
+
+Rule of thumb: **`app/` + `components/` + `public/` is the app; everything that drives or checks it is flow.**
+
+```bash
+git ls-files | grep -E '^(app|components|public)/'                 # app
+git ls-files | grep -vE '^(app|components|public)/' | grep -v node_modules   # flow
+```
+
+Product domain lives only in `docs/product-context.md` (+ `docs/wiki/`); the
+flow is product-agnostic so the app can pivot without touching the machinery.
+
 ## Quick Start
 
 ```bash

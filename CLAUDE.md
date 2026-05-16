@@ -47,6 +47,11 @@ The escalation cap depends on a small set of implicit invariants. A change to
    failing attempt never inflates the counter.
 5. **`active` spec ⇄ existing regression test** is enforced by
    `spec-guard.yml`. Don't add an `active` spec without its `e2e` test.
+6. **`chore` specs are transient.** A cleanup/refactor request produces a
+   `Status: chore` spec that drives one dev+verify cycle and is then
+   auto-pruned from `main` by Auto Merge. Implement it like any spec, but
+   it is not part of the living specification and owns no regression test —
+   its acceptance is "the existing active specs still pass".
 
 ## AI tooling (pinned — do not float to @latest)
 

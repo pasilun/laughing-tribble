@@ -36,7 +36,7 @@ jobs:
                 if ($0 ~ /^<!--/) { in_c=1 }
                 if (in_c) { if ($0 ~ /-->/) in_c=0; next }
                 if ($0 ~ /^[[:space:]]*$/) next
-                if (match($0, /`(active|planned|superseded|obsolete)`/)) {
+                if (match($0, /`(active|planned|superseded|obsolete|chore)`/)) {
                   print substr($0, RSTART+1, RLENGTH-2); exit
                 }
                 exit

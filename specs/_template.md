@@ -4,7 +4,7 @@
 `[kebab-case-id]`
 
 ## Status
-<!-- exactly one of: active | planned | superseded | obsolete -->
+<!-- exactly one of: active | planned | superseded | obsolete | chore -->
 `active`
 
 <!--
@@ -14,6 +14,11 @@
   superseded = folded into another capability spec. Reduce this file to a
                one-line tombstone with [[pointer]] to the replacement.
   obsolete   = the behaviour was removed. Delete the file and its stale tests.
+  chore      = a one-off cleanup/refactor with no new capability. TRANSIENT:
+               it only drives one dev+verify cycle and is auto-pruned from
+               main after the feature PR merges. Never a permanent spec, never
+               a regression-test owner. Acceptance = "no regression in the
+               existing active specs" (+ any specific observable fix).
 -->
 
 ## Regression Test

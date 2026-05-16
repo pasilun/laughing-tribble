@@ -29,12 +29,26 @@ the app could be rebuilt. One spec = one capability, not one change request.
    `Status: superseded` plus `> Superseded. Folded into [[new-id]].`
 4. **Agreed but not building now** → `Status: planned` (no regression test
    required until it is built).
+5. **Maintenance / cleanup / refactor / bug fix with no new
+   user-visible capability** → `Status: chore`. This is a **transient**
+   spec: it drives exactly one dev+verify cycle and is auto-pruned from
+   `main` after the feature PR merges. It is never a permanent spec and
+   never owns a regression test. Do **not** create or edit a capability
+   spec for a chore unless behaviour genuinely changes. Acceptance
+   criteria = "the existing active specs still pass (no regression)" plus
+   any single specific observable fix the request names (e.g. a footer
+   shows the current year). Filename can stay `specs/NNN-slug.md` (the
+   pruner removes it by Status, not by path).
+
+A request to "clean up", "simplify", "refactor", "remove dead code",
+"tidy", or "fix a small bug" is almost always **chore**, not a capability.
 
 ### Status lifecycle (exactly one)
 
 `active` (binding contract; requires an existing Regression Test) ·
 `planned` (not built yet) · `superseded` (tombstone → `[[pointer]]`) ·
-`obsolete` (behaviour removed; file + stale tests get deleted).
+`obsolete` (behaviour removed; file + stale tests get deleted) ·
+`chore` (transient cleanup driver; auto-pruned after merge).
 
 ### Structure
 
