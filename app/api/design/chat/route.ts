@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     console.log('[chat] received', messages?.length, 'messages')
 
     const result = streamText({
-      model: anthropic('claude-3-5-sonnet-20241022'),
+      model: anthropic('claude-sonnet-4-5'),
       system: 'Du är en hjälpsam assistent för bygglovsfrågor. Svara på svenska.',
       messages: await convertToModelMessages(messages),
     })
