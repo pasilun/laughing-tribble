@@ -4,7 +4,7 @@
 `building-model-extraction`
 
 ## Status
-`planned`
+`active`
 
 ## Regression Test
 `e2e/building-model-extraction.spec.ts`

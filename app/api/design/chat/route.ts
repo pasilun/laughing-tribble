@@ -1,9 +1,8 @@
-import { streamText, convertToModelMessages } from 'ai'
+import { streamText, convertToModelMessages, jsonSchema } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 
 export const runtime = 'edge'
 
-// Single place to change the chat model.
 const CHAT_MODEL = 'claude-sonnet-4-5'
 
 export async function POST(req: Request) {
@@ -14,6 +13,36 @@ export async function POST(req: Request) {
       model: anthropic(CHAT_MODEL),
       system: 'Du är en hjälpsam assistent för bygglovsfrågor. Svara på svenska.',
       messages: await convertToModelMessages(messages),
+      tools: {
+        set_building: {
+          description: 'Uppdatera parametrar för byggnaden baserat på vad användaren beskriver. Detta är en partiell uppdatering — uppdatera bara de fält som explicit nämns eller korrigeras.',
+          inputSchema: jsonSchema({
+            type: 'object',
+            properties: {
+              flowType: {
+                type: 'string',
+                description: 'Typ av byggnad (t.ex. "komplementbyggnad", "friggebod", "attefallshus")'
+              },
+              footprint: {
+                type: 'object',
+                properties: {
+                  length: {
+                    type: 'number',
+                    description: 'Längd i meter'
+                  },
+                  width: {
+                    type: 'number',
+                    description: 'Bredd i meter'
+                  }
+                },
+                required: ['length', 'width']
+              }
+            },
+            required: []
+          })
+        }
+      },
+      toolChoice: 'auto'
     })
 
     return result.toUIMessageStreamResponse()

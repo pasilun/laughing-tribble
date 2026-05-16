@@ -2,7 +2,22 @@
 
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+
+type BuildingModel = {
+  flowType?: string
+  footprint?: {
+    length: number
+    width: number
+  }
+}
+
+type ToolCallPart = {
+  type: 'tool-call'
+  toolCallId: string
+  toolName: string
+  args: BuildingModel
+}
 
 export default function DesignPage() {
   const { messages, sendMessage, status, error } = useChat({
@@ -11,6 +26,33 @@ export default function DesignPage() {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isLoading = status === 'submitted' || status === 'streaming'
+
+  const buildingModel = useMemo(() => {
+    return messages.reduce<BuildingModel | null>((acc, message) => {
+      for (const part of message.parts) {
+        if (part.type === 'tool-call') {
+          const toolCall = part as unknown as ToolCallPart
+          if (toolCall.toolName === 'set_building') {
+            const args = toolCall.args
+            const newModel: BuildingModel = {
+              ...(acc || {}),
+            }
+            if (args.flowType) {
+              newModel.flowType = args.flowType
+            }
+            if (args.footprint) {
+              newModel.footprint = {
+                ...(acc?.footprint || { length: 0, width: 0 }),
+                ...args.footprint
+              }
+            }
+            return newModel
+          }
+        }
+      }
+      return acc
+    }, null)
+  }, [messages])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -76,17 +118,14 @@ export default function DesignPage() {
         </div>
       </div>
 
-      {error && (
-        <div
-          role="alert"
-          className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300 border-t border-red-200 dark:border-red-900"
-        >
-          Något gick fel. Försök igen.
-        </div>
-      )}
-
-      <div className="flex-shrink-0 p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-3xl mx-auto">
+      <div className="flex-shrink-0 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
+        <div className="max-w-3xl mx-auto p-6">
+          <pre
+            data-testid="model-state"
+            className="text-xs bg-zinc-100 dark:bg-zinc-900 p-4 rounded-lg overflow-x-auto mb-4 text-zinc-700 dark:text-zinc-300"
+          >
+            {buildingModel === null ? 'null' : JSON.stringify(buildingModel, null, 2)}
+          </pre>
           <form onSubmit={handleSubmit} className="flex gap-3">
             <input
               value={input}
@@ -107,6 +146,15 @@ export default function DesignPage() {
           </form>
         </div>
       </div>
+
+      {error && (
+        <div
+          role="alert"
+          className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300 border-t border-red-200 dark:border-red-900"
+        >
+          Något gick fel. Försök igen.
+        </div>
+      )}
     </div>
   )
 }
