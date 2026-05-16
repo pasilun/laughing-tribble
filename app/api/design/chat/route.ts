@@ -1,11 +1,24 @@
 import { streamText, convertToModelMessages, jsonSchema } from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 
-export const runtime = 'edge'
-
 const CHAT_MODEL = 'claude-sonnet-4-5'
 
 export async function POST(req: Request) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  
+  if (!apiKey) {
+    console.error('[chat] ANTHROPIC_API_KEY is not configured')
+    return new Response(
+      JSON.stringify({ 
+        error: 'AI service not configured. Please set ANTHROPIC_API_KEY environment variable.' 
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+  }
+  
   try {
     const { messages } = await req.json()
 

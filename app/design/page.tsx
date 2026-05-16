@@ -29,30 +29,30 @@ export default function DesignPage() {
 
   const buildingModel = useMemo(() => {
     return messages.reduce<BuildingModel | null>((acc, message) => {
+      let newModel = acc
       for (const part of message.parts) {
         if (part.type === 'tool-call') {
           const toolCall = part as unknown as ToolCallPart
           if (toolCall.toolName === 'set_building') {
-            const args = typeof toolCall.args === 'string' 
-              ? JSON.parse(toolCall.args) 
+            const args = typeof toolCall.args === 'string'
+              ? JSON.parse(toolCall.args)
               : toolCall.args
-            const newModel: BuildingModel = {
-              ...(acc || {}),
+            newModel = {
+              ...(newModel || {}),
             }
             if (args.flowType) {
               newModel.flowType = args.flowType
             }
             if (args.footprint) {
               newModel.footprint = {
-                ...(acc?.footprint || { length: 0, width: 0 }),
+                ...(newModel?.footprint || {}),
                 ...args.footprint
               }
             }
-            return newModel
           }
         }
       }
-      return acc
+      return newModel
     }, null)
   }, [messages])
 
