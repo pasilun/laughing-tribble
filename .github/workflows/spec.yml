@@ -84,9 +84,10 @@ jobs:
       - name: Create draft PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
           gh pr create \
-            --title "spec: ${{ github.event.issue.title }}" \
+            --title "spec: ${ISSUE_TITLE}" \
             --body "Closes #${{ github.event.issue.number }}
 
           Generated spec for issue #${{ github.event.issue.number }}. Review the acceptance criteria, then merge to trigger the dev agent." \

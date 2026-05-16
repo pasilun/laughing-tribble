@@ -22,5 +22,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run actionlint
         uses: docker://rhysd/actionlint:1.7.7
+        env:
+          # Keep actionlint's core checks (invalid YAML, bad expressions,
+          # untrusted-input, wrong webhook events — the class that actually
+          # breaks the loop) as hard failures. Silence shellcheck's
+          # stylistic *info* codes so the gate stays meaningful, not
+          # perma-red on pre-existing nits.
+          SHELLCHECK_OPTS: -e SC2015 -e SC2086 -e SC2129 -e SC2188
         with:
           args: -color

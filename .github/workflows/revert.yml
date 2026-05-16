@@ -2,11 +2,12 @@ name: Auto Revert
 
 on:
   deployment_status:
-    types: [failure]
 
 jobs:
   revert:
-    if: github.event.deployment_status.environment == 'production'
+    if: >
+      github.event.deployment_status.state == 'failure' &&
+      github.event.deployment_status.environment == 'production'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
