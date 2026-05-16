@@ -3,12 +3,35 @@
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useEffect, useRef, useState } from 'react'
+import ModelSummaryPanel from '@/components/ModelSummaryPanel'
+import { BuildingModel, emptyBuildingModel } from '@/lib/building-model'
 
 export default function DesignPage() {
   const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({ api: '/api/design/chat' }),
+    onFinish: ({ messages }) => {
+      const latestAssistantMessage = messages
+        .filter((m) => m.role === 'assistant')
+        .pop()
+
+      if (latestAssistantMessage) {
+        for (const part of latestAssistantMessage.parts) {
+          if (
+            part.type === 'tool-result' &&
+            'output' in part &&
+            part.output &&
+            typeof part.output === 'object' &&
+            'model' in part.output
+          ) {
+            setModel(part.output.model as BuildingModel)
+            break
+          }
+        }
+      }
+    },
   })
   const [input, setInput] = useState('')
+  const [model, setModel] = useState<BuildingModel>(emptyBuildingModel)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isLoading = status === 'submitted' || status === 'streaming'
 
@@ -32,47 +55,53 @@ export default function DesignPage() {
         </h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-3xl mx-auto space-y-6">
-          {messages.length === 0 && (
-            <p className="text-zinc-600 dark:text-zinc-400 text-center py-8">
-              Beskriv ditt projekt så hjälper jag dig att komma igång
-            </p>
-          )}
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              data-testid={message.role === 'assistant' ? 'assistant-message' : undefined}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+      <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-3xl space-y-6">
+            {messages.length === 0 && (
+              <p className="text-zinc-600 dark:text-zinc-400 text-center py-8">
+                Beskriv ditt projekt så hjälper jag dig att komma igång
+              </p>
+            )}
+            {messages.map((message) => (
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                  message.role === 'user'
-                    ? 'bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900'
-                    : 'bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 border border-zinc-200 dark:border-zinc-700'
-                }`}
+                key={message.id}
+                data-testid={message.role === 'assistant' ? 'assistant-message' : undefined}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {message.parts
-                    .filter((p) => p.type === 'text')
-                    .map((p) => (p as { type: 'text'; text: string }).text)
-                    .join('')}
-                </p>
-              </div>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 border border-zinc-200 dark:border-zinc-700">
-                <div className="flex space-x-2">
-                  <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-100" />
-                  <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-200" />
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    message.role === 'user'
+                      ? 'bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900'
+                      : 'bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 border border-zinc-200 dark:border-zinc-700'
+                  }`}
+                >
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {message.parts
+                      .filter((p) => p.type === 'text')
+                      .map((p) => (p as { type: 'text'; text: string }).text)
+                      .join('')}
+                  </p>
                 </div>
               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 border border-zinc-200 dark:border-zinc-700">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-100" />
+                    <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-200" />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+
+        <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <ModelSummaryPanel model={model} />
         </div>
       </div>
 
