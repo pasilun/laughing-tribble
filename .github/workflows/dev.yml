@@ -15,8 +15,68 @@ on:
         required: false
 
 jobs:
-  dev:
+  # Decides which attempt this is and which model to use. The feature branch
+  # is now cumulative (see the dev job), so commits-ahead-of-main is a real
+  # attempt counter: 0..4 -> normal (glm-4.7), 5 -> escalate (glm-5.1, gated
+  # by the "escalation" Environment), >=6 -> stop (handled by verify).
+  gate:
     runs-on: ubuntu-latest
+    outputs:
+      spec_file: ${{ steps.g.outputs.spec_file }}
+      branch: ${{ steps.g.outputs.branch }}
+      mode: ${{ steps.g.outputs.mode }}
+      model: ${{ steps.g.outputs.model }}
+      attempt: ${{ steps.g.outputs.attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve spec / branch / attempt / mode
+        id: g
+        run: |
+          # ---- escalation tunables ----
+          MAX_NORMAL=5
+          BASE_MODEL="zai-coding-plan/glm-4.7"
+          ESC_MODEL="zai-coding-plan/glm-5.1"
+          # -----------------------------
+
+          if [ -n "${{ inputs.spec_file }}" ]; then
+            SPEC_FILE="${{ inputs.spec_file }}"
+          else
+            SPEC_FILE=$(git diff HEAD~1 --name-only | grep '^specs/[^_].*\.md$' | head -n 1)
+          fi
+          if [ -z "$SPEC_FILE" ]; then
+            SPEC_FILE=$(find specs -name "*.md" -not -name "_template.md" -type f | sort | tail -n 1)
+          fi
+          SPEC_NAME=$(basename "$SPEC_FILE" .md)
+          BRANCH="feat/${SPEC_NAME}"
+
+          git fetch origin "$BRANCH" 2>/dev/null || true
+          git fetch origin main 2>/dev/null || true
+          C=$(git rev-list --count "origin/${BRANCH}" ^origin/main 2>/dev/null || echo "0")
+
+          if [ "$C" -ge 6 ]; then
+            MODE="stop";     MODEL="$ESC_MODEL"
+          elif [ "$C" -ge "$MAX_NORMAL" ]; then
+            MODE="escalate"; MODEL="$ESC_MODEL"
+          else
+            MODE="normal";   MODEL="$BASE_MODEL"
+          fi
+
+          echo "spec_file=$SPEC_FILE" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH"       >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE"           >> "$GITHUB_OUTPUT"
+          echo "model=$MODEL"         >> "$GITHUB_OUTPUT"
+          echo "attempt=$((C + 1))"   >> "$GITHUB_OUTPUT"
+          echo "spec=$SPEC_FILE branch=$BRANCH commits=$C mode=$MODE model=$MODEL attempt=$((C + 1))"
+
+  dev:
+    needs: gate
+    if: ${{ needs.gate.outputs.mode != 'stop' }}
+    runs-on: ubuntu-latest
+    # Escalated attempts run only after you approve them in the Actions tab.
+    environment: ${{ needs.gate.outputs.mode == 'escalate' && 'escalation' || '' }}
     permissions:
       contents: write
       pull-requests: write
@@ -28,6 +88,18 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
+      - name: Switch to feature branch (cumulative — build on prior attempt)
+        run: |
+          BRANCH="${{ needs.gate.outputs.branch }}"
+          git fetch origin
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Continuing from previous attempt on $BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            echo "No existing branch — starting from origin/main"
+            git checkout -B "$BRANCH" origin/main
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -37,52 +109,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Find spec file
-        id: spec
-        run: |
-          if [ -n "${{ inputs.spec_file }}" ]; then
-            SPEC_FILE="${{ inputs.spec_file }}"
-          else
-            SPEC_FILE=$(git diff HEAD~1 --name-only | grep '^specs/[^_].*\.md$' | head -n 1)
-          fi
-          if [ -z "$SPEC_FILE" ]; then
-            SPEC_FILE=$(find specs -name "*.md" -not -name "_template.md" -type f | sort | tail -n 1)
-          fi
-          echo "file=$SPEC_FILE" >> $GITHUB_OUTPUT
-          echo "Found spec: $SPEC_FILE"
-
-      - name: Check iteration count
-        id: iteration
-        run: |
-          SPEC_NAME=$(basename "${{ steps.spec.outputs.file }}" .md)
-          BRANCH="feat/${SPEC_NAME}"
-          git fetch origin "$BRANCH" 2>/dev/null || true
-          COUNT=$(git rev-list --count "origin/${BRANCH}" ^origin/main 2>/dev/null || echo "0")
-          echo "count=$COUNT" >> $GITHUB_OUTPUT
-          echo "Iteration count: $COUNT"
-          if [ "$COUNT" -ge 4 ]; then
-            echo "Max iterations reached (${COUNT} commits on branch). Stopping."
-            exit 1
-          fi
-
       - name: Run Dev Agent
         env:
           ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
-          SPEC_FILE: ${{ steps.spec.outputs.file }}
+          SPEC_FILE: ${{ needs.gate.outputs.spec_file }}
           FAILURE_REPORT: ${{ inputs.failure_report }}
+          AGENT_MODEL: ${{ needs.gate.outputs.model }}
         run: |
           if [ -n "$FAILURE_REPORT" ]; then
-            CONTEXT="Previous verification attempt FAILED. You must fix these issues:
+            CONTEXT="Your PREVIOUS attempt is already committed on this branch and FAILED verification.
+          Do NOT start over — read the current code (your prior work) and fix exactly these issues:
 
           ${FAILURE_REPORT}
 
-          Study the failures carefully. Each failing test tells you exactly what the verifier
-          observed vs what it expected. Fix the implementation so all criteria pass."
+          Each failing scenario tells you what the verifier observed vs expected."
           else
             CONTEXT="This is the first implementation attempt."
           fi
 
-          npx opencode-ai@latest run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "
+          npx opencode-ai@latest run --model "$AGENT_MODEL" --dangerously-skip-permissions "
           Read agents/dev/system-prompt.md for your role and rules.
 
           Your task: implement the feature described in ${SPEC_FILE}.
@@ -91,7 +136,7 @@ jobs:
 
           Steps:
           1. Read ${SPEC_FILE} to understand all acceptance criteria
-          2. Explore app/ and components/ to understand existing patterns
+          2. Read the CURRENT state of app/ and components/ — your prior attempt's code is here
           3. Implement the feature using Next.js App Router + TypeScript + Tailwind CSS
           4. Write or update e2e tests in e2e/ that cover each acceptance criterion
           5. Run \`npm run typecheck\` and \`npm run lint\` — fix any errors before finishing
@@ -116,6 +161,7 @@ jobs:
         if: steps.typecheck.outcome == 'failure' || steps.lint.outcome == 'failure'
         env:
           ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          AGENT_MODEL: ${{ needs.gate.outputs.model }}
         run: |
           ERROR_REPORT=""
           if [ "${{ steps.typecheck.outcome }}" = "failure" ]; then
@@ -124,38 +170,36 @@ jobs:
           if [ "${{ steps.lint.outcome }}" = "failure" ]; then
             ERROR_REPORT+="ESLint errors (npm run lint):\n$(cat /tmp/lint-output.txt)\n"
           fi
-          npx opencode-ai@latest run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "
+          npx opencode-ai@latest run --model "$AGENT_MODEL" --dangerously-skip-permissions "
           Fix the following TypeScript and/or ESLint errors. Read the affected files, fix each error, and write the corrected files to disk. Do not change any feature logic — only fix type errors and linting violations.
 
           ${ERROR_REPORT}"
 
-      - name: Typecheck (verify fix)
-        if: steps.typecheck.outcome == 'failure' || steps.lint.outcome == 'failure'
-        run: npm run typecheck
-
-      - name: Lint (verify fix)
-        if: steps.typecheck.outcome == 'failure' || steps.lint.outcome == 'failure'
-        run: npm run lint
-
-      - name: Commit and push implementation
+      # No hard typecheck/lint gate here: commit regardless so the next attempt
+      # builds on this work, and let the Verification Agent be the source of
+      # truth. A broken build will fail verification and feed back into the loop.
+      - name: Commit and push (cumulative — no force)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SPEC_NAME=$(basename "${{ steps.spec.outputs.file }}" .md)
-          BRANCH="feat/${SPEC_NAME}"
-          git fetch origin main
-          git checkout -b "$BRANCH" origin/main
+          BRANCH="${{ needs.gate.outputs.branch }}"
+          SPEC_NAME="$(basename "${{ needs.gate.outputs.spec_file }}" .md)"
+          ATTEMPT="${{ needs.gate.outputs.attempt }}"
           git config user.name "Dev Agent"
           git config user.email "dev-agent@github-actions.bot"
           git add -A
           if git diff --staged --quiet; then
-            echo "No changes to commit — feature may already be implemented"
+            # Empty commit still advances the attempt counter so the loop
+            # always terminates (escalation / stop) instead of spinning.
+            git commit --allow-empty -m "chore(${SPEC_NAME}): dev attempt ${ATTEMPT} (no changes)"
           else
-            git commit -m "feat: implement ${SPEC_NAME}"
-            git push --force origin "$BRANCH"
+            git commit -m "feat(${SPEC_NAME}): dev attempt ${ATTEMPT}"
+          fi
+          git push origin "HEAD:${BRANCH}"
+          if ! gh pr view "$BRANCH" >/dev/null 2>&1; then
             gh pr create \
               --title "feat: implement ${SPEC_NAME}" \
-              --body "Implements spec in ${{ steps.spec.outputs.file }}" \
+              --body "Implements spec in ${{ needs.gate.outputs.spec_file }}" \
               --base main \
               --head "$BRANCH" || true
           fi
