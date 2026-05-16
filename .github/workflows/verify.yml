@@ -137,29 +137,16 @@ jobs:
         id: verify
         run: |
           if [ ! -f /tmp/verify-result.json ]; then
-            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "passed=false" >> "$GITHUB_OUTPUT"
             echo "Verifier agent did not write /tmp/verify-result.json" > /tmp/verify-failures.txt
+          elif jq -e '.passed == true' /tmp/verify-result.json >/dev/null 2>&1; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
           else
-            PASSED=$(python3 -c "
-import json, sys
-try:
-    d = json.load(open('/tmp/verify-result.json'))
-    print('true' if d.get('passed') else 'false')
-except Exception as e:
-    print('false')
-" 2>/dev/null)
-            echo "passed=$PASSED" >> $GITHUB_OUTPUT
-            if [ "$PASSED" != "true" ]; then
-              python3 -c "
-import json
-try:
-    d = json.load(open('/tmp/verify-result.json'))
-    failures = d.get('failures', ['No failure details provided'])
-    print('\n'.join(failures))
-except Exception:
-    print(open('/tmp/verify-result.json').read())
-" > /tmp/verify-failures.txt 2>/dev/null || echo "Could not parse verify-result.json" > /tmp/verify-failures.txt
-            fi
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            jq -r '(.failures // ["No failure details provided"]) | join("\n")' \
+              /tmp/verify-result.json > /tmp/verify-failures.txt 2>/dev/null \
+              || cp /tmp/verify-result.json /tmp/verify-failures.txt 2>/dev/null \
+              || echo "Could not parse verify-result.json" > /tmp/verify-failures.txt
           fi
 
       - name: Commit verified tests for regression
