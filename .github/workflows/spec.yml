@@ -27,15 +27,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Determine spec filename
+      - name: Determine branch + fallback name
         id: naming
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
+          # The agent decides the actual spec path per agents/spec/system-prompt.md
+          # (capability → specs/<kebab>.md; chore → specs/NNN-slug.md; it may
+          # also tombstone/promote other specs). This is only a fallback name
+          # for the chore case.
           LAST_NUM=$(find specs -name "[0-9][0-9][0-9]-*.md" | sort | tail -n 1 | xargs basename 2>/dev/null | grep -oP '^\d+' || echo "0")
           NEXT_NUM=$(printf "%03d" $((10#$LAST_NUM + 1)))
           SLUG=$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-' | cut -c1-40)
-          echo "file=specs/${NEXT_NUM}-${SLUG}.md" >> $GITHUB_OUTPUT
+          echo "fallback=specs/${NEXT_NUM}-${SLUG}.md" >> $GITHUB_OUTPUT
           echo "branch=spec/issue-${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
 
       - name: Create feature branch
@@ -52,24 +56,42 @@ jobs:
           ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          SPEC_FILE: ${{ steps.naming.outputs.file }}
+          FALLBACK_FILE: ${{ steps.naming.outputs.fallback }}
         run: |
           npx opencode-ai@1.15.3 run --model zai-coding-plan/glm-4.7 \
             --dangerously-skip-permissions \
-            "Read agents/spec/system-prompt.md for your role and rules.
-            Create a spec file at ${SPEC_FILE} for GitHub issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
-            Full description: read /tmp/issue-body.txt
-            Follow specs/_template.md. All criteria must be browser-observable with Playwright.
-            Use your file write tool to write the spec to ${SPEC_FILE}."
+            "Read agents/spec/system-prompt.md for your role and rules, and
+            specs/_template.md for structure.
+            GitHub issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
+            Full description: read /tmp/issue-body.txt — follow its instructions.
+            Classify the request and choose the spec path yourself per the
+            system prompt: a capability → specs/<kebab>.md (Status active,
+            with a Regression Test pointer); a cleanup/refactor → a chore
+            spec (Status chore, you may use ${FALLBACK_FILE}). You may also
+            promote/edit or tombstone existing specs as the prompt directs.
+            All acceptance criteria must be browser-observable with Playwright.
+            Use your file write tool to write all spec file(s) under specs/."
 
-      - name: Verify spec file was created
+      - name: Verify a spec was written
         run: |
-          if [ ! -s "${{ steps.naming.outputs.file }}" ]; then
-            echo "Error: Spec file is missing or empty"
+          git add -A specs/
+          CHANGES=$(git diff --cached --name-only -- specs/ | grep -v '^specs/_template\.md$' || true)
+          if [ -z "$CHANGES" ]; then
+            echo "Error: the spec agent produced no changes under specs/"
             exit 1
           fi
-          echo "Spec file created successfully:"
-          cat "${{ steps.naming.outputs.file }}"
+          # Every added/modified (not deleted) spec must be non-empty.
+          while IFS=$'\t' read -r st path; do
+            case "$st" in
+              D) continue ;;
+            esac
+            if [ ! -s "$path" ]; then
+              echo "Error: $path is empty"
+              exit 1
+            fi
+          done < <(git diff --cached --name-status -- specs/ | grep -v '^.\s*specs/_template\.md$')
+          echo "Spec changes:"
+          git diff --cached --name-status -- specs/
 
       - name: Commit and push spec
         env:
@@ -77,8 +99,8 @@ jobs:
         run: |
           git config user.name "Spec Agent"
           git config user.email "spec-agent@github-actions.bot"
-          git add specs/
-          git diff --staged --quiet || git commit -m "spec: add spec for issue #${{ github.event.issue.number }}"
+          git add -A specs/
+          git diff --staged --quiet || git commit -m "spec: issue #${{ github.event.issue.number }}"
           git push --force origin "${{ steps.naming.outputs.branch }}"
 
       - name: Create draft PR
