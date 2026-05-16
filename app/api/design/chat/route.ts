@@ -137,6 +137,25 @@ export async function POST(req: Request) {
       existingPottM2: null,
     }
 
+    for (const message of messages) {
+      if (message.role === 'assistant' && Array.isArray(message.parts)) {
+        for (const part of message.parts) {
+          if (part.type === 'tool-result' && part.output && typeof part.output === 'object' && 'model' in part.output) {
+            const toolModel = part.output.model as BuildingModel
+            if (toolModel.purpose !== undefined) currentModel.purpose = toolModel.purpose
+            if (toolModel.flowType !== undefined) currentModel.flowType = toolModel.flowType
+            if (toolModel.footprint !== undefined) currentModel.footprint = toolModel.footprint
+            if (toolModel.wallHeight !== undefined) currentModel.wallHeight = toolModel.wallHeight
+            if (toolModel.roof !== undefined) currentModel.roof = toolModel.roof
+            if (toolModel.inomDetaljplan !== undefined) currentModel.inomDetaljplan = toolModel.inomDetaljplan
+            if (toolModel.distanceToGrans !== undefined) currentModel.distanceToGrans = toolModel.distanceToGrans
+            if (toolModel.installations !== undefined) currentModel.installations = [...toolModel.installations]
+            if (toolModel.existingPottM2 !== undefined) currentModel.existingPottM2 = toolModel.existingPottM2
+          }
+        }
+      }
+    }
+
     const result = streamText({
       model: anthropic(CHAT_MODEL),
       system: `Du är en hjälpsam assistent för bygglovsfrågor. Svara på svenska.
