@@ -127,7 +127,7 @@ jobs:
             CONTEXT="This is the first implementation attempt."
           fi
 
-          npx opencode-ai@latest run --model "$AGENT_MODEL" --dangerously-skip-permissions "
+          npx opencode-ai@1.15.3 run --model "$AGENT_MODEL" --dangerously-skip-permissions "
           Read agents/dev/system-prompt.md for your role and rules.
 
           Your task: implement the feature described in ${SPEC_FILE}.
@@ -170,7 +170,7 @@ jobs:
           if [ "${{ steps.lint.outcome }}" = "failure" ]; then
             ERROR_REPORT+="ESLint errors (npm run lint):\n$(cat /tmp/lint-output.txt)\n"
           fi
-          npx opencode-ai@latest run --model "$AGENT_MODEL" --dangerously-skip-permissions "
+          npx opencode-ai@1.15.3 run --model "$AGENT_MODEL" --dangerously-skip-permissions "
           Fix the following TypeScript and/or ESLint errors. Read the affected files, fix each error, and write the corrected files to disk. Do not change any feature logic — only fix type errors and linting violations.
 
           ${ERROR_REPORT}"

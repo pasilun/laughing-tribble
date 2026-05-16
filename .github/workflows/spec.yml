@@ -54,7 +54,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           SPEC_FILE: ${{ steps.naming.outputs.file }}
         run: |
-          npx opencode-ai@latest run --model zai-coding-plan/glm-4.7 \
+          npx opencode-ai@1.15.3 run --model zai-coding-plan/glm-4.7 \
             --dangerously-skip-permissions \
             "Read agents/spec/system-prompt.md for your role and rules.
             Create a spec file at ${SPEC_FILE} for GitHub issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}

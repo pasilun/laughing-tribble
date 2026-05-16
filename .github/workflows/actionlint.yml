@@ -1,0 +1,26 @@
+name: Actionlint
+
+# Catches invalid workflow YAML / shell-in-run errors at PR time instead of
+# at loop-runtime (the failure mode that has repeatedly stalled the loop).
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+  workflow_dispatch:
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color

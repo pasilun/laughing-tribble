@@ -85,7 +85,7 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          OUTPUT=$(npx vercel --token $VERCEL_TOKEN --yes 2>&1)
+          OUTPUT=$(npx vercel@54.1.0 --token $VERCEL_TOKEN --yes 2>&1)
           echo "$OUTPUT"
           PREVIEW_URL=$(echo "$OUTPUT" | grep -oE 'https://[a-zA-Z0-9._-]+\.vercel\.app' | grep -v 'vercel\.com' | head -1)
           echo "url=$PREVIEW_URL" >> $GITHUB_OUTPUT
@@ -116,7 +116,7 @@ jobs:
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
         run: |
           TARGET_FILE="e2e/_verified-${SPEC_ID}.spec.ts"
-          npx opencode-ai@latest run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "
+          npx opencode-ai@1.15.3 run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "
           Read agents/verifier/system-prompt.md for your role and rules.
 
           Spec file: ${SPEC_FILE}
@@ -209,9 +209,19 @@ jobs:
             if [ "$C" -ge 5 ]; then
               [ -n "$PR_NUMBER" ] && gh pr comment "$PR_NUMBER" --body "⚠️ 5 attempts failed. Escalating to the stronger model (glm-5.1) — **approve the queued Dev Agent run** in the Actions tab (Environment: \`escalation\`) to proceed." || true
             fi
-            gh workflow run dev.yml \
-              --field spec_file="${SPEC_FILE}" \
-              --field failure_report="${FAILURE_REPORT}"
+            if ! gh workflow run dev.yml \
+                 --field spec_file="${SPEC_FILE}" \
+                 --field failure_report="${FAILURE_REPORT}"; then
+              # The loop's most dangerous failure mode is a silent stall:
+              # if LOOP_PAT is missing/expired the dispatch fails and the
+              # loop just stops with no signal. Make it loud.
+              gh issue create -R "$REPO" \
+                --title "🔴 Dev loop stalled: retry dispatch failed (${SPEC_FILE})" \
+                --label bug \
+                --body "Could not dispatch the next dev attempt for \`${BRANCH}\`. The \`LOOP_PAT\` secret is likely missing or expired. The loop is stalled until this is fixed." || true
+              [ -n "$PR_NUMBER" ] && gh pr comment "$PR_NUMBER" --body "🔴 Loop stalled — retry dispatch failed (check \`LOOP_PAT\`)." || true
+              exit 1
+            fi
           fi
 
       - name: Fail if tests failed
