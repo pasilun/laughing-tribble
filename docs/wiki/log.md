@@ -2,6 +2,42 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
+## [2026-05-16] milestone | 009a Design Chat UI — working end-to-end ✅
+
+**Summary:** The `/design` chat screen is live and responding with real Claude AI replies in Swedish. This closes the 009a spec.
+
+### What broke and how it was fixed
+
+Three bugs were stacked on top of each other, all caused by the `ai` package jumping to v6:
+
+1. **`toDataStreamResponse()` removed in ai@6** → replaced with `toUIMessageStreamResponse()`
+2. **`useChat` API completely overhauled in v6** — `input`, `handleInputChange`, `handleSubmit`, `isLoading` all gone. Migrated to `DefaultChatTransport`, `sendMessage({ text })`, `status`, and local `useState` for the input. Messages now use `parts` (not `content`), requiring `convertToModelMessages()` on the server.
+3. **`claude-3-5-sonnet-20241022` not recognised** — `@ai-sdk/anthropic@3.0.77` only ships Claude 4.x model IDs. Switched to `claude-sonnet-4-5`.
+
+A debug bar (status / msgs / error) was added to the UI to diagnose the model error on mobile without DevTools.
+
+### Current spec status
+
+| Spec | Status | Notes |
+|------|--------|-------|
+| 001–006 | `draft` (implemented) | Early loop specs — e2e tests pass, specs never formally closed |
+| 007 situationsplan | `draft` | Lantmäteriet API credentials needed |
+| 008 planritning | `draft` | Depends on 007 |
+| **009a design-chat-ui** | **`complete`** | ✅ Working in production |
+| 009b building-model-tools | `draft` | Next up — needs `ANTHROPIC_API_KEY` confirmed in Vercel Preview scope |
+| 009c floor-plan-svg | `draft` | Depends on 009b |
+| 009d triage-panel | `draft` | Depends on 009b |
+| 009e validation-loop | `draft` | Depends on 009c + 009d |
+
+### Next steps
+
+1. **Verify `ANTHROPIC_API_KEY` is in Vercel Preview scope** (not just Production) — required for the verifier agent to test 009b on preview deployments
+2. **Trigger 009b** by changing its spec status to `ready-for-dev`
+3. **Remove the debug bar** from `/design` once 009b lands (or keep it behind a `?debug=1` query param)
+4. **Register at opendata.lantmateriet.se** for Topowebb + Fastighetsindelning credentials (unblocks 007)
+
+
+
 ## [2026-05-03] ingest | Triage Rules
 
 **Source:** `/docs/triage-rules.md`
