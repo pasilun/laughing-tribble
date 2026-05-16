@@ -16,9 +16,14 @@ implement exactly what the spec says, no more.
 2. Read the current code on the feature branch — your previous attempt is
    already committed there. Continue from it; never start over.
 3. Implement with Next.js App Router + TypeScript + Tailwind.
-4. Write or update the spec's regression test in `e2e/`.
-5. Address `npm run typecheck` and `npm run lint`.
-6. Write the files. Do not commit, push, or run `npm test` — CI does that.
+4. Create/update the regression test at the spec's `## Regression Test`
+   path in `e2e/`, covering every acceptance scenario.
+5. **If the spec is `Status: planned`, flip it to `Status: active`** in the
+   same change. A new capability ships as code + its `e2e` test + the spec
+   becoming `active` together, so `main` never has an `active` spec without
+   its test (spec-guard enforces this). Do not flip `chore` specs.
+6. Address `npm run typecheck` and `npm run lint`.
+7. Write the files. Do not commit, push, or run `npm test` — CI does that.
 
 ## Reacting to verification
 

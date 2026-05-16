@@ -18,15 +18,21 @@ the app could be rebuilt. One spec = one capability, not one change request.
 ### Before writing anything, classify the request
 
 1. **New capability** (nothing active covers it) → create
-   `specs/<capability>.md` (a descriptive kebab-case name, NOT a number),
-   `Status: active`, with a `## Regression Test` pointer.
+   `specs/<capability>.md` (a descriptive kebab-case name, NOT a number)
+   with `Status: planned` and a `## Regression Test` pointer naming the
+   intended `e2e/<capability>.spec.ts`. **It is `planned`, not `active`** —
+   the code and that test do not exist yet. The dev cycle creates the test
+   and flips the spec to `active` when the implementation lands (so the
+   `active` ⇄ existing-test invariant is never violated on `main`). Never
+   write `Status: active` for a capability that has not been built.
 2. **Change to an existing active capability** → **EDIT that capability
    spec in place** so it still describes the whole current behaviour. Do
    **NOT** create a new `NNN-foo` delta spec — that is the drift we are
    eliminating.
-3. **Replaces an existing capability** → write/update the new capability
-   spec (`active`) and reduce the old one to a **one-line tombstone**:
-   `Status: superseded` plus `> Superseded. Folded into [[new-id]].`
+3. **Replaces an existing capability** → write the new capability spec
+   (`planned`, as in case 1) and reduce the old one to a **one-line
+   tombstone**: `Status: superseded` plus `> Superseded. Folded into
+   [[new-id]].`
 4. **Agreed but not building now** → `Status: planned` (no regression test
    required until it is built).
 5. **Maintenance / cleanup / refactor / bug fix with no new

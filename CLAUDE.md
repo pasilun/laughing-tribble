@@ -46,7 +46,9 @@ The escalation cap depends on a small set of implicit invariants. A change to
 4. **The verifier commits only on pass** (`e2e/_verified-*.spec.ts`), so a
    failing attempt never inflates the counter.
 5. **`active` spec ⇄ existing regression test** is enforced by
-   `spec-guard.yml`. Don't add an `active` spec without its `e2e` test.
+   `spec-guard.yml`. A new capability is specced as `planned`; the dev
+   cycle creates its `e2e` test and flips it to `active` in the same
+   feature PR, so `main` never has an `active` spec without its test.
 6. **`chore` specs are transient.** A cleanup/refactor request produces a
    `Status: chore` spec that drives one dev+verify cycle and is then
    auto-pruned from `main` by Auto Merge. Implement it like any spec, but
