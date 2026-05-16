@@ -76,12 +76,14 @@ export default function DesignPage() {
         </div>
       </div>
 
-      {/* debug bar — remove before launch */}
-      <div className="flex-shrink-0 px-6 py-2 bg-zinc-100 dark:bg-zinc-900 text-xs font-mono text-zinc-500 border-t border-zinc-200 dark:border-zinc-800 flex gap-4">
-        <span>status: <strong>{status}</strong></span>
-        <span>msgs: <strong>{messages.length}</strong></span>
-        {error && <span className="text-red-500">error: {error.message}</span>}
-      </div>
+      {error && (
+        <div
+          role="alert"
+          className="flex-shrink-0 px-6 py-3 bg-red-50 dark:bg-red-950 text-sm text-red-700 dark:text-red-300 border-t border-red-200 dark:border-red-900"
+        >
+          Något gick fel. Försök igen.
+        </div>
+      )}
 
       <div className="flex-shrink-0 p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
         <div className="max-w-3xl mx-auto">

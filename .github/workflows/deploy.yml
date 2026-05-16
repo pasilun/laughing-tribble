@@ -38,7 +38,7 @@ jobs:
         id: regression
         env:
           CI: 'true'
-          BASE_URL: 'https://laughing-tribble-psi.vercel.app'
+          BASE_URL: ${{ vars.PROD_URL }}
         run: |
           if ls e2e/_verified-*.spec.ts 1>/dev/null 2>&1; then
             npx playwright test e2e/_verified-*.spec.ts --reporter=line \

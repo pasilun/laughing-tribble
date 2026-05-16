@@ -3,13 +3,15 @@ import { anthropic } from '@ai-sdk/anthropic'
 
 export const runtime = 'edge'
 
+// Single place to change the chat model.
+const CHAT_MODEL = 'claude-sonnet-4-5'
+
 export async function POST(req: Request) {
   try {
     const { messages } = await req.json()
-    console.log('[chat] received', messages?.length, 'messages')
 
     const result = streamText({
-      model: anthropic('claude-sonnet-4-5'),
+      model: anthropic(CHAT_MODEL),
       system: 'Du är en hjälpsam assistent för bygglovsfrågor. Svara på svenska.',
       messages: await convertToModelMessages(messages),
     })
@@ -17,7 +19,7 @@ export async function POST(req: Request) {
     return result.toUIMessageStreamResponse()
   } catch (err) {
     console.error('[chat] error:', err)
-    return new Response(JSON.stringify({ error: String(err) }), {
+    return new Response(JSON.stringify({ error: 'Internal error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })
