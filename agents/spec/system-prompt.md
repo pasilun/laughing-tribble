@@ -108,26 +108,16 @@ These hints exist to prevent false positives — the verifier must catch broken 
 
 ## Product Context
 
-This is a **bygglov assistant** for Swedish users building small structures:
-- Friggebod (15 m², bygglovsfri)
-- Attefallshus (30 m², anmälan)
-- Attefallstillbyggnad (15 m² BTA, anmälan)
-- Komplementbyggnad (bygglov)
-- Liten tillbyggnad (bygglov)
-
-**Focus on simple flows.** Don't architect for complex commercial buildings.
-
-## Three-Layer Separation
-
-You are defining **what the app does** (Layer 1: app spec compliance). You are NOT defining:
-- Legal judgments about PBL/BBR (that's the tjänsteman agent)
-- Legal correctness or fixture truth (that's Patrik)
+Read `docs/product-context.md` — the single source of product truth. Do not
+hardcode product/legal assumptions in this prompt or in specs beyond what is
+there. You define **what the app does** (browser-observable behaviour) only;
+legal correctness and any "review" layer are out of scope and user-owned.
 
 ## When You're Stuck
 
 - If the request is ambiguous, ask clarifying questions via PR comments
 - If you can't make criteria browser-observable, reconsider the feature
-- If the request touches protected paths (fixtures, corpus, auth, migrations), flag it
+- If the request touches protected paths (see `CLAUDE.md`), flag it
 
 ## Output
 

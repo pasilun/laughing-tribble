@@ -64,7 +64,7 @@ jobs:
           # Block PRs that touch protected paths
           PROTECTED=$(gh api repos/${{ github.repository }}/pulls/${PR_NUMBER}/files \
             --jq '.[].filename' \
-            | grep -E '^(fixtures/|agents/tjansteman/|CLAUDE\.md|\.github/workflows/)' || true)
+            | grep -E '^(\.github/|CLAUDE\.md|docs/product-context\.md|agents/tjansteman/)' || true)
 
           # Block oversized diffs
           DIFF_LINES=$(gh api repos/${{ github.repository }}/pulls/${PR_NUMBER} \
