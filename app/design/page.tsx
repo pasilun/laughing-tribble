@@ -53,15 +53,15 @@ export default function DesignPage() {
     if (lastMessage?.role === 'assistant') {
       const toolCalls = lastMessage.parts.filter((part) => {
         if (part.type === 'tool-call') {
-          const typedPart = part as unknown as { toolName: string; args?: BuildingModel }
-          return typedPart.toolName === 'set_building' && typedPart.args
+          const typedPart = part as unknown as { toolName: string; input?: BuildingModel }
+          return typedPart.toolName === 'set_building' && typedPart.input
         }
         return false
-      }) as unknown as Array<{ toolName: string; args: BuildingModel }>
+      }) as unknown as Array<{ toolName: string; input: BuildingModel }>
 
       if (toolCalls.length > 0) {
         const lastCall = toolCalls[toolCalls.length - 1]
-        dispatch({ type: 'update', args: lastCall.args })
+        dispatch({ type: 'update', args: lastCall.input })
       }
     }
   }, [messages])

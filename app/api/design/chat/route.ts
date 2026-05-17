@@ -46,13 +46,16 @@ async function createFakeStream(prompt: string, signal?: AbortSignal) {
       if (fixture) {
         for (const call of fixture.toolCalls) {
           const toolCallData = JSON.stringify({
-            type: 'tool-call',
+            type: 'tool-input-available',
             toolCallId: `call_${Math.random().toString(36).substring(7)}`,
             toolName: 'set_building',
-            args: call.args,
+            input: call.args,
           })
           controller.enqueue(encoder.encode(`data: ${toolCallData}\n\n`))
         }
+
+        const messageId = `msg_${Math.random().toString(36).substring(7)}`
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-start', id: messageId })}\n\n`))
 
         for (const char of fixture.response) {
           if (signal?.aborted) {
@@ -60,23 +63,30 @@ async function createFakeStream(prompt: string, signal?: AbortSignal) {
             return
           }
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'text-delta', textDelta: char })}\n\n`),
+            encoder.encode(`data: ${JSON.stringify({ type: 'text-delta', delta: char, id: messageId })}\n\n`),
           )
           await new Promise((resolve) => setTimeout(resolve, 30))
         }
+
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-end', id: messageId })}\n\n`))
       } else {
         const fallbackResponse =
           'Jag förstår. Berätta gärna mer om ditt byggprojekt så hjälper jag dig vidare.'
+        const messageId = `msg_${Math.random().toString(36).substring(7)}`
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-start', id: messageId })}\n\n`))
+
         for (const char of fallbackResponse) {
           if (signal?.aborted) {
             controller.close()
             return
           }
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'text-delta', textDelta: char })}\n\n`),
+            encoder.encode(`data: ${JSON.stringify({ type: 'text-delta', delta: char, id: messageId })}\n\n`),
           )
           await new Promise((resolve) => setTimeout(resolve, 30))
         }
+
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-end', id: messageId })}\n\n`))
       }
 
       controller.enqueue(encoder.encode('data: [DONE]\n\n'))
