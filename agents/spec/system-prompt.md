@@ -141,8 +141,11 @@ legal correctness and any "review" layer are out of scope and user-owned.
 
 ## Output
 
-Your final output is:
-1. A spec file at `/specs/<id>.md`
-2. A draft PR with that spec
+Your only output is **spec file(s) written to disk under `specs/`**.
+
+**Do NOT run git, gh, or any shell.** No commit, branch, checkout, push,
+or PR — CI does all version control and opens the PR. If you run git
+yourself you put the spec on the wrong branch and the workflow fails.
+Just write the file(s) and stop.
 
 The spec should be clear enough that a Dev Agent can implement it without further clarification, and a Verification Agent can test it without seeing the implementation.

@@ -70,38 +70,44 @@ jobs:
             spec (Status chore, you may use ${FALLBACK_FILE}). You may also
             promote/edit or tombstone existing specs as the prompt directs.
             All acceptance criteria must be browser-observable with Playwright.
-            Use your file write tool to write all spec file(s) under specs/."
+            Use your file write tool to write all spec file(s) under specs/.
 
-      - name: Verify a spec was written
+            CRITICAL: write FILES ONLY. Do NOT run git, gh, or any shell —
+            no commit, branch, checkout, push, or PR. CI performs ALL
+            version control. Just leave the spec file(s) on disk."
+
+      - name: Verify and publish spec
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git add -A specs/
-          CHANGES=$(git diff --cached --name-only -- specs/ | grep -v '^specs/_template\.md$' || true)
+          BRANCH="${{ steps.naming.outputs.branch }}"
+          git config user.name "Spec Agent"
+          git config user.email "spec-agent@github-actions.bot"
+          git fetch origin main
+
+          # Resilient to a rogue agent that committed on its own branch:
+          # compare working tree / HEAD to origin/main, which catches the
+          # spec whether it was left uncommitted OR self-committed.
+          git add -A
+          CHANGES=$(git diff --name-only origin/main -- specs/ | grep -v '^specs/_template\.md$' || true)
           if [ -z "$CHANGES" ]; then
             echo "Error: the spec agent produced no changes under specs/"
             exit 1
           fi
-          # Every added/modified (not deleted) spec must be non-empty.
           while IFS=$'\t' read -r st path; do
-            case "$st" in
-              D) continue ;;
-            esac
-            if [ ! -s "$path" ]; then
-              echo "Error: $path is empty"
-              exit 1
-            fi
-          done < <(git diff --cached --name-status -- specs/ | grep -v '^.\s*specs/_template\.md$')
-          echo "Spec changes:"
-          git diff --cached --name-status -- specs/
+            [ "$st" = "D" ] && continue
+            if [ ! -s "$path" ]; then echo "Error: $path is empty"; exit 1; fi
+          done < <(git diff --name-status origin/main -- specs/ | grep -v '_template\.md$')
+          echo "Spec changes vs main:"
+          git diff --name-status origin/main -- specs/
 
-      - name: Commit and push spec
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "Spec Agent"
-          git config user.email "spec-agent@github-actions.bot"
+          # Publish onto the intended branch regardless of what the agent
+          # did: -B repoints/keeps BRANCH at the current HEAD (adopting an
+          # agent commit if there is one); then commit any uncommitted spec.
+          git checkout -B "$BRANCH"
           git add -A specs/
-          git diff --staged --quiet || git commit -m "spec: issue #${{ github.event.issue.number }}"
-          git push --force origin "${{ steps.naming.outputs.branch }}"
+          git diff --cached --quiet -- specs/ || git commit -m "spec: issue #${{ github.event.issue.number }}"
+          git push --force origin "$BRANCH"
 
       - name: Create draft PR
         env:
