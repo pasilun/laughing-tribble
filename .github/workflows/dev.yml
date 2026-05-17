@@ -44,10 +44,24 @@ jobs:
           ESC_MODEL="zai-coding-plan/glm-5.1"
           # -----------------------------
 
+          # Status of a spec file (active|planned|chore|superseded|obsolete|"")
+          spec_status() {
+            awk '/^## Status/{s=1;next} s{ if($0~/^<!--/){c=1} if(c){ if($0~/-->/)c=0; next} if($0~/^[[:space:]]*$/)next; if(match($0,/`(active|planned|superseded|obsolete|chore)`/)){print substr($0,RSTART+1,RLENGTH-2);exit} exit }' "$1" 2>/dev/null
+          }
+
           if [ -n "${{ inputs.spec_file }}" ]; then
             SPEC_FILE="${{ inputs.spec_file }}"
           else
-            SPEC_FILE=$(git diff HEAD~1 --name-only | grep '^specs/[^_].*\.md$' | head -n 1)
+            # A spec PR can touch several files (new capability + a
+            # tombstone). Pick the first changed spec that is NOT a
+            # tombstone — never resume on a superseded/obsolete spec.
+            SPEC_FILE=""
+            for f in $(git diff HEAD~1 --name-only | grep '^specs/[^_].*\.md$'); do
+              st=$(spec_status "$f")
+              if [ "$st" != "superseded" ] && [ "$st" != "obsolete" ]; then
+                SPEC_FILE="$f"; break
+              fi
+            done
           fi
           if [ -z "$SPEC_FILE" ]; then
             SPEC_FILE=$(find specs -name "*.md" -not -name "_template.md" -type f | sort | tail -n 1)
