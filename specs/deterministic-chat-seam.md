@@ -4,7 +4,7 @@
 `deterministic-chat-seam`
 
 ## Status
-`planned`
+`active`
 
 ## Regression Test
 `e2e/deterministic-chat-seam.spec.ts`

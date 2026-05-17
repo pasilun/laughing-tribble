@@ -2,18 +2,64 @@
 
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useReducer, useState } from 'react'
+
+interface BuildingModel {
+  flowType?: string
+  footprint?: {
+    length?: number
+    width?: number
+  }
+}
+
+type BuildingAction =
+  | { type: 'update'; args: BuildingModel }
+  | { type: 'reset' }
+
+function buildingReducer(state: BuildingModel | null, action: BuildingAction): BuildingModel | null {
+  if (action.type === 'reset') return null
+  if (action.type === 'update') {
+    return {
+      ...state,
+      ...action.args,
+      footprint: {
+        ...state?.footprint,
+        ...action.args.footprint,
+      },
+    }
+  }
+  return state
+}
 
 export default function DesignPage() {
   const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({ api: '/api/design/chat' }),
   })
   const [input, setInput] = useState('')
+  const [buildingModel, dispatch] = useReducer(buildingReducer, null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isLoading = status === 'submitted' || status === 'streaming'
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1]
+    if (lastMessage?.role === 'assistant') {
+      const toolCalls = lastMessage.parts.filter((part) => {
+        if (part.type === 'tool-call') {
+          const typedPart = part as unknown as { toolName: string; args?: BuildingModel }
+          return typedPart.toolName === 'set_building' && typedPart.args
+        }
+        return false
+      }) as unknown as Array<{ toolName: string; args: BuildingModel }>
+
+      if (toolCalls.length > 0) {
+        const lastCall = toolCalls[toolCalls.length - 1]
+        dispatch({ type: 'update', args: lastCall.args })
+      }
+    }
   }, [messages])
 
   function handleSubmit(e: React.FormEvent) {
@@ -34,6 +80,13 @@ export default function DesignPage() {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-3xl mx-auto space-y-6">
+          <pre
+            data-testid="model-state"
+            className="bg-zinc-100 dark:bg-zinc-900 p-4 rounded-lg text-xs font-mono overflow-auto"
+          >
+            {JSON.stringify(buildingModel, null, 2)}
+          </pre>
+
           {messages.length === 0 && (
             <p className="text-zinc-600 dark:text-zinc-400 text-center py-8">
               Beskriv ditt projekt så hjälper jag dig att komma igång
