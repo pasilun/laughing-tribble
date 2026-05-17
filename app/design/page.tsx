@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { useEffect, useRef, useReducer, useState } from 'react'
+import { useEffect, useMemo, useRef, useReducer, useState } from 'react'
 
 interface BuildingModel {
   flowType?: string
@@ -32,8 +32,12 @@ function buildingReducer(state: BuildingModel | null, action: BuildingAction): B
 }
 
 export default function DesignPage() {
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: '/api/design/chat' }),
+    [],
+  )
   const { messages, sendMessage, status, error } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/design/chat' }),
+    transport,
   })
   const [input, setInput] = useState('')
   const [buildingModel, dispatch] = useReducer(buildingReducer, null)
@@ -62,12 +66,16 @@ export default function DesignPage() {
     }
   }, [messages])
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const text = input.trim()
     if (!text) return
     setInput('')
-    sendMessage({ text })
+    try {
+      sendMessage({ text })
+    } catch (err) {
+      console.error('Failed to send message:', err)
+    }
   }
 
   return (
@@ -140,7 +148,11 @@ export default function DesignPage() {
 
       <div className="flex-shrink-0 p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
         <div className="max-w-3xl mx-auto">
-          <form onSubmit={handleSubmit} className="flex gap-3">
+          <form
+            onSubmit={handleSubmit}
+            method="post"
+            className="flex gap-3"
+          >
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
