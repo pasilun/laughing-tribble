@@ -19,12 +19,16 @@ export default function DesignPage() {
     onToolCall: ({ toolCall }) => {
       if (toolCall.toolName === 'set_building') {
         try {
-          const args = typeof toolCall.input === 'string' 
+          const args = typeof toolCall.input === 'string'
             ? JSON.parse(toolCall.input) as BuildingModel
             : toolCall.input as BuildingModel
           setBuildingModel((prev) => ({
             ...prev,
-            ...args
+            ...args,
+            footprint: {
+              ...prev?.footprint,
+              ...args.footprint
+            }
           }))
         } catch (err) {
           console.error('Failed to parse tool args:', err)
