@@ -1,9 +1,5 @@
 import { test, expect } from '@playwright/test'
 
-// Regression test for specs/design-screen.md (active capability spec).
-// Covers the streaming chat shell. Does NOT assert the temporary debug bar
-// (known deviation, slated for removal — see the spec).
-
 test.describe('Design Screen - identity', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/design')
@@ -43,25 +39,17 @@ test.describe('Design Screen - conversation', () => {
   }) => {
     await page.goto('/design')
 
-    // Use the deterministic seam fixture prompt to ensure deterministic
-    // behaviour in preview without requiring a real LLM key.
     const fixturePrompt =
       'Jag vill bygga en komplementbyggnad, 4.5 meter lång och 4.5 meter bred'
     await page.getByTestId('chat-input').fill(fixturePrompt)
     await page.getByRole('button', { name: 'Skicka' }).click()
 
-    // User message is echoed and the input clears immediately.
     await expect(page.getByText(fixturePrompt)).toBeVisible()
     await expect(page.getByTestId('chat-input')).toHaveValue('')
 
-    // Assistant reply streams in. This is verified deterministically via the
-    // [[deterministic-chat-seam]] fixture. We only assert the chat-streaming
-    // UX here, not specific building-model values (those are covered by the
-    // seam's own regression test).
     const assistantMessage = page.getByTestId('assistant-message').first()
     await expect(assistantMessage).toBeVisible({ timeout: 30_000 })
 
-    // Verify the streamed content is non-empty and does not contain error text.
     const messageText = await assistantMessage.textContent()
     expect(messageText?.trim().length).toBeGreaterThan(0)
     expect(messageText).not.toContain('error')
