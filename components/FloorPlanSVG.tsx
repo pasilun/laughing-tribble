@@ -36,9 +36,8 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
       <svg
         data-testid="floor-plan-svg"
         width="100%"
-        height="auto"
         viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
-        className="w-full max-w-full"
+        className="w-full max-w-full h-auto"
         preserveAspectRatio="xMidYMid meet"
         style={{ display: 'block' }}
       >
