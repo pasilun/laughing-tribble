@@ -46,14 +46,21 @@ All criteria are browser-observable (Playwright).
 **And** a send button labelled `Skicka` is visible
 **And** the send button is disabled while the input is empty
 
-### Scenario 3: Sending a message shows it and streams a reply
+### Scenario 3 (DEFERRED — not currently a binding criterion)
 
-**Given** the user has typed a non-empty message
-**When** they submit the form (click `Skicka` or press Enter)
-**Then** their message appears in the conversation aligned as a user message
-**And** the input clears
-**And** an assistant message appears and its text streams in
-**And** a loading indicator is shown while the assistant is responding
+> **Honesty note:** the chat round-trip below was never genuinely verified.
+> The loop's preview has no working chat backend (no key in Preview /
+> non-deterministic LLM), so this scenario only ever "passed" UI-only or
+> failed for infra reasons. It is **not binding** until
+> [[deterministic-chat-seam]] lands (deterministic, key-free preview chat).
+> At that point this is restored as a binding criterion and genuinely
+> re-verified.
+>
+> **Given** the user has typed a non-empty message
+> **When** they submit the form (click `Skicka` or press Enter)
+> **Then** their message appears as a user message, the input clears, an
+> assistant message appears and streams in, and a loading indicator shows
+> while responding.
 
 ### Scenario 4: Reachable from the landing page
 
@@ -83,3 +90,11 @@ Implemented by `app/design/page.tsx` using `@ai-sdk/react` `useChat` against
 Known deviation (do not enshrine as contract): the page currently renders a
 `status / msgs / error` debug bar marked "remove before launch". It is tech
 debt to be removed and must not be asserted by the regression test.
+
+Verification honesty: Scenarios 1, 2, 4 (identity, composer, navigation)
+are genuinely browser-verified. Scenario 3 (chat streaming) is **deferred**
+— it depends on a working chat backend the loop's preview never had, so it
+was never truly verified. `e2e/design-screen.spec.ts`'s streaming
+assertion is therefore not trustworthy until [[deterministic-chat-seam]]
+makes preview chat deterministic; the test will be reworked to drive the
+seam and Scenario 3 restored as binding then.
