@@ -28,6 +28,6 @@ jobs:
           # breaks the loop) as hard failures. Silence shellcheck's
           # stylistic *info* codes so the gate stays meaningful, not
           # perma-red on pre-existing nits.
-          SHELLCHECK_OPTS: -e SC2015 -e SC2086 -e SC2129 -e SC2188
+          SHELLCHECK_OPTS: -e SC2015 -e SC2086 -e SC2129 -e SC2188 -e SC2016
         with:
           args: -color
