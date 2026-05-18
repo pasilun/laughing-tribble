@@ -59,6 +59,7 @@ The fake model is controlled by a fixtures map that matches exact prompts to scr
 - To verify partial update: after the correction message, wait up to 10s; the changed field (length) must have the new value while other fields remain unchanged WITHOUT a page reload
 - Verify both chat messages and both assistant responses are visible simultaneously after the second message (history persists)
 - These tests must pass on the Vercel preview with NO `ANTHROPIC_API_KEY` set (validates the fake path)
+- On any failure, inspect the network: confirm `POST /api/design/chat` fired (status 200) and capture a snippet of the streamed response body — a missing/empty/ wrongly-shaped tool part in the response is the expected failure signature here, and the verdict must say so
 
 ## Out of Scope
 
@@ -81,3 +82,31 @@ The fake model is controlled by a fixtures map that matches exact prompts to scr
 - The fake must implement the same streaming and tool-call interface as the real model to ensure the wiring is identical
 - The model state is displayed as raw JSON (not styled) to keep this verification mechanism minimal
 - The fixtures map should be extensible for future test scenarios but is intentionally minimal for this capability
+
+## Implementation Approach (REQUIRED — do not deviate)
+
+Prior attempts failed 4× by hand-authoring the AI-SDK UI-message-stream
+protocol (`createUIMessageStream` writing raw `tool-input-available`
+chunks). The client `useChat` then never saw a matching tool part, so the
+model state never updated. **Do not hand-author stream chunks.**
+
+Instead, **fake the model, not the stream**:
+
+- Build a deterministic mock `LanguageModel` (use the AI SDK's test
+  utilities, e.g. `MockLanguageModelV2` / `simulateReadableStream` from
+  the `ai` package's test exports) that, for a matched fixture prompt,
+  returns a normal assistant text part **and a `set_building` tool call**
+  via the SDK's own result shape.
+- Pass that mock as the `model` to the **same `streamText(...)`** call the
+  real path uses, and return the **same `toUIMessageStreamResponse()`**.
+  Only the `model` differs between preview and production — everything
+  downstream (stream encoding, `useChat`, the tool part the client reads)
+  is the real, unchanged code path. That is the entire point of a contract
+  test.
+- Define the `set_building` tool with a matching schema so the client
+  reads it as a normal tool part (not a hand-built `dynamic-tool`).
+
+If the SDK utility names differ in the installed `ai` version, find the
+equivalent in `node_modules/ai` — but the rule stands: swap the model,
+reuse `streamText` + `toUIMessageStreamResponse`, never reconstruct the
+wire protocol by hand.
