@@ -133,32 +133,37 @@ jobs:
           FAILURE_REPORT: ${{ inputs.failure_report }}
           AGENT_MODEL: ${{ needs.gate.outputs.model }}
         run: |
-          if [ -n "$FAILURE_REPORT" ]; then
-            CONTEXT="Your PREVIOUS attempt is already committed on this branch and FAILED verification.
-          Do NOT start over — read the current code (your prior work) and fix exactly these issues:
+          # Build the prompt in a FILE via env vars (printf) so the full
+          # verifier verdict — JSON with quotes/backticks/newlines — reaches
+          # the agent intact. Never interpolate it into a quoted CLI arg.
+          {
+            echo "Read agents/dev/system-prompt.md for your role and rules."
+            echo ""
+            echo "Your task: implement the feature described in ${SPEC_FILE}."
+            echo ""
+            if [ -n "$FAILURE_REPORT" ]; then
+              echo "Your PREVIOUS attempt is already committed on this branch and FAILED verification."
+              echo "Do NOT start over — read the current code (your prior work) and fix exactly these issues."
+              echo "The verifier's full verdict (with network/console evidence) follows as JSON:"
+              echo ""
+              printf '%s\n' "$FAILURE_REPORT"
+              echo ""
+            else
+              echo "This is the first implementation attempt."
+            fi
+            echo ""
+            echo "Steps:"
+            echo "1. Read ${SPEC_FILE} to understand all acceptance criteria and its required implementation approach"
+            echo "2. Read the CURRENT state of app/ and components/ — your prior attempt's code is here"
+            echo "3. Implement using Next.js App Router + TypeScript + Tailwind CSS"
+            echo "4. Write or update e2e tests in e2e/ covering each acceptance criterion"
+            echo "5. Run npm run typecheck and npm run lint — fix any errors before finishing"
+            echo "6. Use your file write tool to write all code files to disk"
+            echo "7. Do NOT run npm test, do NOT commit or push — just write the code files"
+          } > /tmp/dev-prompt.txt
 
-          ${FAILURE_REPORT}
-
-          Each failing scenario tells you what the verifier observed vs expected."
-          else
-            CONTEXT="This is the first implementation attempt."
-          fi
-
-          npx opencode-ai@1.15.3 run --model "$AGENT_MODEL" --dangerously-skip-permissions "
-          Read agents/dev/system-prompt.md for your role and rules.
-
-          Your task: implement the feature described in ${SPEC_FILE}.
-
-          ${CONTEXT}
-
-          Steps:
-          1. Read ${SPEC_FILE} to understand all acceptance criteria
-          2. Read the CURRENT state of app/ and components/ — your prior attempt's code is here
-          3. Implement the feature using Next.js App Router + TypeScript + Tailwind CSS
-          4. Write or update e2e tests in e2e/ that cover each acceptance criterion
-          5. Run \`npm run typecheck\` and \`npm run lint\` — fix any errors before finishing
-          6. Use your file write tool to write all code files to disk
-          7. Do NOT run npm test, do NOT commit or push — just write the code files"
+          npx opencode-ai@1.15.3 run --model "$AGENT_MODEL" \
+            --dangerously-skip-permissions "$(cat /tmp/dev-prompt.txt)"
 
       - name: Typecheck
         id: typecheck

@@ -143,8 +143,9 @@ jobs:
             echo "passed=true" >> "$GITHUB_OUTPUT"
           else
             echo "passed=false" >> "$GITHUB_OUTPUT"
-            jq -r '(.failures // ["No failure details provided"]) | join("\n")' \
-              /tmp/verify-result.json > /tmp/verify-failures.txt 2>/dev/null \
+            # Preserve the FULL structured verdict (failures may be objects
+            # carrying network/console evidence) — do not flatten to strings.
+            jq '.' /tmp/verify-result.json > /tmp/verify-failures.txt 2>/dev/null \
               || cp /tmp/verify-result.json /tmp/verify-failures.txt 2>/dev/null \
               || echo "Could not parse verify-result.json" > /tmp/verify-failures.txt
           fi
@@ -167,14 +168,21 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
             const passed = '${{ steps.verify.outputs.passed }}' === 'true';
-            const emoji = passed ? '✅' : '❌';
-            const verdict = passed ? 'pass' : 'fail';
+            let body = passed ? '✅ Verification: pass' : '❌ Verification: fail';
+            if (!passed) {
+              let v = '';
+              try { v = fs.readFileSync('/tmp/verify-failures.txt', 'utf8'); } catch {}
+              // Durable, lossless record of the full verdict (the dev agent
+              // and humans both read this).
+              body += `\n\n<!-- VERIFY-VERDICT -->\n<details><summary>Full verdict</summary>\n\n\`\`\`json\n${v.slice(0, 60000)}\n\`\`\`\n</details>`;
+            }
             github.rest.issues.createComment({
               issue_number: ${{ steps.pr.outputs.number }},
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `${emoji} Verification: ${verdict}`,
+              body,
             });
 
       - name: Retry, escalate, or stop

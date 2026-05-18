@@ -51,6 +51,23 @@ For EVERY scenario, verify:
 
 Every spec includes a `## Verifier Hints` section with exact selectors, timing guidance, and negative assertions written specifically for that feature. Follow them precisely — they exist to prevent false positives.
 
+### Capture evidence on every failure (not just the DOM)
+
+A DOM symptom alone ("model-state stayed null") is not enough for the dev
+agent to fix an integration bug. For every failing scenario you MUST also
+collect the black-box-observable evidence and put it in the verdict:
+
+- **Network**: for any API-backed feature, inspect the request the page
+  makes to its endpoint (e.g. `POST /api/design/chat`) via
+  `browser_network_requests()`. Did it fire? Method, URL, HTTP status, and
+  a snippet (~500 chars) of the **response body**. "Send did nothing" vs
+  "request 500'd" vs "request returned a body the client ignored" are
+  completely different bugs — say which.
+- **Console**: capture `browser_console_messages` errors/warnings.
+- **Observed vs expected**: exactly what you saw vs what the spec required.
+
+DOM-only verdicts are insufficient for any feature that calls an API.
+
 ### Testing each scenario
 
 - **Given X** → navigate and interact to reach this state
@@ -70,19 +87,27 @@ Write to `/tmp/verify-result.json`:
 }
 ```
 
-On failure:
+On failure (include the evidence — this is what the dev agent fixes from):
 
 ```json
 {
   "passed": false,
   "failures": [
-    "Scenario 2: Filled chat-input with 'Hej', clicked send-button, waited 15s — [data-testid=assistant-message] never appeared",
-    "Scenario 2: Response appeared but contained 'fel uppstod' instead of assistant content"
+    {
+      "scenario": "Scenario 2",
+      "action": "Filled chat-input with the fixture prompt, clicked send-button, waited 15s",
+      "expected": "[data-testid=model-state] shows komplementbyggnad, length 4.5, width 4.5",
+      "observed": "[data-testid=model-state] still shows null",
+      "network": "POST /api/design/chat fired, status 200, response body started: '0:\"...\" ' (no tool/dynamic-tool part present)",
+      "console": "no errors"
+    }
   ]
 }
 ```
 
-Each failure entry must state: which scenario, what action was taken, what was expected, what was actually observed.
+Each failure MUST include scenario, action, expected, observed, network
+(or 'n/a' if no API), and console. Plain strings are acceptable only if
+they still contain all of that detail — structured is strongly preferred.
 
 `passed: true` ONLY when ALL acceptance criteria in the spec pass AND you have actually navigated to and interacted with the preview URL.
 
