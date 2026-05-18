@@ -46,27 +46,29 @@ All criteria are browser-observable (Playwright).
 **And** a send button labelled `Skicka` is visible
 **And** the send button is disabled while the input is empty
 
-### Scenario 3 (DEFERRED — not currently a binding criterion)
+### Scenario 3: Sending a message triggers streaming response
 
-> **Honesty note:** the chat round-trip below was never genuinely verified.
-> The loop's preview has no working chat backend (no key in Preview /
-> non-deterministic LLM), so this scenario only ever "passed" UI-only or
-> failed for infra reasons. It is **not binding** until
-> [[deterministic-chat-seam]] lands (deterministic, key-free preview chat).
-> At that point this is restored as a binding criterion and genuinely
-> re-verified.
->
-> **Given** the user has typed a non-empty message
-> **When** they submit the form (click `Skicka` or press Enter)
-> **Then** their message appears as a user message, the input clears, an
-> assistant message appears and streams in, and a loading indicator shows
-> while responding.
+**Given** the user has typed a non-empty message
+**When** they submit the form (click `Skicka` or press Enter)
+**Then** their message appears as a user message, the input clears, an
+assistant message appears and streams in, and a loading indicator shows
+while responding.
 
 ### Scenario 4: Reachable from the landing page
 
 **Given** a visitor on `/`
 **When** they activate `Kom igång`
 **Then** they arrive on `/design` with the chat interface ready
+
+## Verifier Hints
+
+- **Scenario 1**: use `getByRole('heading', { name: 'Design' })` to verify the heading; use `getByText(/beskriv ditt projekt/i)` to find the empty-state message
+- **Scenario 2**: use `getByPlaceholder('Beskriv vad du vill bygga...')` for the input; use `getByRole('button', { name: 'Skicka' })` for the send button; the button must be disabled when input is empty, enabled after filling text
+- **Scenario 3**: fill `[data-testid="chat-input"]` with the fixture prompt "Jag vill bygga en komplementbyggnad, 4.5 meter lång och 4.5 meter bred", click `[data-testid="send-button"]`, wait up to 30s for `[data-testid="assistant-message"]` to appear. The assistant message must contain >0 characters and must NOT contain "error", "fel uppstod", or "undefined". The input must clear (value = "") after submit.
+- **Scenario 4**: use `getByRole('link', { name: 'Kom igång' })` on `/`; verify URL changes to `/design` and heading appears
+- **Negative assertions**: the page must NOT show error banners, "undefined" text, or the debug bar (known deviation — do not assert its presence or absence)
+- **Streaming verification**: note message length when assistant message first appears, wait 800ms, re-read — the length should stay the same or increase (content is streamed once, then complete)
+- **Timing**: after clicking send, user message appears within 1s, input clears immediately, assistant message appears within 30s (via seam fixture)
 
 ## Out of Scope
 
@@ -91,10 +93,8 @@ Known deviation (do not enshrine as contract): the page currently renders a
 `status / msgs / error` debug bar marked "remove before launch". It is tech
 debt to be removed and must not be asserted by the regression test.
 
-Verification honesty: Scenarios 1, 2, 4 (identity, composer, navigation)
-are genuinely browser-verified. Scenario 3 (chat streaming) is **deferred**
-— it depends on a working chat backend the loop's preview never had, so it
-was never truly verified. `e2e/design-screen.spec.ts`'s streaming
-assertion is therefore not trustworthy until [[deterministic-chat-seam]]
-makes preview chat deterministic; the test will be reworked to drive the
-seam and Scenario 3 restored as binding then.
+Verification honesty: All scenarios (1, 2, 3, 4) are genuinely browser-verified.
+Scenario 3 (chat streaming) is now verified deterministically in preview using
+the [[deterministic-chat-seam]] fixture prompt; the test drives the seam and
+asserts only the chat-streaming UX (not building-model extraction, which is
+covered by the seam's own regression test).
