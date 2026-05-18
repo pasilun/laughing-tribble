@@ -2,6 +2,49 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
+## [2026-05-18] overhaul | Dev loop hardened, spec corpus re-baselined, first chat feature shipped autonomously ✅
+
+**Summary:** Large session reworking the loop into a self-defending system, turning `specs/` into a living specification, decoupling the machinery from the product, and shipping the first chat capability end-to-end with no human intervention.
+
+### Dev loop hardening
+
+- **actionlint CI** gates every workflow change (invalid YAML / shell / bad events fail at PR time, not loop-runtime — the failure mode that repeatedly stalled the loop).
+- **Pinned tooling**: `opencode-ai@1.15.3`, `@playwright/mcp@0.0.75`, `vercel@54.1.0` (floating `@latest` had silently broken the loop, incl. an opencode MCP-schema change).
+- **Attempt cap = `LOOP_MAX_ATTEMPTS` repo var (3)**, read by both dev.yml and verify.yml; every failure now comments `Attempt N/MAX` (was: felt infinite).
+- **Escalation**: after the cap, one attempt on the stronger model `zai-coding-plan/glm-5.1`, gated by the `escalation` GitHub Environment (required reviewer = repo owner — manual approval, no silent spend). Exhaustion opens a `🆘` issue.
+- **Counter is cumulative & real**: dev.yml builds on the existing `feat/<spec>` branch (no force-push); commits-ahead-of-main is the only counter; empty commit on no-op so it always terminates.
+- **LOOP_PAT** wired for the cross-workflow chain (the old wiki TODO — **done**); a failed retry-dispatch now opens a loud issue instead of silently stalling.
+- **spec.yml** is path-agnostic (agent picks capability/chore path) and resilient to a rogue agent that self-commits/branches; the spec agent is forbidden from running git/gh.
+- **dev.yml** selects the real capability spec (skips superseded tombstones) and creates a PR when no *open* PR exists (a closed PR on a reused branch no longer suppresses it).
+- **Lossless, evidence-rich verifier feedback**: verifier must capture network (did the API call fire? status/response snippet) + console + observed-vs-expected as a structured verdict; verify.yml preserves the full verdict and posts it as a durable `VERIFY-VERDICT` PR comment; dev.yml builds its prompt from a file so the full JSON verdict reaches the agent intact.
+- **deploy.yml**: deterministic `_verified-*` contract suite now runs against a fresh **preview** (fake → reliable) + a separate environment-agnostic **production smoke**. Fixes the false `🔴 Regression detected` on every chat deploy.
+
+### Spec corpus = living specification
+
+- Re-baselined from a pile of change-request deltas into capability specs. Status lifecycle enforced: `active` (binding contract, requires an existing regression test — `spec-guard.yml`), `planned` (agreed, not built), `superseded`/`obsolete` (tombstone/delete), `chore` (transient cleanup, auto-pruned from `main` after merge).
+- New capabilities are specced `planned`; the dev cycle creates the regression test and flips `planned → active` in the same PR, so `main` never has an `active` spec without its test.
+- Active capability specs: [[landing-page]], [[design-screen]], [[footer]], [[deterministic-chat-seam]]. Spec 008 (planritning) tombstoned (superseded by the 009 line). 007 + 009b–009e remain `planned`.
+- `CLAUDE.md` rewritten as an accurate, **product-agnostic loop contract** with the loop invariants documented; product domain moved to a single source: [[product-context]] (`docs/product-context.md`). Agent prompts no longer hard-code bygglov/tjänsteman specifics.
+
+### Milestone: first chat feature shipped autonomously
+
+- The live-LLM verifier conflated infra/model/code failures (missing Preview key + non-determinism), burning attempts on unfixable problems. Resolved with the **deterministic chat seam**: `/api/design/chat` selects the model by `VERCEL_ENV` — production uses real `anthropic('claude-sonnet-4-5')`, preview/dev uses a deterministic mock `LanguageModel` (mock the **model**, not the stream — via `streamText()` + `toUIMessageStreamResponse()`, the real wiring). Loop verification needs no LLM key and is deterministic.
+- [[deterministic-chat-seam]] shipped by the loop within the 3-attempt cap, no escalation, no human edits — the first chat capability built fully autonomously.
+- [[design-screen]] Scenario 3 (chat streaming) was honestly marked unverified, then **genuinely re-verified** through the loop once the seam made preview chat deterministic.
+
+### Key learnings
+
+- **The loop must defend itself.** Most outages were harness/CI errors, not product code — fail fast and loud (actionlint, pinned tools, loud stalls) beats reactive patching.
+- **Don't verify LLM features against a live LLM in the merge gate.** Non-determinism + infra conflate three failure classes. Fake the model deterministically for the contract gate; keep real-LLM quality as a separate non-blocking eval.
+- **Specs are a contract, not a changelog.** Capability specs (not deltas) + `active ⇄ regression test` enforced = drift defence that's executable.
+- **Tell the agent the *how* for hostile APIs.** 4 attempts (incl. glm-5.1) failed hand-rolling the AI-SDK v6 stream protocol; mandating "mock the model, reuse `streamText`" in the spec made it pass.
+
+**Pages updated:**
+- Updated: [[wiki-index]] (Dev Loop Infrastructure, Core Product Screens, counts)
+- Updated: [[log]] (this entry)
+
+---
+
 ## [2026-05-16] milestone | 009a Design Chat UI — working end-to-end ✅
 
 **Summary:** The `/design` chat screen is live and responding with real Claude AI replies in Swedish. This closes the 009a spec.

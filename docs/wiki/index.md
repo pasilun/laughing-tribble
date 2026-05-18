@@ -36,17 +36,17 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 ## Dev Loop Infrastructure
 
-- [[dev-loop-workflows]] - GitHub Actions workflows: spec → dev → verify → auto-merge → deploy. Independent verifier generates its own tests from spec against Vercel preview. Retry loop: verify failure → dispatches dev with failure report → dev fixes → dispatches verify. Cap: 4 commits/branch. Secrets: `ZHIPU_API_KEY`, `VERCEL_TOKEN`. Vercel SSO disabled for previews. ✓
+- [[dev-loop-workflows]] - GitHub Actions: spec → dev → verify → auto-merge → deploy. Independent interactive Playwright verifier against a Vercel preview. ✓
 
-  **Current behaviour notes (2026-05-10):**
-  - `deploy.yml` runs only on `workflow_run: Auto Merge` and `workflow_dispatch` — not on every push to main.
-  - `spec.yml` fails hard if the agent doesn't write the spec file via the write tool (stdout fallback removed).
-  - `verify.yml` writes tests directly to `e2e/_verified-<SPEC_ID>.spec.ts`; no intermediate `_verify.spec.ts` copy step.
-  - `e2e/_verify.spec.ts` is gitignored as a defensive measure.
-  - `app/layout.tsx` uses `lang="sv"` and product title "Bygglov-assistenten".
-
-  **TODO — PAT secret to simplify retry chain:**
-  The current `workflow_dispatch` retry chain (verify → dispatch dev → dev dispatches verify back) exists because GitHub blocks `workflow_run` events triggered by `GITHUB_TOKEN`. Adding a single PAT secret (e.g. `LOOP_PAT`) with `repo` + `actions:write` scope would allow a clean `workflow_run` chain instead, removing the explicit "Trigger verify on retry runs" dispatch step in `dev.yml`. Not urgent, but eliminates the round-trip complexity when the time comes.
+  **Current behaviour (2026-05-18 — see [[log]] 2026-05-18 entry):**
+  - **Attempt cap** = `LOOP_MAX_ATTEMPTS` repo var (3), read by `dev.yml` + `verify.yml`. Counter = commits-ahead-of-main on the cumulative `feat/<spec>` branch (no force-push; empty commit on no-op). Every failure comments `Attempt N/MAX`.
+  - **Escalation**: after the cap, one attempt on `zai-coding-plan/glm-5.1`, gated by the `escalation` GitHub Environment (manual approval). Exhaustion opens a `🆘` issue. Cross-workflow chain uses `LOOP_PAT` (the old PAT TODO — **done**); failed dispatch opens a loud issue.
+  - **Spec status lifecycle**: `active` (binding; requires an existing regression test, enforced by `spec-guard.yml`), `planned` (not built), `superseded`/`obsolete` (tombstone/delete), `chore` (transient, auto-pruned after merge). New capabilities are `planned`; the dev cycle creates the test and flips `planned → active` in the same PR.
+  - **spec.yml** path-agnostic + resilient to a rogue self-committing agent; the spec agent must not run git/gh. **dev.yml** skips superseded tombstones when selecting the spec and creates a PR when no *open* PR exists.
+  - **Verifier feedback** is lossless + evidence-rich (network/console captured; full structured verdict in a `VERIFY-VERDICT` PR comment; dev prompt built from a file).
+  - **deploy.yml**: deterministic `_verified-*` contract suite runs vs a fresh **preview** (fake); separate environment-agnostic **production smoke**.
+  - **actionlint CI** gates all workflow changes; agent tooling pinned (`opencode-ai@1.15.3`, `@playwright/mcp@0.0.75`, `vercel@54.1.0`).
+  - **Loop is product-agnostic**: `CLAUDE.md` is the loop contract + invariants; product domain in [[product-context]] (`docs/product-context.md`). Secrets: `ZHIPU_API_KEY`, `VERCEL_TOKEN`/`VERCEL_ORG_ID`/`VERCEL_PROJECT_ID`, `LOOP_PAT`; vars: `LOOP_MAX_ATTEMPTS`, `PROD_URL`.
 
 ## Agent Configuration
 
@@ -55,11 +55,22 @@ A catalog of all wiki entries for the bygglov assistant project.
 - [[verifier-agent-prompt]] - System prompt for the verifier agent (`agents/verifier/system-prompt.md`) ✓
 - [[tjansteman-agent-prompt]] - System prompt for the tjänsteman agent (product-embedded, protected path)
 
-## Core Product Screens
+## Capability Specs (the living specification — `specs/`)
 
-- [[design-conversation-spec]] - Spec 009: LLM conversation → BuildingModel → SVG floor plan + triage panel. Claude API tool use extracts parametric model (footprint, roof, installations). Verification loop validates against regulatory limits after each tool call. Triage inputs come from conversation only — LLM asks follow-up questions. 2D SVG only for MVP. **Active — implement next.**
-- [[situationsplan-spec]] - Spec 007 (revised): Place BuildingModel footprint on Lantmäteriet WMS map, measure distances to boundary, export situationsplan PDF at 1:500. Depends on spec 009 (needs BuildingModel) and Lantmäteriet API credentials.
-- ~~[[planritning-spec]]~~ - Spec 008: **Superseded** by spec 009. Floor plan is now derived from BuildingModel, not entered manually. Do not implement.
+**Active (built + genuinely verified):**
+- [[landing-page]] — homepage: headline, single `Kom igång` CTA → `/design`. ✓
+- [[design-screen]] — `/design` streaming chat shell; Scenario 3 genuinely re-verified via the seam. ✓
+- [[footer]] — global copyright footer on every page. ✓
+- [[deterministic-chat-seam]] — `/api/design/chat` serves a deterministic mock model in preview (real model in prod), so the loop can verify chat without an LLM key. **First chat capability shipped fully autonomously.** ✓
+
+**Planned (roadmap, not built):**
+- [[009b-building-model-tools]] → [[building-model-extraction]] / [[building-model-panel]] / [[building-model-computed]] — chat tool-calls → structured BuildingModel (split for loop-sized delivery).
+- [[009c-floor-plan-svg]] — dimensioned SVG floor plan from the BuildingModel.
+- [[009d-triage-panel]] — live LOVFRI/ANMÄLAN/BYGGLOV verdict from the model.
+- [[009e-validation-loop]] — API validates the model vs regulatory limits, feeds constraints back.
+- [[007-situationsplan]] — footprint on a Lantmäteriet map, boundary distances, PDF (needs Lantmäteriet creds).
+
+**Superseded/obsolete:** spec 008 (planritning, → 009 line), 009/009a, and the old delta specs (001–006, 010) — tombstoned during the re-baseline.
 
 ## UI & UX
 
@@ -80,5 +91,4 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 ---
 
-**Total entries:** 9 complete, 18 TODO, 1 superseded
-**Last updated:** 2026-05-12 (product pivot: real project defined, design conversation + parametric model, spec 008 superseded, spec 009 active)
+**Last updated:** 2026-05-18 — loop hardened (3-attempt cap + glm-5.1 escalation gate, actionlint, pinned tooling, lossless verifier feedback, contract-vs-preview regression); spec corpus re-baselined into a living specification; loop decoupled from product ([[product-context]]); first chat capability ([[deterministic-chat-seam]]) shipped fully autonomously; [[design-screen]] genuinely re-verified. See [[log]] 2026-05-18.
