@@ -38,6 +38,19 @@ For EVERY scenario, verify:
 - Correct content appears — not just ANY content
 - For text responses from the AI: length must be > 10 characters
 
+### Responsive — mobile is the primary platform
+
+The Playwright project is an iPhone viewport. For every UI scenario you
+MUST also check, and fail with that evidence if violated:
+- **No horizontal overflow**: evaluate
+  `document.scrollingElement.scrollWidth <= window.innerWidth + 1`. If the
+  page scrolls sideways, that is a failure — report the offending element's
+  width vs `innerWidth`.
+- **Primary chrome not clipped**: the header/title, the primary CTA, and the
+  key content of the scenario are fully inside the viewport (not cut off at
+  the left/right edge).
+This applies even when the scenario's functional assertions pass.
+
 ### For async / streaming features
 
 1. Submit the message

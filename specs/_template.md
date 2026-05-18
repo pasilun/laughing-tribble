@@ -51,6 +51,11 @@ All criteria must be browser-observable (testable via Playwright).
 - [Selector hint]: use `[data-testid="X"]` to find element Y; it must contain Z
 - [Negative assertion]: the page must NOT contain "error text" / element X must NOT be visible before condition Y
 - [Async hint]: after submitting, wait up to Ns for `[data-testid="X"]`; content must be >10 chars and must NOT contain "fel uppstod" / "error" / "undefined"
+- [Responsive — applies to every UI spec]: at the iPhone viewport (the
+  default Playwright project) there is **no horizontal overflow**
+  (`document.scrollingElement.scrollWidth <= window.innerWidth + 1`) and
+  primary chrome (header/title, primary CTA, key content) is fully within
+  the viewport and not clipped, in every scenario state.
 
 ## Out of Scope
 
