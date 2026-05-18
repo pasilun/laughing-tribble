@@ -85,17 +85,16 @@ test.describe('Design Mobile Layout - Horizontal Overflow + Safe Area', () => {
       await page.setViewportSize({ width: 375, height: 667 })
       await page.goto('/design')
 
-      const headerBox = await page.evaluate(() => {
+      const headerStyle = await page.evaluate(() => {
         const header = document.querySelector('header')
         if (!header) return null
-        const computedStyle = window.getComputedStyle(header)
         return {
-          paddingTop: computedStyle.paddingTop
+          paddingTop: header.style.paddingTop
         }
       })
 
-      expect(headerBox).not.toBeNull()
-      expect(headerBox?.paddingTop).toContain('env(safe-area-inset-top)')
+      expect(headerStyle).not.toBeNull()
+      expect(headerStyle?.paddingTop).toContain('env(safe-area-inset-top)')
     })
 
     test('header text is visible and positioned correctly', async ({ page }) => {
