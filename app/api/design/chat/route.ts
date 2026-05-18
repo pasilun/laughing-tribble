@@ -31,7 +31,7 @@ const FIXTURES: Record<string, { response: string; toolCall?: { name: string; ar
 }
 
 function createFakeModel(userText: string) {
-  const fixture = Object.entries(FIXTURES).find(([prompt]) => userText.includes(prompt))?.[1]
+  const fixture = Object.entries(FIXTURES).find(([prompt]) => prompt === userText)?.[1]
   const responseText = fixture?.response || 'Jag förstår inte din förfrågan. Kan du vara mer specifik?'
 
   return new MockLanguageModelV3({
@@ -39,15 +39,29 @@ function createFakeModel(userText: string) {
     modelId: 'fake-model',
     doStream: async () => {
       const chunks: LanguageModelV3StreamPart[] = [
-        { type: 'text-delta', id: 'msg-1', delta: responseText }
+        { type: 'text-start', id: 'msg-1' },
+        { type: 'text-delta', id: 'msg-1', delta: responseText },
+        { type: 'text-end', id: 'msg-1' }
       ]
 
       if (fixture?.toolCall) {
         const toolArgsString = JSON.stringify(fixture.toolCall.args)
-        chunks.push(
-          { type: 'tool-call', toolCallId: 'tc-1', toolName: fixture.toolCall.name, input: toolArgsString }
-        )
+        chunks.push({
+          type: 'tool-call',
+          toolCallId: 'tc-1',
+          toolName: fixture.toolCall.name,
+          input: toolArgsString
+        })
       }
+
+      chunks.push({
+        type: 'finish',
+        finishReason: { unified: 'stop', raw: 'stop' },
+        usage: {
+          inputTokens: { total: 10, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 20, text: 20, reasoning: undefined }
+        }
+      })
 
       return {
         stream: simulateReadableStream({
