@@ -12,7 +12,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
 
   if (!length || !width) {
     return (
-      <div className="w-full h-64 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700">
+      <div className="w-full h-64 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Beskriv dimensioner för att se ritning
         </p>
@@ -21,31 +21,25 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
   }
 
   const padding = 60
-  const maxWidth = 600
-  const maxHeight = 400
   const aspectRatio = length / width
 
-  let svgWidth = maxWidth
-  let svgHeight = maxWidth / aspectRatio
+  const viewBoxWidth = 600
+  const viewBoxHeight = 600 / aspectRatio
 
-  if (svgHeight > maxHeight) {
-    svgHeight = maxHeight
-    svgWidth = maxHeight * aspectRatio
-  }
-
-  const rectWidth = svgWidth - padding * 2
-  const rectHeight = svgHeight - padding * 2
+  const rectWidth = viewBoxWidth - padding * 2
+  const rectHeight = viewBoxHeight - padding * 2
 
   const area = length * width
 
   return (
-    <div className="w-full">
+    <div className="w-full overflow-hidden">
       <svg
         data-testid="floor-plan-svg"
-        width={svgWidth}
-        height={svgHeight}
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        className="mx-auto"
+        width="100%"
+        viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
+        className="w-full max-w-full h-auto"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: 'block' }}
       >
         <rect
           x={padding}
@@ -57,7 +51,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
           strokeWidth={2}
           data-testid="floor-plan-rect"
         />
-        
+
         <text
           x={padding + rectWidth / 2}
           y={padding + rectHeight / 2}
@@ -90,7 +84,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
         </text>
       </svg>
 
-      <div className="mt-4 text-center">
+      <div className="mt-4 text-center overflow-hidden">
         <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Byggnadsarea: {area}
         </span>

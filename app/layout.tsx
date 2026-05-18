@@ -11,6 +11,7 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   title: "Bygglov-assistenten",
   description: "Skapa din bygglovsansökan enkelt och snabbt",
+  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
 };
 
 export default function RootLayout({
@@ -23,6 +24,9 @@ export default function RootLayout({
       lang="sv"
       className={`${geistSans.variable} h-full antialiased`}
     >
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+      </head>
       <body className="min-h-full flex flex-col">
         <div className="flex-1">{children}</div>
         <Footer />
