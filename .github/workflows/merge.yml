@@ -29,12 +29,16 @@ jobs:
         id: pr
         uses: actions/github-script@v7
         with:
+          env:
+            DISPATCH_PR: ${{ inputs.pr_number }}
           script: |
             let number;
             if (context.eventName === 'workflow_dispatch') {
-              number = parseInt('${{ inputs.pr_number }}');
+              number = parseInt(process.env.DISPATCH_PR, 10);
             } else {
-              const prs = JSON.parse('${{ toJson(github.event.workflow_run.pull_requests) }}');
+              // Read from the context object directly — never interpolate
+              // ${{ toJson(...) }} into the script (breaks JS at parse time).
+              const prs = context.payload.workflow_run?.pull_requests || [];
               if (prs.length > 0) {
                 number = prs[0].number;
               } else {
