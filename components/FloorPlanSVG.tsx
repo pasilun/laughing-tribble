@@ -21,20 +21,13 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
   }
 
   const padding = 60
-  const maxWidth = 600
-  const maxHeight = 400
   const aspectRatio = length / width
 
-  let svgWidth = maxWidth
-  let svgHeight = maxWidth / aspectRatio
+  const viewBoxWidth = 600
+  const viewBoxHeight = 600 / aspectRatio
 
-  if (svgHeight > maxHeight) {
-    svgHeight = maxHeight
-    svgWidth = maxHeight * aspectRatio
-  }
-
-  const rectWidth = svgWidth - padding * 2
-  const rectHeight = svgHeight - padding * 2
+  const rectWidth = viewBoxWidth - padding * 2
+  const rectHeight = viewBoxHeight - padding * 2
 
   const area = length * width
 
@@ -42,10 +35,11 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
     <div className="w-full">
       <svg
         data-testid="floor-plan-svg"
-        width={svgWidth}
-        height={svgHeight}
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        width="100%"
+        height="auto"
+        viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
         className="mx-auto"
+        preserveAspectRatio="xMidYMid meet"
       >
         <rect
           x={padding}
@@ -57,7 +51,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
           strokeWidth={2}
           data-testid="floor-plan-rect"
         />
-        
+
         <text
           x={padding + rectWidth / 2}
           y={padding + rectHeight / 2}

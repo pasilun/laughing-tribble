@@ -48,14 +48,14 @@ export default function DesignPage() {
 
   return (
     <div className="flex flex-col h-screen bg-zinc-50 dark:bg-black font-sans">
-      <header className="flex-shrink-0 px-6 py-4 bg-white dark:bg-black border-b border-zinc-200 dark:border-zinc-800">
+      <header className="flex-shrink-0 px-6 py-4 pt-[env(safe-area-inset-top)] bg-white dark:bg-black border-b border-zinc-200 dark:border-zinc-800">
         <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
           Design
         </h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="w-full max-w-3xl mx-auto space-y-6">
           <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700">
             <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Building Model</h2>
             <pre data-testid="model-state" className="text-xs bg-zinc-50 dark:bg-black p-2 rounded overflow-x-auto">
@@ -119,8 +119,8 @@ export default function DesignPage() {
         </div>
       )}
 
-      <div className="flex-shrink-0 p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-3xl mx-auto">
+      <div className="flex-shrink-0 p-4 sm:p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
+        <div className="w-full max-w-3xl mx-auto">
           <form onSubmit={handleSubmit} className="flex gap-3">
             <input
               value={input}
