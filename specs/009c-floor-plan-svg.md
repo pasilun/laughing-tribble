@@ -4,7 +4,7 @@
 `009c-floor-plan-svg`
 
 ## Status
-`planned`
+`active`
 
 ## Regression Test
 `e2e/009c-floor-plan-svg.spec.ts`

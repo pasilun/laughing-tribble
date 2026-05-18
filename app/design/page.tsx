@@ -3,14 +3,8 @@
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useEffect, useRef, useState } from 'react'
-
-type BuildingModel = {
-  flowType?: string
-  footprint?: {
-    length?: number
-    width?: number
-  }
-}
+import { BuildingModel } from '@/types/building'
+import { FloorPlanSVG } from '@/components/FloorPlanSVG'
 
 export default function DesignPage() {
   const [buildingModel, setBuildingModel] = useState<BuildingModel | null>(null)
@@ -67,6 +61,11 @@ export default function DesignPage() {
             <pre data-testid="model-state" className="text-xs bg-zinc-50 dark:bg-black p-2 rounded overflow-x-auto">
               {buildingModel ? JSON.stringify(buildingModel, null, 2) : 'null'}
             </pre>
+          </div>
+
+          <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700">
+            <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Floor Plan</h2>
+            <FloorPlanSVG model={buildingModel} />
           </div>
 
           {messages.length === 0 && (
