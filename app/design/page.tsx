@@ -16,7 +16,10 @@ type BuildingAction =
   | { type: 'update'; args: BuildingModel }
   | { type: 'reset' }
 
-function buildingReducer(state: BuildingModel | null, action: BuildingAction): BuildingModel | null {
+function buildingReducer(
+  state: BuildingModel | null,
+  action: BuildingAction,
+): BuildingModel | null {
   if (action.type === 'reset') return null
   if (action.type === 'update') {
     return {
@@ -49,19 +52,18 @@ export default function DesignPage() {
   }, [messages])
 
   useEffect(() => {
-    const lastMessage = messages[messages.length - 1]
-    if (lastMessage?.role === 'assistant') {
-      const toolCalls = lastMessage.parts.filter((part) => {
-        if (part.type === 'tool-call') {
-          const typedPart = part as unknown as { toolName: string; input?: BuildingModel }
-          return typedPart.toolName === 'set_building' && typedPart.input
+    for (const message of messages) {
+      if (message.role !== 'assistant') continue
+      for (const part of message.parts) {
+        const p = part as Record<string, unknown>
+        if (
+          p.type === 'dynamic-tool' &&
+          p.toolName === 'set_building' &&
+          p.state === 'input-available' &&
+          p.input != null
+        ) {
+          dispatch({ type: 'update', args: p.input as BuildingModel })
         }
-        return false
-      }) as unknown as Array<{ toolName: string; input: BuildingModel }>
-
-      if (toolCalls.length > 0) {
-        const lastCall = toolCalls[toolCalls.length - 1]
-        dispatch({ type: 'update', args: lastCall.input })
       }
     }
   }, [messages])
@@ -103,8 +105,12 @@ export default function DesignPage() {
           {messages.map((message) => (
             <div
               key={message.id}
-              data-testid={message.role === 'assistant' ? 'assistant-message' : undefined}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              data-testid={
+                message.role === 'assistant' ? 'assistant-message' : undefined
+              }
+              className={`flex ${
+                message.role === 'user' ? 'justify-end' : 'justify-start'
+              }`}
             >
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-3 ${
@@ -116,7 +122,9 @@ export default function DesignPage() {
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">
                   {message.parts
                     .filter((p) => p.type === 'text')
-                    .map((p) => (p as { type: 'text'; text: string }).text)
+                    .map(
+                      (p) => (p as { type: 'text'; text: string }).text,
+                    )
                     .join('')}
                 </p>
               </div>
@@ -148,11 +156,7 @@ export default function DesignPage() {
 
       <div className="flex-shrink-0 p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
         <div className="max-w-3xl mx-auto">
-          <form
-            onSubmit={handleSubmit}
-            method="post"
-            className="flex gap-3"
-          >
+          <form onSubmit={handleSubmit} method="post" className="flex gap-3">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}

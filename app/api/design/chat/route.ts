@@ -1,135 +1,114 @@
-import { streamText, convertToModelMessages } from 'ai'
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+} from 'ai'
 import { anthropic } from '@ai-sdk/anthropic'
 
 export const runtime = 'edge'
 
 const CHAT_MODEL = 'claude-sonnet-4-5'
 
+interface BuildingArgs {
+  flowType?: string
+  footprint?: { length?: number; width?: number }
+}
+
 const FIXTURES: Record<
   string,
-  { toolCalls: { args: { flowType?: string; footprint?: { length?: number; width?: number } } }[]; response: string }
+  { toolCalls: BuildingArgs[]; response: string }
 > = {
   'Jag vill bygga en komplementbyggnad, 4.5 meter lång och 4.5 meter bred': {
     toolCalls: [
       {
-        args: {
-          flowType: 'komplementbyggnad',
-          footprint: { length: 4.5, width: 4.5 },
-        },
+        flowType: 'komplementbyggnad',
+        footprint: { length: 4.5, width: 4.5 },
       },
     ],
-    response: 'Jag hjälper dig att bygga en komplementbyggnad med måtten 4,5 x 4,5 meter.',
+    response:
+      'Jag hjälper dig att bygga en komplementbyggnad med måtten 4,5 x 4,5 meter.',
   },
   'Ändra längden till 5 meter': {
     toolCalls: [
       {
-        args: {
-          footprint: { length: 5 },
-        },
+        footprint: { length: 5 },
       },
     ],
     response: 'Uppfattat, jag ändrar längden till 5 meter.',
   },
 }
 
-async function createFakeStream(prompt: string, signal?: AbortSignal) {
+function extractUserText(messages: unknown[]): string {
+  const last = messages[messages.length - 1] as Record<string, unknown> | undefined
+  if (!last) return ''
+  const parts = last.parts as Array<Record<string, unknown>> | undefined
+  if (Array.isArray(parts)) {
+    return parts
+      .filter(
+        (p) => p.type === 'text' && typeof p.text === 'string' && p.text,
+      )
+      .map((p) => p.text as string)
+      .join('')
+  }
+  const content = last.content
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .filter(
+        (c: Record<string, unknown>) =>
+          c.type === 'text' && typeof c.text === 'string' && c.text,
+      )
+      .map((c: Record<string, unknown>) => c.text as string)
+      .join('')
+  }
+  return ''
+}
+
+function createFakeResponse(prompt: string): Response {
   const fixture = FIXTURES[prompt]
+  const responseText =
+    fixture?.response ??
+    'Jag förstår. Berätta gärna mer om ditt byggprojekt.'
+  const toolCalls = fixture?.toolCalls ?? []
 
-  const encoder = new TextEncoder()
-  const stream = new ReadableStream({
-    async start(controller) {
-      if (signal?.aborted) {
-        controller.close()
-        return
+  const stream = createUIMessageStream({
+    execute({ writer }) {
+      for (let i = 0; i < toolCalls.length; i++) {
+        writer.write({
+          type: 'tool-input-available',
+          toolCallId: `call_${i}_${Date.now()}`,
+          toolName: 'set_building',
+          input: toolCalls[i],
+        })
       }
 
-      if (fixture) {
-        for (const call of fixture.toolCalls) {
-          const toolCallData = JSON.stringify({
-            type: 'tool-input-available',
-            toolCallId: `call_${Math.random().toString(36).substring(7)}`,
-            toolName: 'set_building',
-            input: call.args,
-          })
-          controller.enqueue(encoder.encode(`data: ${toolCallData}\n\n`))
-        }
-
-        const messageId = `msg_${Math.random().toString(36).substring(7)}`
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-start', id: messageId })}\n\n`))
-
-        for (const char of fixture.response) {
-          if (signal?.aborted) {
-            controller.close()
-            return
-          }
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'text-delta', delta: char, id: messageId })}\n\n`),
-          )
-          await new Promise((resolve) => setTimeout(resolve, 30))
-        }
-
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-end', id: messageId })}\n\n`))
-      } else {
-        const fallbackResponse =
-          'Jag förstår. Berätta gärna mer om ditt byggprojekt så hjälper jag dig vidare.'
-        const messageId = `msg_${Math.random().toString(36).substring(7)}`
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-start', id: messageId })}\n\n`))
-
-        for (const char of fallbackResponse) {
-          if (signal?.aborted) {
-            controller.close()
-            return
-          }
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'text-delta', delta: char, id: messageId })}\n\n`),
-          )
-          await new Promise((resolve) => setTimeout(resolve, 30))
-        }
-
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-end', id: messageId })}\n\n`))
-      }
-
-      controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-      controller.close()
+      const textId = `txt_${Date.now()}`
+      writer.write({ type: 'text-start', id: textId })
+      writer.write({ type: 'text-delta', delta: responseText, id: textId })
+      writer.write({ type: 'text-end', id: textId })
     },
   })
 
-  return stream
+  return createUIMessageStreamResponse({ stream })
 }
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json()
-
-    const lastMessage = messages[messages.length - 1]
-    let userPrompt = ''
-
-    if (lastMessage?.content) {
-      if (typeof lastMessage.content === 'string') {
-        userPrompt = lastMessage.content
-      } else if (Array.isArray(lastMessage.content)) {
-        userPrompt = lastMessage.content
-          .filter((c: { type: string; text?: string }) => c.type === 'text' && c.text)
-          .map((c: { type: string; text?: string }) => c.text || '')
-          .join('')
-      }
-    }
+    const { messages } = (await req.json()) as { messages: unknown[] }
+    const userPrompt = extractUserText(messages)
 
     if (process.env.VERCEL_ENV !== 'production') {
-      const stream = await createFakeStream(userPrompt, req.signal)
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-        },
-      })
+      return createFakeResponse(userPrompt)
     }
 
     const result = streamText({
       model: anthropic(CHAT_MODEL),
-      system: 'Du är en hjälpsam assistent för bygglovsfrågor. Svara på svenska.',
-      messages: await convertToModelMessages(messages),
+      system:
+        'Du är en hjälpsam assistent för bygglovsfrågor. Svara på svenska.',
+      messages: await convertToModelMessages(
+        messages as Parameters<typeof convertToModelMessages>[0],
+      ),
     })
 
     return result.toUIMessageStreamResponse()
