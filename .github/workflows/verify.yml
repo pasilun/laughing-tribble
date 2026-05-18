@@ -150,16 +150,25 @@ jobs:
               || echo "Could not parse verify-result.json" > /tmp/verify-failures.txt
           fi
 
-      - name: Commit verified tests for regression
+      - name: Commit verified test + flip planned→active
         if: steps.verify.outputs.passed == 'true'
         env:
           SPEC_ID: ${{ steps.spec.outputs.spec_id }}
+          SPEC_FILE: ${{ steps.spec.outputs.file }}
         run: |
           git config user.name "Verification Agent"
           git config user.email "verify-agent@github-actions.bot"
           git add "e2e/_verified-${SPEC_ID}.spec.ts"
+          # The verifier owns the single regression test. A new capability is
+          # specced `planned`; now that it's verified and its _verified- test
+          # exists, flip it to `active` in the SAME commit so main never has
+          # an active spec without its test (and dev never writes tests).
+          if [ -f "$SPEC_FILE" ] && awk '/^## Status/{getline;print;exit}' "$SPEC_FILE" | grep -q '`planned`'; then
+            perl -0pi -e 's/(## Status\n)`planned`/$1`active`/' "$SPEC_FILE"
+            git add "$SPEC_FILE"
+          fi
           if ! git diff --staged --quiet; then
-            git commit -m "test: save verified regression tests for ${SPEC_ID} [skip ci]"
+            git commit -m "test: verified regression for ${SPEC_ID}; activate spec [skip ci]"
             git push origin HEAD:${{ steps.pr.outputs.branch }}
           fi
 

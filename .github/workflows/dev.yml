@@ -153,13 +153,18 @@ jobs:
             fi
             echo ""
             echo "Steps:"
-            echo "1. Read ${SPEC_FILE} to understand all acceptance criteria and its required implementation approach"
+            echo "1. Read ${SPEC_FILE} — all acceptance criteria and its required implementation approach"
             echo "2. Read the CURRENT state of app/ and components/ — your prior attempt's code is here"
             echo "3. Implement using Next.js App Router + TypeScript + Tailwind CSS"
-            echo "4. Write or update e2e tests in e2e/ covering each acceptance criterion"
-            echo "5. Run npm run typecheck and npm run lint — fix any errors before finishing"
-            echo "6. Use your file write tool to write all code files to disk"
-            echo "7. Do NOT run npm test, do NOT commit or push — just write the code files"
+            echo "4. Make the SMALLEST possible diff. Do NOT rewrite files, do NOT reformat,"
+            echo "   do NOT add scaffolding. Change only what the spec requires (a layout/chore"
+            echo "   spec is usually a handful of lines)."
+            echo "5. Do NOT write or modify ANY test files (e2e/ or otherwise). The"
+            echo "   Verification Agent owns the single regression test. Writing your own"
+            echo "   tests is wasted, duplicated, and bloats the diff past the merge gate."
+            echo "6. Run npm run typecheck and npm run lint — fix any errors before finishing"
+            echo "7. Use your file write tool to write the code files to disk"
+            echo "8. Do NOT run npm test, do NOT commit or push — just write the code files"
           } > /tmp/dev-prompt.txt
 
           npx opencode-ai@1.15.3 run --model "$AGENT_MODEL" \
@@ -196,6 +201,30 @@ jobs:
           Fix the following TypeScript and/or ESLint errors. Read the affected files, fix each error, and write the corrected files to disk. Do not change any feature logic — only fix type errors and linting violations.
 
           ${ERROR_REPORT}"
+
+      # Proactively trim an oversized diff in-loop, before verify/merge,
+      # rather than discovering it at the Auto Merge 400-line hard gate
+      # (which wastes the whole cycle).
+      - name: Trim oversized diff
+        env:
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+          AGENT_MODEL: ${{ needs.gate.outputs.model }}
+          SPEC_FILE: ${{ needs.gate.outputs.spec_file }}
+        run: |
+          git add -A
+          LINES=$(git diff --cached --numstat origin/main -- . | awk '{a+=$1;d+=$2} END {print a+d+0}')
+          BUDGET="${{ vars.LOOP_DIFF_BUDGET || '300' }}"
+          echo "diff vs origin/main: ${LINES} changed lines (budget ${BUDGET}, hard gate 400)"
+          if [ "${LINES}" -gt "${BUDGET}" ]; then
+            git reset -q
+            npx opencode-ai@1.15.3 run --model "$AGENT_MODEL" --dangerously-skip-permissions "
+            Your change is ${LINES} changed lines vs main — too large; Auto Merge hard-blocks >400.
+            Shrink it: revert unrelated edits and reformatting, keep ONLY the minimal change that
+            satisfies ${SPEC_FILE}, and do NOT add or modify any test files (the Verification
+            Agent owns the single regression test). Write the trimmed files."
+          else
+            git reset -q
+          fi
 
       # No hard typecheck/lint gate here: commit regardless so the next attempt
       # builds on this work, and let the Verification Agent be the source of
