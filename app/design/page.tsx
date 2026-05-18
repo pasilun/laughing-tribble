@@ -48,22 +48,22 @@ export default function DesignPage() {
 
   return (
     <div className="flex flex-col h-screen bg-zinc-50 dark:bg-black font-sans">
-      <header className="flex-shrink-0 px-6 py-4 pt-[env(safe-area-inset-top)] bg-white dark:bg-black border-b border-zinc-200 dark:border-zinc-800">
+      <header className="flex-shrink-0 px-6 py-4 bg-white dark:bg-black border-b border-zinc-200 dark:border-zinc-800" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
           Design
         </h1>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="w-full max-w-3xl mx-auto space-y-6">
-          <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700">
+        <div className="w-full max-w-3xl mx-auto space-y-6 overflow-hidden">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700 overflow-hidden">
             <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Building Model</h2>
-            <pre data-testid="model-state" className="text-xs bg-zinc-50 dark:bg-black p-2 rounded overflow-x-auto">
+            <pre data-testid="model-state" className="text-xs bg-zinc-50 dark:bg-black p-2 rounded overflow-x-auto max-w-full">
               {buildingModel ? JSON.stringify(buildingModel, null, 2) : 'null'}
             </pre>
           </div>
 
-          <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700 overflow-hidden">
             <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Floor Plan</h2>
             <FloorPlanSVG model={buildingModel} />
           </div>
@@ -80,13 +80,13 @@ export default function DesignPage() {
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                className={`max-w-[80%] rounded-2xl px-4 py-3 overflow-hidden ${
                   message.role === 'user'
                     ? 'bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900'
                     : 'bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 border border-zinc-200 dark:border-zinc-700'
                 }`}
               >
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                <p className="text-sm leading-relaxed whitespace-pre-wrap overflow-hidden">
                   {message.parts
                     .filter((p) => p.type === 'text')
                     .map((p) => (p as { type: 'text'; text: string }).text)
@@ -97,7 +97,7 @@ export default function DesignPage() {
           ))}
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 border border-zinc-200 dark:border-zinc-700">
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 border border-zinc-200 dark:border-zinc-700 overflow-hidden">
                 <div className="flex space-x-2">
                   <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" />
                   <div className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce delay-100" />
@@ -119,8 +119,8 @@ export default function DesignPage() {
         </div>
       )}
 
-      <div className="flex-shrink-0 p-4 sm:p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800">
-        <div className="w-full max-w-3xl mx-auto">
+      <div className="flex-shrink-0 p-4 sm:p-6 bg-white dark:bg-black border-t border-zinc-200 dark:border-zinc-800 overflow-hidden">
+        <div className="w-full max-w-3xl mx-auto overflow-hidden">
           <form onSubmit={handleSubmit} className="flex gap-3">
             <input
               value={input}

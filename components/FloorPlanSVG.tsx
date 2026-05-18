@@ -12,7 +12,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
 
   if (!length || !width) {
     return (
-      <div className="w-full h-64 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700">
+      <div className="w-full h-64 flex items-center justify-center bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Beskriv dimensioner för att se ritning
         </p>
@@ -32,14 +32,15 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
   const area = length * width
 
   return (
-    <div className="w-full">
+    <div className="w-full overflow-hidden">
       <svg
         data-testid="floor-plan-svg"
         width="100%"
         height="auto"
         viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
-        className="mx-auto"
+        className="w-full max-w-full"
         preserveAspectRatio="xMidYMid meet"
+        style={{ display: 'block' }}
       >
         <rect
           x={padding}
@@ -84,7 +85,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
         </text>
       </svg>
 
-      <div className="mt-4 text-center">
+      <div className="mt-4 text-center overflow-hidden">
         <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Byggnadsarea: {area}
         </span>
