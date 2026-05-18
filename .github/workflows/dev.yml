@@ -218,7 +218,11 @@ jobs:
             git commit -m "feat(${SPEC_NAME}): dev attempt ${ATTEMPT}"
           fi
           git push origin "HEAD:${BRANCH}"
-          if ! gh pr view "$BRANCH" >/dev/null 2>&1; then
+          # Must check for an OPEN PR specifically: `gh pr view` matches a
+          # CLOSED PR for a reused branch name, which would skip creating
+          # the open PR the verify loop requires.
+          OPEN_PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [ -z "$OPEN_PR" ]; then
             gh pr create \
               --title "feat: implement ${SPEC_NAME}" \
               --body "Implements spec in ${{ needs.gate.outputs.spec_file }}" \
