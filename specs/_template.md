@@ -22,8 +22,12 @@
 -->
 
 ## Regression Test
-<!-- Required when Status is `active`. Path must exist. -->
-`e2e/[capability].spec.ts`
+<!--
+  Required when Status is `active`. The Verification Agent AUTHORS this file
+  and flips the spec planned→active when it passes — the dev agent must NOT
+  write tests. Use the verifier's path convention:
+-->
+`e2e/_verified-[kebab-id].spec.ts`
 
 ## Description
 Describe the capability as it must exist NOW — not the change being made.

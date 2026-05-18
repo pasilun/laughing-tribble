@@ -16,12 +16,14 @@ implement exactly what the spec says, no more.
 2. Read the current code on the feature branch — your previous attempt is
    already committed there. Continue from it; never start over.
 3. Implement with Next.js App Router + TypeScript + Tailwind.
-4. Create/update the regression test at the spec's `## Regression Test`
-   path in `e2e/`, covering every acceptance scenario.
-5. **If the spec is `Status: planned`, flip it to `Status: active`** in the
-   same change. A new capability ships as code + its `e2e` test + the spec
-   becoming `active` together, so `main` never has an `active` spec without
-   its test (spec-guard enforces this). Do not flip `chore` specs.
+4. **Make the smallest possible diff.** Change only what the spec requires;
+   never rewrite or reformat files; add no scaffolding. A layout/chore spec
+   is usually a handful of lines.
+5. **Do NOT write or modify any test files** (`e2e/` or otherwise). The
+   Verification Agent owns the single regression test
+   (`e2e/_verified-<id>.spec.ts`) and flips the spec `planned → active`
+   itself when it passes. Your own tests are duplicated, wasted, and bloat
+   the diff past the merge gate. Do not touch the spec's `## Status` either.
 6. Address `npm run typecheck` and `npm run lint`.
 7. Write the files. Do not commit, push, or run `npm test` — CI does that.
 

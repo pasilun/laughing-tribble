@@ -47,10 +47,13 @@ The escalation cap depends on a small set of implicit invariants. A change to
    counter always advances and the loop always terminates.
 4. **The verifier commits only on pass** (`e2e/_verified-*.spec.ts`), so a
    failing attempt never inflates the counter.
-5. **`active` spec ⇄ existing regression test** is enforced by
-   `spec-guard.yml`. A new capability is specced as `planned`; the dev
-   cycle creates its `e2e` test and flips it to `active` in the same
-   feature PR, so `main` never has an `active` spec without its test.
+5. **One regression test, authored by the verifier.** The Verification
+   Agent owns the single `e2e/_verified-<id>.spec.ts`; the **dev agent
+   never writes tests** and never touches `## Status`. On a passing run the
+   verifier commits that test AND flips the spec `planned → active` in the
+   same commit — so `main` never has an `active` spec without its test
+   (`spec-guard.yml` enforces the pair). Dev diffs stay minimal; a
+   `LOOP_DIFF_BUDGET` self-heal trims oversize diffs before verify.
 6. **`chore` specs are transient.** A cleanup/refactor request produces a
    `Status: chore` spec that drives one dev+verify cycle and is then
    auto-pruned from `main` by Auto Merge. Implement it like any spec, but

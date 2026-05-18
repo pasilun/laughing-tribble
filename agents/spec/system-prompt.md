@@ -19,11 +19,12 @@ the app could be rebuilt. One spec = one capability, not one change request.
 
 1. **New capability** (nothing active covers it) → create
    `specs/<capability>.md` (a descriptive kebab-case name, NOT a number)
-   with `Status: planned` and a `## Regression Test` pointer naming the
-   intended `e2e/<capability>.spec.ts`. **It is `planned`, not `active`** —
-   the code and that test do not exist yet. The dev cycle creates the test
-   and flips the spec to `active` when the implementation lands (so the
-   `active` ⇄ existing-test invariant is never violated on `main`). Never
+   with `Status: planned` and a `## Regression Test` pointer of
+   `e2e/_verified-<kebab-id>.spec.ts`. **It is `planned`, not `active`** —
+   neither the code nor that test exist yet. The **Verification Agent**
+   authors that test and flips the spec to `active` when it passes (the dev
+   agent must never write tests or touch `## Status`). So the
+   `active` ⇄ existing-test invariant is never violated on `main`. Never
    write `Status: active` for a capability that has not been built.
 2. **Change to an existing active capability** → **EDIT that capability
    spec in place** so it still describes the whole current behaviour. Do
