@@ -4,9 +4,33 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useEffect, useRef, useState } from 'react'
 
+type BuildingModel = {
+  flowType?: string
+  footprint?: {
+    length?: number
+    width?: number
+  }
+}
+
 export default function DesignPage() {
+  const [buildingModel, setBuildingModel] = useState<BuildingModel | null>(null)
   const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({ api: '/api/design/chat' }),
+    onToolCall: ({ toolCall }) => {
+      if (toolCall.toolName === 'set_building') {
+        try {
+          const args = typeof toolCall.input === 'string' 
+            ? JSON.parse(toolCall.input) as BuildingModel
+            : toolCall.input as BuildingModel
+          setBuildingModel((prev) => ({
+            ...prev,
+            ...args
+          }))
+        } catch (err) {
+          console.error('Failed to parse tool args:', err)
+        }
+      }
+    }
   })
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -34,6 +58,13 @@ export default function DesignPage() {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-3xl mx-auto space-y-6">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700">
+            <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Building Model</h2>
+            <pre data-testid="model-state" className="text-xs bg-zinc-50 dark:bg-black p-2 rounded overflow-x-auto">
+              {buildingModel ? JSON.stringify(buildingModel, null, 2) : 'null'}
+            </pre>
+          </div>
+
           {messages.length === 0 && (
             <p className="text-zinc-600 dark:text-zinc-400 text-center py-8">
               Beskriv ditt projekt så hjälper jag dig att komma igång
