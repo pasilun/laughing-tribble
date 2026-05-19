@@ -21,16 +21,15 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
   }
 
   const padding = 60
-  const aspectRatio = length / width
-
-  const viewBoxWidth = 600
-  const baseViewBoxHeight = 600 / aspectRatio
+  const scale = 50
   const scaleBarHeight = 50
   const scaleBarBottomPadding = 20
-  const viewBoxHeight = baseViewBoxHeight + scaleBarHeight + scaleBarBottomPadding
 
-  const rectWidth = viewBoxWidth - padding * 2
-  const rectHeight = baseViewBoxHeight - padding * 2
+  const rectWidth = length * scale
+  const rectHeight = width * scale
+
+  const viewBoxWidth = rectWidth + padding * 2
+  const viewBoxHeight = rectHeight + padding + scaleBarHeight + scaleBarBottomPadding
 
   const maxDimension = Math.max(length, width)
   const scaleBarLength = maxDimension <= 4 ? 1 : maxDimension <= 10 ? 2 : 5
