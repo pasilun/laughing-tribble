@@ -90,6 +90,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
 
         <g transform={`translate(${viewBoxWidth / 2}, ${padding + rectHeight + 20})`}>
           <line
+            data-testid="scale-bar"
             x1={-(rectWidth / length) * scaleBarLength / 2}
             y1={0}
             x2={(rectWidth / length) * scaleBarLength / 2}
