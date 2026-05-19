@@ -13,90 +13,79 @@
 
 Add a visual scale bar to the existing floor plan SVG to make it immediately obvious what real-world scale the drawing represents. The scale bar appears below the floor plan rectangle within the same SVG viewBox.
 
-This is a transient chore spec that drives one dev+verify cycle to add the scale bar feature. After implementation, the scale bar requirements will be folded into the existing `009c-floor-plan-svg.md` capability spec, and this file will be auto-pruned.
-
 ## User Stories
 
 ### As a homeowner
 **I want** to see a scale bar on the floor plan
 **So that** I can quickly understand the real-world scale without having to read dimension numbers
 
+## Canonical Test Interaction
+
+All scenarios below are verified from **a single chat interaction**:
+
+1. Navigate to `/design`
+2. Send exactly one message: `"Jag vill bygga en komplementbyggnad, 8 meter lång och 6 meter bred"`
+3. Wait up to 15s for `[data-testid="floor-plan-svg"]` to appear
+4. Run all scenario checks against that state — do NOT send further messages or reload
+
 ## Acceptance Criteria
 
 All criteria must be browser-observable (testable via Playwright).
 
-### Scenario 1: Scale bar appears with floor plan
+### Scenario 1: Scale bar absent before any building is described
 
-**Given** the user is on `/design` and describes a 4.5 × 4.5m building
-**When** the floor plan SVG appears
-**Then** a horizontal scale bar is visible below the floor plan rectangle
-**And** the scale bar has tick marks at both ends
-**And** a label underneath the bar shows the scale (e.g. "1 m")
+**Given** the user navigates to `/design` before sending any message
+**Then** `[data-testid="floor-plan-svg"]` is NOT present
+**And** the placeholder text is visible ("Beskriv dimensioner för att se ritning" or similar)
 
-### Scenario 2: Scale bar length adapts to building size
+### Scenario 2: Scale bar appears after building is described
 
-**Given** the user is on `/design` and describes a 4.5 × 4.5m building
-**When** the floor plan appears
-**Then** the scale bar shows "1 m" (for buildings ≤ 4m)
+**Given** the canonical interaction has been performed (8 × 6m building)
+**When** `[data-testid="floor-plan-svg"]` is present
+**Then** `[data-testid="scale-bar"]` is present inside the SVG
+**And** `[data-testid="scale-bar-label"]` is present and contains "2 m" (8m max dimension ≤ 10m → 2m scale)
 
-**Given** the user is on `/design` and describes a 8 × 6m building
-**When** the floor plan appears
-**Then** the scale bar shows "2 m" (for buildings ≤ 10m)
+### Scenario 3: Scale bar is mathematically proportional to the floor plan
 
-**Given** the user is on `/design` and describes a 12 × 8m building
-**When** the floor plan appears
-**Then** the scale bar shows "5 m" (for larger buildings)
+**Given** the canonical interaction has been performed (8 × 6m building)
+**When** `[data-testid="floor-plan-svg"]` is present
+**Then** the `x1` and `x2` attributes of `[data-testid="scale-bar"]` satisfy:
+  `(x2 - x1) / rectWidth ≈ 2 / 8` (within 1% tolerance)
+  where `rectWidth` is the `width` attribute of `[data-testid="floor-plan-rect"]`
 
-### Scenario 3: Scale bar is mathematically proportional
+### Scenario 4: Dimension labels include the "m" unit suffix
 
-**Given** the floor plan shows a building of known dimensions (e.g. 4.5 × 4.5m)
-**When** the scale bar shows "1 m"
-**Then** the scale bar's SVG length is exactly proportional to the floor plan rectangle (1m scale bar length = floor plan rectangle length / 4.5)
+**Given** the canonical interaction has been performed (8 × 6m building)
+**Then** `[data-testid="dim-label-length"]` text content contains "m" (e.g. "8 m" or "8m")
+**And** `[data-testid="dim-label-width"]` text content contains "m" (e.g. "6 m" or "6m")
 
-### Scenario 4: Dimension labels include unit suffix
+### Scenario 5: Floor plan rectangle encodes exact real-world aspect ratio
 
-**Given** the floor plan is showing any dimensions
-**Then** the dimension labels on the axes include the "m" unit suffix (e.g. "4.5m" instead of "4.5")
+**Given** the canonical interaction has been performed (8 × 6m building)
+**Then** `getAttribute('width')` and `getAttribute('height')` on `[data-testid="floor-plan-rect"]`
+  satisfy `Math.abs(parseFloat(width) / parseFloat(height) - 8 / 6) < 0.001`
 
-### Scenario 5: Floor plan rectangle dimensions are mathematically exact
-
-**Given** the user is on `/design` and describes a 10 × 3m building
-**When** the floor plan SVG appears
-**Then** the `width` and `height` attributes of `[data-testid="floor-plan-rect"]` satisfy `width / height === 10 / 3` exactly (i.e. `Math.abs(width / height - 10 / 3) < 0.001`)
-
-**Given** the user is on `/design` and describes a 4 × 4m building
-**When** the floor plan SVG appears
-**Then** the `width` and `height` attributes of `[data-testid="floor-plan-rect"]` are identical (`width === height`)
-
-**Note:** this criterion tests the SVG attribute values directly — not visual appearance. A visually similar rectangle is not sufficient; the ratio encoded in the markup must equal the real-world ratio.
+**Note:** read SVG attributes directly via `getAttribute` — do NOT use `getBoundingClientRect()`.
 
 ## Verifier Hints
 
-- **Selector hint**: after sending a dimension message, wait up to 15s for `[data-testid="floor-plan-svg"]` to appear; verify it contains a scale bar element (look for tick marks or a line element below the rect)
-- **Scale bar label**: find the scale bar label element (`[data-testid="scale-bar-label"]`); it must contain a number followed by " m" (e.g. "1 m", "2 m", "5 m") and must NOT be empty
-- **Proportional verification**: for a 4.5 × 4.5m building, verify the scale bar shows "1 m"; the scale bar's length should be approximately 1/4.5 of the floor plan rectangle's width (within 5% tolerance)
-- **Dimension label units**: use `[data-testid="dim-label-length"]` and `[data-testid="dim-label-width"]` to verify they contain the "m" suffix (e.g., "4.5m" not "4.5")
-- **Rectangle exact ratio**: read `width` and `height` from `[data-testid="floor-plan-rect"]` using `getAttribute('width')` and `getAttribute('height')`; parse as floats; assert `Math.abs(parseFloat(width) / parseFloat(height) - 10 / 3) < 0.001` for a 10 × 3m building; assert `parseFloat(width) === parseFloat(height)` for a 4 × 4m building. Do NOT use `getBoundingClientRect()` — read the SVG attributes directly.
-- **Negative assertion**: the scale bar must NOT appear before the floor plan is set; only the placeholder should be visible initially
+- **Single session**: perform the canonical interaction once; verify all 5 scenarios without reloading or sending additional messages
+- **Scenario 1 check**: before sending any message, confirm `[data-testid="floor-plan-svg"]` does not exist in the DOM
+- **Scenario 2 check**: `await page.getByTestId('scale-bar-label')` — assert `.textContent()` equals `"2 m"`
+- **Scenario 3 check**: use `browser_evaluate` to read `x1`/`x2` from `[data-testid="scale-bar"]` and `width` from `[data-testid="floor-plan-rect"]`; assert `Math.abs((x2-x1)/rectWidth - 2/8) < 0.01`
+- **Scenario 4 check**: `getByTestId('dim-label-length').textContent()` must include "m"; same for `dim-label-width`
+- **Scenario 5 check**: `browser_evaluate('() => { const r = document.querySelector("[data-testid=floor-plan-rect]"); return parseFloat(r.getAttribute("width")) / parseFloat(r.getAttribute("height")); }')` — assert result is within 0.001 of `8/6 ≈ 1.3333`
+- **Mobile check**: assert `document.scrollingElement.scrollWidth <= window.innerWidth + 1`
 
 ## Out of Scope
 
+- Testing multiple building sizes (the adaptive scale logic is covered implicitly by the 8×6m → "2 m" case)
 - Changes to chat, building model extraction, or any other component
 - Changes to protected paths
-- North arrow, title block, or other decorative elements (marked "later" in 009c-floor-plan-svg.md)
-
-## Dependencies
-
-- [[009c-floor-plan-svg]] — the active capability spec that will eventually incorporate these requirements
 
 ## Notes
 
 - Implementation target: `components/FloorPlanSVG.tsx`
-- The scale bar should be drawn inside the same SVG as the floor plan rectangle
-- Scale bar adaptive logic:
-  - If max dimension ≤ 4m: use 1m scale
-  - If max dimension ≤ 10m: use 2m scale
-  - Otherwise: use 5m scale
-- Scale bar should be positioned below the floor plan rectangle, with tick marks at both ends
-- Label text should be centered below the scale bar
-- The `width` and `height` SVG attributes of the floor plan rect must encode the exact real-world ratio — `width / height` must equal `length / width_dimension` to within floating-point precision (< 0.001 absolute error)
+- Scale bar adaptive logic: max(length, width) ≤ 4m → "1 m"; ≤ 10m → "2 m"; otherwise → "5 m"
+- Scale bar drawn inside the SVG below the floor plan rect, with tick marks at both ends and a centred label
+- The `width`/`height` SVG attributes of the rect must encode the exact real-world ratio
