@@ -22,14 +22,13 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
 
   const padding = 60
   const scale = 50
-  const scaleBarHeight = 50
-  const scaleBarBottomPadding = 20
+  const scaleBarArea = 70
 
   const rectWidth = length * scale
   const rectHeight = width * scale
 
   const viewBoxWidth = rectWidth + padding * 2
-  const viewBoxHeight = rectHeight + padding + scaleBarHeight + scaleBarBottomPadding
+  const viewBoxHeight = rectHeight + padding + scaleBarArea
 
   const maxDimension = Math.max(length, width)
   const scaleBarLength = maxDimension <= 4 ? 1 : maxDimension <= 10 ? 2 : 5
@@ -88,7 +87,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
           {width}m
         </text>
 
-        <g transform={`translate(${viewBoxWidth / 2}, ${padding + rectHeight + 20})`}>
+        <g transform={`translate(${viewBoxWidth / 2}, ${padding + rectHeight + 24})`}>
           <line
             data-testid="scale-bar"
             x1={-(rectWidth / length) * scaleBarLength / 2}
@@ -117,7 +116,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
           <text
             data-testid="scale-bar-label"
             x={0}
-            y={20}
+            y={18}
             textAnchor="middle"
             className="text-xs fill-zinc-700 dark:fill-zinc-300"
           >
