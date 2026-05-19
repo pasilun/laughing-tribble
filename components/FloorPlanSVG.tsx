@@ -24,10 +24,16 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
   const aspectRatio = length / width
 
   const viewBoxWidth = 600
-  const viewBoxHeight = 600 / aspectRatio
+  const baseViewBoxHeight = 600 / aspectRatio
+  const scaleBarHeight = 50
+  const scaleBarBottomPadding = 20
+  const viewBoxHeight = baseViewBoxHeight + scaleBarHeight + scaleBarBottomPadding
 
   const rectWidth = viewBoxWidth - padding * 2
-  const rectHeight = viewBoxHeight - padding * 2
+  const rectHeight = baseViewBoxHeight - padding * 2
+
+  const maxDimension = Math.max(length, width)
+  const scaleBarLength = maxDimension <= 4 ? 1 : maxDimension <= 10 ? 2 : 5
 
   const area = length * width
 
@@ -69,7 +75,7 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
           textAnchor="middle"
           className="text-xs fill-zinc-700 dark:fill-zinc-300"
         >
-          {length}
+          {length}m
         </text>
 
         <text
@@ -80,8 +86,44 @@ export function FloorPlanSVG({ model }: FloorPlanSVGProps) {
           dominantBaseline="middle"
           className="text-xs fill-zinc-700 dark:fill-zinc-300"
         >
-          {width}
+          {width}m
         </text>
+
+        <g transform={`translate(${viewBoxWidth / 2}, ${padding + rectHeight + 20})`}>
+          <line
+            x1={-(rectWidth / length) * scaleBarLength / 2}
+            y1={0}
+            x2={(rectWidth / length) * scaleBarLength / 2}
+            y2={0}
+            stroke="#71717a"
+            strokeWidth={2}
+          />
+          <line
+            x1={-(rectWidth / length) * scaleBarLength / 2}
+            y1={-5}
+            x2={-(rectWidth / length) * scaleBarLength / 2}
+            y2={5}
+            stroke="#71717a"
+            strokeWidth={2}
+          />
+          <line
+            x1={(rectWidth / length) * scaleBarLength / 2}
+            y1={-5}
+            x2={(rectWidth / length) * scaleBarLength / 2}
+            y2={5}
+            stroke="#71717a"
+            strokeWidth={2}
+          />
+          <text
+            data-testid="scale-bar-label"
+            x={0}
+            y={20}
+            textAnchor="middle"
+            className="text-xs fill-zinc-700 dark:fill-zinc-300"
+          >
+            {scaleBarLength} m
+          </text>
+        </g>
       </svg>
 
       <div className="mt-4 text-center overflow-hidden">
