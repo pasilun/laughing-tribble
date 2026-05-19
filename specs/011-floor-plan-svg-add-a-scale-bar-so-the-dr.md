@@ -58,15 +58,17 @@ All criteria must be browser-observable (testable via Playwright).
 **Given** the floor plan is showing any dimensions
 **Then** the dimension labels on the axes include the "m" unit suffix (e.g. "4.5m" instead of "4.5")
 
-### Scenario 5: Floor plan rectangle is drawn to scale
+### Scenario 5: Floor plan rectangle dimensions are mathematically exact
 
 **Given** the user is on `/design` and describes a 10 × 3m building
 **When** the floor plan SVG appears
-**Then** the floor plan rectangle's rendered width-to-height ratio is approximately 10:3 (within 5% tolerance)
+**Then** the `width` and `height` attributes of `[data-testid="floor-plan-rect"]` satisfy `width / height === 10 / 3` exactly (i.e. `Math.abs(width / height - 10 / 3) < 0.001`)
 
 **Given** the user is on `/design` and describes a 4 × 4m building
 **When** the floor plan SVG appears
-**Then** the floor plan rectangle renders as a square — its width and height are equal within 5% tolerance
+**Then** the `width` and `height` attributes of `[data-testid="floor-plan-rect"]` are identical (`width === height`)
+
+**Note:** this criterion tests the SVG attribute values directly — not visual appearance. A visually similar rectangle is not sufficient; the ratio encoded in the markup must equal the real-world ratio.
 
 ## Verifier Hints
 
@@ -74,7 +76,7 @@ All criteria must be browser-observable (testable via Playwright).
 - **Scale bar label**: find the scale bar label element (`[data-testid="scale-bar-label"]`); it must contain a number followed by " m" (e.g. "1 m", "2 m", "5 m") and must NOT be empty
 - **Proportional verification**: for a 4.5 × 4.5m building, verify the scale bar shows "1 m"; the scale bar's length should be approximately 1/4.5 of the floor plan rectangle's width (within 5% tolerance)
 - **Dimension label units**: use `[data-testid="dim-label-length"]` and `[data-testid="dim-label-width"]` to verify they contain the "m" suffix (e.g., "4.5m" not "4.5")
-- **Rectangle proportions**: for a 10 × 3m building, read the `width` and `height` attributes from `[data-testid="floor-plan-rect"]`; the ratio `width/height` must be within 5% of `10/3 ≈ 3.33`. For a 4 × 4m building the same attributes must be within 5% of each other (square).
+- **Rectangle exact ratio**: read `width` and `height` from `[data-testid="floor-plan-rect"]` using `getAttribute('width')` and `getAttribute('height')`; parse as floats; assert `Math.abs(parseFloat(width) / parseFloat(height) - 10 / 3) < 0.001` for a 10 × 3m building; assert `parseFloat(width) === parseFloat(height)` for a 4 × 4m building. Do NOT use `getBoundingClientRect()` — read the SVG attributes directly.
 - **Negative assertion**: the scale bar must NOT appear before the floor plan is set; only the placeholder should be visible initially
 
 ## Out of Scope
@@ -97,4 +99,4 @@ All criteria must be browser-observable (testable via Playwright).
   - Otherwise: use 5m scale
 - Scale bar should be positioned below the floor plan rectangle, with tick marks at both ends
 - Label text should be centered below the scale bar
-- The floor plan rectangle's aspect ratio must reflect the building's real length:width ratio — a 10 × 3m building must look noticeably wider than it is tall, not square
+- The `width` and `height` SVG attributes of the floor plan rect must encode the exact real-world ratio — `width / height` must equal `length / width_dimension` to within floating-point precision (< 0.001 absolute error)
