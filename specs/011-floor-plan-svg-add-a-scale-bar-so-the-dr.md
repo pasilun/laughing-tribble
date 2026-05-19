@@ -58,12 +58,23 @@ All criteria must be browser-observable (testable via Playwright).
 **Given** the floor plan is showing any dimensions
 **Then** the dimension labels on the axes include the "m" unit suffix (e.g. "4.5m" instead of "4.5")
 
+### Scenario 5: Floor plan rectangle is drawn to scale
+
+**Given** the user is on `/design` and describes a 10 × 3m building
+**When** the floor plan SVG appears
+**Then** the floor plan rectangle's rendered width-to-height ratio is approximately 10:3 (within 5% tolerance)
+
+**Given** the user is on `/design` and describes a 4 × 4m building
+**When** the floor plan SVG appears
+**Then** the floor plan rectangle renders as a square — its width and height are equal within 5% tolerance
+
 ## Verifier Hints
 
 - **Selector hint**: after sending a dimension message, wait up to 15s for `[data-testid="floor-plan-svg"]` to appear; verify it contains a scale bar element (look for tick marks or a line element below the rect)
-- **Scale bar label**: find the scale bar label element; it must contain a number followed by " m" (e.g. "1 m", "2 m", "5 m") and must NOT be empty
+- **Scale bar label**: find the scale bar label element (`[data-testid="scale-bar-label"]`); it must contain a number followed by " m" (e.g. "1 m", "2 m", "5 m") and must NOT be empty
 - **Proportional verification**: for a 4.5 × 4.5m building, verify the scale bar shows "1 m"; the scale bar's length should be approximately 1/4.5 of the floor plan rectangle's width (within 5% tolerance)
 - **Dimension label units**: use `[data-testid="dim-label-length"]` and `[data-testid="dim-label-width"]` to verify they contain the "m" suffix (e.g., "4.5m" not "4.5")
+- **Rectangle proportions**: for a 10 × 3m building, read the `width` and `height` attributes from `[data-testid="floor-plan-rect"]`; the ratio `width/height` must be within 5% of `10/3 ≈ 3.33`. For a 4 × 4m building the same attributes must be within 5% of each other (square).
 - **Negative assertion**: the scale bar must NOT appear before the floor plan is set; only the placeholder should be visible initially
 
 ## Out of Scope
@@ -86,3 +97,4 @@ All criteria must be browser-observable (testable via Playwright).
   - Otherwise: use 5m scale
 - Scale bar should be positioned below the floor plan rectangle, with tick marks at both ends
 - Label text should be centered below the scale bar
+- The floor plan rectangle's aspect ratio must reflect the building's real length:width ratio — a 10 × 3m building must look noticeably wider than it is tall, not square
