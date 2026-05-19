@@ -105,6 +105,18 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
+      - name: Notify loop status — dev started
+        if: vars.LOOP_STATUS_ISSUE != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: parseInt('${{ vars.LOOP_STATUS_ISSUE }}'),
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🔨 **Dev attempt ${{ needs.gate.outputs.attempt }}** started — \`${{ needs.gate.outputs.spec_file }}\` (model: \`${{ needs.gate.outputs.model }}\`)`
+            });
+
       - name: Switch to feature branch (cumulative — build on prior attempt)
         run: |
           BRANCH="${{ needs.gate.outputs.branch }}"
@@ -247,6 +259,7 @@ jobs:
             git commit -m "feat(${SPEC_NAME}): dev attempt ${ATTEMPT}"
           fi
           git push origin "HEAD:${BRANCH}"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
           # Must check for an OPEN PR specifically: `gh pr view` matches a
           # CLOSED PR for a reused branch name, which would skip creating
           # the open PR the verify loop requires.
@@ -258,3 +271,15 @@ jobs:
               --base main \
               --head "$BRANCH" || true
           fi
+
+      - name: Notify loop status — dev committed
+        if: vars.LOOP_STATUS_ISSUE != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: parseInt('${{ vars.LOOP_STATUS_ISSUE }}'),
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Dev attempt ${{ needs.gate.outputs.attempt }}** committed — \`${{ needs.gate.outputs.spec_file }}\` → verifier starting`
+            });

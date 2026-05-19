@@ -144,3 +144,20 @@ jobs:
               body: `${emoji} Auto-merge: ${status}\n\n${reason}`,
             });
 
+      - name: Notify loop status — merge result
+        if: vars.LOOP_STATUS_ISSUE != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ steps.check.outputs.status }}';
+            const prNumber = '${{ steps.pr.outputs.number }}';
+            const body = status === 'ready'
+              ? `🚀 **Merged** PR #${prNumber} to main`
+              : `🚫 **Auto-merge blocked** PR #${prNumber} — ${{ steps.check.outputs.reason }}`;
+            github.rest.issues.createComment({
+              issue_number: parseInt('${{ vars.LOOP_STATUS_ISSUE }}'),
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+

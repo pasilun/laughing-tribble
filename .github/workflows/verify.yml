@@ -105,6 +105,21 @@ jobs:
           echo "spec_id=$SPEC_ID" >> $GITHUB_OUTPUT
           echo "Found spec: $SPEC_FILE (ID: $SPEC_ID)"
 
+      - name: Notify loop status — verifier started
+        if: vars.LOOP_STATUS_ISSUE != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const previewUrl = '${{ steps.preview.outputs.url }}';
+            const specId = '${{ steps.spec.outputs.spec_id }}';
+            const prNumber = '${{ steps.pr.outputs.number }}';
+            github.rest.issues.createComment({
+              issue_number: parseInt('${{ vars.LOOP_STATUS_ISSUE }}'),
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🔍 **Verifier started** — \`${specId}\` PR #${prNumber} | [preview](${previewUrl})`
+            });
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -192,6 +207,30 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               body,
+            });
+
+      - name: Notify loop status — verdict
+        if: vars.LOOP_STATUS_ISSUE != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const passed = '${{ steps.verify.outputs.passed }}' === 'true';
+            const specId = '${{ steps.spec.outputs.spec_id }}';
+            const prNumber = '${{ steps.pr.outputs.number }}';
+            let body;
+            if (passed) {
+              body = `✅ **Verified** \`${specId}\` — all scenarios passed → merging PR #${prNumber}`;
+            } else {
+              let failures = '';
+              try { failures = fs.readFileSync('/tmp/verify-failures.txt', 'utf8').slice(0, 600); } catch {}
+              body = `❌ **Verify failed** \`${specId}\` PR #${prNumber}\n\`\`\`\n${failures}\n\`\`\``;
+            }
+            github.rest.issues.createComment({
+              issue_number: parseInt('${{ vars.LOOP_STATUS_ISSUE }}'),
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
             });
 
       - name: Retry, escalate, or stop
