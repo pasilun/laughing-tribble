@@ -21,11 +21,46 @@ const FIXTURES: Record<string, { response: string; toolCall?: { name: string; ar
       args: { flowType: 'komplementbyggnad', footprint: { length: 4.5, width: 4.5 } }
     }
   },
+  'Jag vill bygga en komplementbyggnad, 8 meter lång och 6 meter bred': {
+    response: 'Jag förstår att du vill bygga en komplementbyggnad. Jag har registrerat måtten: 8 meter i längd och 6 meter i bredd.',
+    toolCall: {
+      name: 'set_building',
+      args: { flowType: 'komplementbyggnad', footprint: { length: 8, width: 6 } }
+    }
+  },
+  'Jag vill bygga en komplementbyggnad, 12 meter lång och 8 meter bred': {
+    response: 'Jag förstår att du vill bygga en komplementbyggnad. Jag har registrerat måtten: 12 meter i längd och 8 meter i bredd.',
+    toolCall: {
+      name: 'set_building',
+      args: { flowType: 'komplementbyggnad', footprint: { length: 12, width: 8 } }
+    }
+  },
+  'Jag vill bygga en komplementbyggnad, 10 meter lång och 3 meter bred': {
+    response: 'Jag förstår att du vill bygga en komplementbyggnad. Jag har registrerat måtten: 10 meter i längd och 3 meter i bredd.',
+    toolCall: {
+      name: 'set_building',
+      args: { flowType: 'komplementbyggnad', footprint: { length: 10, width: 3 } }
+    }
+  },
+  'Jag vill bygga en komplementbyggnad, 4 meter lång och 4 meter bred': {
+    response: 'Jag förstår att du vill bygga en komplementbyggnad. Jag har registrerat måtten: 4 meter i längd och 4 meter i bredd.',
+    toolCall: {
+      name: 'set_building',
+      args: { flowType: 'komplementbyggnad', footprint: { length: 4, width: 4 } }
+    }
+  },
   'Ändra längden till 5 meter': {
     response: 'Jag har uppdaterat längden till 5 meter. Bredden och byggnadstypen är oförändrade.',
     toolCall: {
       name: 'set_building',
       args: { footprint: { length: 5 } }
+    }
+  },
+  'Ändra längden till 8 meter': {
+    response: 'Jag har uppdaterat längden till 8 meter. Bredden och byggnadstypen är oförändrade.',
+    toolCall: {
+      name: 'set_building',
+      args: { footprint: { length: 8 } }
     }
   }
 }
