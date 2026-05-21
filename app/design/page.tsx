@@ -31,6 +31,7 @@ export default function DesignPage() {
     }
   })
   const [input, setInput] = useState('')
+  const [panelOpen, setPanelOpen] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isLoading = status === 'submitted' || status === 'streaming'
 
@@ -58,57 +59,77 @@ export default function DesignPage() {
           Outer overflow must be visible; each panel owns its own scroll. */}
       <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4 p-4 sm:p-6">
 
-        {/* Model state panel — always visible, scrolls its own content if tall.
-            On mobile: order-first (top). On desktop: right column, fixed width. */}
+        {/* Vis + model panel — collapsible, stuck to the top of its column.
+            On mobile: order-first (pinned top bar). On desktop: right column. */}
         <div
           data-testid="model-state-panel-wrapper"
-          className="order-first md:order-last w-full md:w-80 flex-shrink-0 overflow-y-auto"
+          className="order-first md:order-last w-full md:w-80 flex-shrink-0 md:overflow-y-auto"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700">
-            <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-3">Modellstatus</h2>
-            <div data-testid="model-state-panel" className="space-y-2 text-sm">
-              <div data-testid="field-flowType" className={buildingModel?.flowType ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
-                <span className="font-medium">Byggnadstyp:</span>{' '}
-                {buildingModel?.flowType || <span className="italic">Ej angivet</span>}
+          <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <button
+              type="button"
+              onClick={() => setPanelOpen((v) => !v)}
+              aria-expanded={panelOpen}
+              data-testid="panel-toggle"
+              className="w-full flex items-center justify-between p-4 text-left"
+            >
+              <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Modell &amp; ritning</h2>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                {panelOpen ? 'Dölj ▲' : 'Visa ▼'}
+              </span>
+            </button>
+
+            {panelOpen && (
+              <div data-testid="panel-body" className="px-4 pb-4 space-y-4">
+                <FloorPlanSVG model={buildingModel} />
+
+                <div data-testid="model-state-panel" className="space-y-2 text-sm">
+                  <div data-testid="field-flowType" className={buildingModel?.flowType ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
+                    <span className="font-medium">Byggnadstyp:</span>{' '}
+                    {buildingModel?.flowType || <span className="italic">Ej angivet</span>}
+                  </div>
+                  <div data-testid="field-footprint" className={buildingModel?.footprint?.length && buildingModel?.footprint?.width ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
+                    <span className="font-medium">Grundplan:</span>{' '}
+                    {buildingModel?.footprint?.length && buildingModel?.footprint?.width
+                      ? `${buildingModel.footprint.length} m × ${buildingModel.footprint.width} m`
+                      : <span className="italic">Ej angivet</span>}
+                  </div>
+                  <div data-testid="field-roof-type" className={buildingModel?.roof ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
+                    <span className="font-medium">Taktyp:</span>{' '}
+                    {buildingModel?.roof?.type || <span className="italic">Ej angivet</span>}
+                  </div>
+                  <div data-testid="field-roof-pitch" className={buildingModel?.roof?.pitch ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
+                    <span className="font-medium">Taklutning:</span>{' '}
+                    {buildingModel?.roof?.pitch !== undefined && buildingModel.roof.pitch !== null
+                      ? `${buildingModel.roof.pitch}°`
+                      : <span className="italic">Ej angivet</span>}
+                  </div>
+                  <div data-testid="field-wallHeight" className={buildingModel?.wallHeight ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
+                    <span className="font-medium">Vägghöjd:</span>{' '}
+                    {buildingModel?.wallHeight ? `${buildingModel.wallHeight} m` : <span className="italic">Ej angivet</span>}
+                  </div>
+                  <div data-testid="field-installations" className={buildingModel?.installations && buildingModel.installations.length > 0 ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
+                    <span className="font-medium">Installationer:</span>{' '}
+                    {buildingModel?.installations && buildingModel.installations.length > 0
+                      ? buildingModel.installations.join(', ')
+                      : <span className="italic">Ej angivet</span>}
+                  </div>
+                  <div data-testid="field-inomDetaljplan" className={buildingModel?.inomDetaljplan !== undefined ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
+                    <span className="font-medium">Detaljplan:</span>{' '}
+                    {buildingModel?.inomDetaljplan !== undefined
+                      ? buildingModel.inomDetaljplan ? 'Ja' : 'Nej'
+                      : <span className="italic">Ej angivet</span>}
+                  </div>
+                  <div data-testid="field-distanceToGrans" className={buildingModel?.distanceToGrans ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
+                    <span className="font-medium">Avstånd till tomtgräns:</span>{' '}
+                    {buildingModel?.distanceToGrans ? `${buildingModel.distanceToGrans} m` : <span className="italic">Ej angivet</span>}
+                  </div>
+                </div>
               </div>
-              <div data-testid="field-footprint" className={buildingModel?.footprint?.length && buildingModel?.footprint?.width ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
-                <span className="font-medium">Grundplan:</span>{' '}
-                {buildingModel?.footprint?.length && buildingModel?.footprint?.width
-                  ? `${buildingModel.footprint.length} m × ${buildingModel.footprint.width} m`
-                  : <span className="italic">Ej angivet</span>}
-              </div>
-              <div data-testid="field-roof-type" className={buildingModel?.roof ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
-                <span className="font-medium">Taktyp:</span>{' '}
-                {buildingModel?.roof?.type || <span className="italic">Ej angivet</span>}
-              </div>
-              <div data-testid="field-roof-pitch" className={buildingModel?.roof?.pitch ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
-                <span className="font-medium">Taklutning:</span>{' '}
-                {buildingModel?.roof?.pitch !== undefined && buildingModel.roof.pitch !== null
-                  ? `${buildingModel.roof.pitch}°`
-                  : <span className="italic">Ej angivet</span>}
-              </div>
-              <div data-testid="field-wallHeight" className={buildingModel?.wallHeight ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
-                <span className="font-medium">Vägghöjd:</span>{' '}
-                {buildingModel?.wallHeight ? `${buildingModel.wallHeight} m` : <span className="italic">Ej angivet</span>}
-              </div>
-              <div data-testid="field-installations" className={buildingModel?.installations && buildingModel.installations.length > 0 ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
-                <span className="font-medium">Installationer:</span>{' '}
-                {buildingModel?.installations && buildingModel.installations.length > 0
-                  ? buildingModel.installations.join(', ')
-                  : <span className="italic">Ej angivet</span>}
-              </div>
-              <div data-testid="field-inomDetaljplan" className={buildingModel?.inomDetaljplan !== undefined ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
-                <span className="font-medium">Detaljplan:</span>{' '}
-                {buildingModel?.inomDetaljplan !== undefined
-                  ? buildingModel.inomDetaljplan ? 'Ja' : 'Nej'
-                  : <span className="italic">Ej angivet</span>}
-              </div>
-              <div data-testid="field-distanceToGrans" className={buildingModel?.distanceToGrans ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
-                <span className="font-medium">Avstånd till tomtgräns:</span>{' '}
-                {buildingModel?.distanceToGrans ? `${buildingModel.distanceToGrans} m` : <span className="italic">Ej angivet</span>}
-              </div>
-            </div>
-            <pre data-testid="model-state" className="mt-4 text-xs bg-zinc-50 dark:bg-black p-2 rounded overflow-x-auto">
+            )}
+
+            {/* Machine-readable model state for regression tests (not shown to users) */}
+            <pre data-testid="model-state" className="sr-only">
               {buildingModel ? JSON.stringify(buildingModel, null, 2) : 'null'}
             </pre>
           </div>
@@ -117,11 +138,6 @@ export default function DesignPage() {
         {/* Chat panel — scrollable, fills remaining space */}
         <div className="flex-1 min-h-0 overflow-y-auto order-last md:order-first">
           <div className="w-full max-w-3xl mx-auto space-y-6">
-            <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700">
-              <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">Floor Plan</h2>
-              <FloorPlanSVG model={buildingModel} />
-            </div>
-
             {messages.length === 0 && (
               <p className="text-zinc-600 dark:text-zinc-400 text-center py-8">
                 Beskriv ditt projekt så hjälper jag dig att komma igång
