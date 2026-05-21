@@ -11,6 +11,14 @@ type BuildingModel = {
     length?: number
     width?: number
   }
+  roof?: {
+    type: 'sadel' | 'pulpet' | 'flat'
+    pitch?: number
+  }
+  wallHeight?: number
+  installations?: string[]
+  inomDetaljplan?: boolean
+  distanceToGrans?: number
 }
 
 const FIXTURES: Record<string, { response: string; toolCall?: { name: string; args: BuildingModel } }> = {
@@ -61,6 +69,34 @@ const FIXTURES: Record<string, { response: string; toolCall?: { name: string; ar
     toolCall: {
       name: 'set_building',
       args: { footprint: { length: 8 } }
+    }
+  },
+  'Sadeltak med 25 graders lutning': {
+    response: 'Jag har registrerat att du vill ha ett sadeltak med 25 graders lutning.',
+    toolCall: {
+      name: 'set_building',
+      args: { roof: { type: 'sadel', pitch: 25 } }
+    }
+  },
+  'Vägghöjd 2.4 meter': {
+    response: 'Jag har registrerat att vägghöjden är 2.4 meter.',
+    toolCall: {
+      name: 'set_building',
+      args: { wallHeight: 2.4 }
+    }
+  },
+  'Den ska ha dusch och avlopp': {
+    response: 'Jag har registrerat att byggnaden ska ha vatten och avlopp.',
+    toolCall: {
+      name: 'set_building',
+      args: { installations: ['vatten', 'avlopp'] }
+    }
+  },
+  'Den ligger inom detaljplan, 4 meter från tomtgränsen': {
+    response: 'Jag har registrerat att byggnaden ligger inom detaljplan, 4 meter från tomtgränsen.',
+    toolCall: {
+      name: 'set_building',
+      args: { inomDetaljplan: true, distanceToGrans: 4 }
     }
   }
 }
@@ -131,7 +167,22 @@ export async function POST(req: Request) {
               length: { type: 'number' },
               width: { type: 'number' }
             }
-          }
+          },
+          roof: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['sadel', 'pulpet', 'flat'] },
+              pitch: { type: 'number' }
+            },
+            required: ['type']
+          },
+          wallHeight: { type: 'number' },
+          installations: {
+            type: 'array',
+            items: { type: 'string' }
+          },
+          inomDetaljplan: { type: 'boolean' },
+          distanceToGrans: { type: 'number' }
         }
       }),
       execute: async (args: BuildingModel) => args
