@@ -98,6 +98,20 @@ const FIXTURES: Record<string, { response: string; toolCall?: { name: string; ar
       name: 'set_building',
       args: { inomDetaljplan: true, distanceToGrans: 4 }
     }
+  },
+  'Jag vill bygga en komplementbyggnad, 4 meter lång och 4 meter bred, utanför detaljplan och utan installationer': {
+    response: 'Jag har registrerat en komplementbyggnad 4×4 meter utanför detaljplan, utan installationer.',
+    toolCall: {
+      name: 'set_building',
+      args: { flowType: 'komplementbyggnad', footprint: { length: 4, width: 4 }, inomDetaljplan: false, installations: [] }
+    }
+  },
+  'Den ska ha en eldstad': {
+    response: 'Jag har registrerat att byggnaden ska ha en eldstad.',
+    toolCall: {
+      name: 'set_building',
+      args: { installations: ['eldstad'] }
+    }
   }
 }
 

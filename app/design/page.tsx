@@ -5,6 +5,7 @@ import { DefaultChatTransport } from 'ai'
 import { useEffect, useRef, useState } from 'react'
 import { BuildingModel } from '@/types/building'
 import { FloorPlanSVG } from '@/components/FloorPlanSVG'
+import { runTriage } from '@/lib/triage'
 
 export default function DesignPage() {
   const [buildingModel, setBuildingModel] = useState<BuildingModel | null>(null)
@@ -30,6 +31,7 @@ export default function DesignPage() {
       }
     }
   })
+  const triage = runTriage(buildingModel)
   const [input, setInput] = useState('')
   const [panelOpen, setPanelOpen] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -81,6 +83,44 @@ export default function DesignPage() {
 
             {panelOpen && (
               <div data-testid="panel-body" className="px-4 pb-4 space-y-4">
+                <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 p-3 space-y-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Lovplikt</h3>
+                  {triage.bucket && (
+                    <div
+                      data-testid="triage-bucket"
+                      className={`flex items-center gap-2 text-sm font-semibold ${
+                        triage.bucket === 'LOVFRI'
+                          ? 'text-green-700 dark:text-green-400'
+                          : triage.bucket === 'ANMÄLAN'
+                          ? 'text-amber-700 dark:text-amber-400'
+                          : 'text-red-700 dark:text-red-400'
+                      }`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          triage.bucket === 'LOVFRI'
+                            ? 'bg-green-500'
+                            : triage.bucket === 'ANMÄLAN'
+                            ? 'bg-amber-500'
+                            : 'bg-red-500'
+                        }`}
+                      />
+                      {triage.bucket}
+                    </div>
+                  )}
+                  {triage.reasons.length > 0 && (
+                    <ul data-testid="triage-reasons" className="text-xs text-zinc-600 dark:text-zinc-300 space-y-1 list-disc list-inside">
+                      {triage.reasons.map((reason, i) => (
+                        <li key={i}>{reason}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {triage.incomplete && (
+                    <p data-testid="triage-incomplete" className="text-xs text-zinc-400 dark:text-zinc-500 italic">
+                      Mer information behövs för att bedöma lovplikt
+                    </p>
+                  )}
+                </div>
                 <FloorPlanSVG model={buildingModel} />
 
                 <div data-testid="model-state-panel" className="space-y-2 text-sm">

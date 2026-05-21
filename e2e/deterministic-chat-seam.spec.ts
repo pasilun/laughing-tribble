@@ -63,7 +63,7 @@ test.describe('Deterministic Chat Seam', () => {
 
     const initialUrl = page.url()
 
-    await expect(modelState).toContainText('5', { timeout: 10000 })
+    await expect(page.getByTestId('assistant-message').nth(1)).toBeVisible({ timeout: 15000 })
 
     const finalUrl = page.url()
     expect(finalUrl).toBe(initialUrl)
@@ -75,10 +75,6 @@ test.describe('Deterministic Chat Seam', () => {
     expect(modelStateText).toContain('4.5')
     expect(modelStateText).toContain('flowType')
     expect(modelStateText).toContain('komplementbyggnad')
-
-    const assistantMessages = await page.getByTestId('assistant-message').all()
-    expect(assistantMessages.length).toBeGreaterThanOrEqual(2)
-
     expect(modelStateText).not.toContain('undefined')
     expect(modelStateText).not.toContain('fel uppstod')
     expect(modelStateText).not.toContain('error')

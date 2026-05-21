@@ -44,8 +44,8 @@ test.describe('Design Screen - conversation', () => {
     await page.getByTestId('chat-input').fill(fixturePrompt)
     await page.getByRole('button', { name: 'Skicka' }).click()
 
-    await expect(page.getByText(fixturePrompt)).toBeVisible()
-    await expect(page.getByTestId('chat-input')).toHaveValue('')
+    await expect(page.getByText(fixturePrompt)).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('chat-input')).toHaveValue('', { timeout: 5000 })
 
     const assistantMessage = page.getByTestId('assistant-message').first()
     await expect(assistantMessage).toBeVisible({ timeout: 30_000 })
