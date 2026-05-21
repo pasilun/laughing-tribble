@@ -65,7 +65,7 @@ export default function DesignPage() {
             On mobile: order-first (pinned top bar). On desktop: right column. */}
         <div
           data-testid="model-state-panel-wrapper"
-          className="order-first md:order-last w-full md:w-80 flex-shrink-0 md:overflow-y-auto"
+          className="order-first md:order-last w-full md:w-80 flex-shrink-0 max-h-[50vh] overflow-y-auto md:max-h-none md:overflow-y-auto"
         >
           <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700">
             <button
