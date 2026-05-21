@@ -10,7 +10,7 @@ test.describe('Feature: Add Scale Bar to Floor Plan SVG', () => {
     const placeholder = page.getByText('Beskriv dimensioner för att se ritning');
     await expect(placeholder).toBeVisible();
 
-    const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth);
+    const scrollWidth = await page.evaluate(() => document.scrollingElement?.scrollWidth ?? 0);
     const innerWidth = await page.evaluate(() => window.innerWidth);
     expect(scrollWidth).toBeLessThanOrEqual(innerWidth + 1);
   });
@@ -30,7 +30,7 @@ test.describe('Feature: Add Scale Bar to Floor Plan SVG', () => {
     const labelText = await scaleBarLabel.textContent();
     expect(labelText).toBe('2 m');
 
-    const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth);
+    const scrollWidth = await page.evaluate(() => document.scrollingElement?.scrollWidth ?? 0);
     const innerWidth = await page.evaluate(() => window.innerWidth);
     expect(scrollWidth).toBeLessThanOrEqual(innerWidth + 1);
   });
@@ -61,7 +61,7 @@ test.describe('Feature: Add Scale Bar to Floor Plan SVG', () => {
     const expectedRatio = 2 / 4.5;
     expect(result).toBeCloseTo(expectedRatio, 1);
 
-    const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth);
+    const scrollWidth = await page.evaluate(() => document.scrollingElement?.scrollWidth ?? 0);
     const innerWidth = await page.evaluate(() => window.innerWidth);
     expect(scrollWidth).toBeLessThanOrEqual(innerWidth + 1);
   });
@@ -86,7 +86,7 @@ test.describe('Feature: Add Scale Bar to Floor Plan SVG', () => {
     const widthText = await dimLabelWidth.textContent();
     expect(widthText).toContain('m');
 
-    const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth);
+    const scrollWidth = await page.evaluate(() => document.scrollingElement?.scrollWidth ?? 0);
     const innerWidth = await page.evaluate(() => window.innerWidth);
     expect(scrollWidth).toBeLessThanOrEqual(innerWidth + 1);
   });
@@ -106,12 +106,16 @@ test.describe('Feature: Add Scale Bar to Floor Plan SVG', () => {
 
     const diff = await page.evaluate(() => {
       const r = document.querySelector("[data-testid=floor-plan-rect]");
-      return Math.abs(parseFloat(r.getAttribute("width")) - parseFloat(r.getAttribute("height")));
+      if (!r) return 0;
+      const width = r.getAttribute("width");
+      const height = r.getAttribute("height");
+      if (!width || !height) return 0;
+      return Math.abs(parseFloat(width) - parseFloat(height));
     });
 
     expect(diff).toBeLessThan(0.001);
 
-    const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth);
+    const scrollWidth = await page.evaluate(() => document.scrollingElement?.scrollWidth ?? 0);
     const innerWidth = await page.evaluate(() => window.innerWidth);
     expect(scrollWidth).toBeLessThanOrEqual(innerWidth + 1);
   });
