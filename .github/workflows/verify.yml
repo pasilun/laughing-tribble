@@ -14,10 +14,7 @@ on:
 
 jobs:
   verify:
-    if: >
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'workflow_dispatch'
+    if: false # disabled — verification is done manually with Claude Code
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

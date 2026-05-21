@@ -6,7 +6,7 @@ on:
 
 jobs:
   create-spec:
-    if: github.event.label.name == 'feature-request'
+    if: false # disabled — specs are written manually with Claude Code
     runs-on: ubuntu-latest
     permissions:
       contents: write
