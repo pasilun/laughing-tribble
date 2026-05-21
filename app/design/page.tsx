@@ -183,28 +183,30 @@ export default function DesignPage() {
                 Beskriv ditt projekt så hjälper jag dig att komma igång
               </p>
             )}
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                data-testid={message.role === 'assistant' ? 'assistant-message' : undefined}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
+            {messages.map((message) => {
+              const text = message.parts
+                .filter((p) => p.type === 'text')
+                .map((p) => (p as { type: 'text'; text: string }).text)
+                .join('')
+              if (message.role === 'assistant' && !text.trim()) return null
+              return (
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                    message.role === 'user'
-                      ? 'bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900'
-                      : 'bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 border border-zinc-200 dark:border-zinc-700'
-                  }`}
+                  key={message.id}
+                  data-testid={message.role === 'assistant' ? 'assistant-message' : undefined}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {message.parts
-                      .filter((p) => p.type === 'text')
-                      .map((p) => (p as { type: 'text'; text: string }).text)
-                      .join('')}
-                  </p>
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                      message.role === 'user'
+                        ? 'bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900'
+                        : 'bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 border border-zinc-200 dark:border-zinc-700'
+                    }`}
+                  >
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-white dark:bg-zinc-900 rounded-2xl px-4 py-3 border border-zinc-200 dark:border-zinc-700">

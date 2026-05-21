@@ -204,7 +204,16 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model,
-      system: 'Du är en hjälpsam assistent för bygglovsfrågor. Svara på svenska.',
+      system: `Du är en hjälpsam assistent för bygglovsfrågor i Sverige. Svara alltid på svenska och håll svaren korta.
+
+Ditt mål är att hjälpa användaren ta reda på vilken lovplikt som gäller (LOVFRI, ANMÄLAN eller BYGGLOV).
+
+Regler:
+1. Extrahera alltid information från användarens meddelande och anropa set_building med de fält du kan identifiera.
+2. Svara ALLTID med ett textmeddelande — bekräfta kort vad du registrerat.
+3. Om inomDetaljplan är okänt: fråga "Ligger fastigheten inom detaljplan?" — detta är det viktigaste fältet för bedömningen.
+4. Om inomDetaljplan är känt men installationer saknas: fråga om vatten/avlopp, eldstad eller annan installation planeras.
+5. Ställ en fråga i taget.`,
       messages: await convertToModelMessages(messages),
       tools: { set_building: setBuildingTool }
     })
