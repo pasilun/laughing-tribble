@@ -1,13 +1,13 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, Page } from '@playwright/test'
 
 test.describe('Building Model Fields', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/design')
   })
 
-  async function checkNoHorizontalOverflow(page: any) {
+  async function checkNoHorizontalOverflow(page: Page) {
     const result = await page.evaluate(() => ({
-      scrollWidth: document.scrollingElement.scrollWidth,
+      scrollWidth: document.scrollingElement?.scrollWidth ?? 0,
       innerWidth: window.innerWidth,
     }))
     expect(result.scrollWidth).toBeLessThanOrEqual(result.innerWidth + 1)
@@ -21,7 +21,7 @@ test.describe('Building Model Fields', () => {
     
     const modelStateParsed = await page.evaluate(() => {
       const modelState = document.querySelector('[data-testid="model-state"]')
-      return JSON.parse(modelState.textContent)
+      return JSON.parse(modelState?.textContent ?? 'null')
     })
     expect(modelStateParsed).toBeNull()
     
@@ -44,7 +44,7 @@ test.describe('Building Model Fields', () => {
 
     const modelStateParsed = await page.evaluate(() => {
       const modelState = document.querySelector('[data-testid="model-state"]')
-      return JSON.parse(modelState.textContent)
+      return JSON.parse(modelState?.textContent ?? 'null')
     })
     
     expect(modelStateParsed.flowType).toBe('komplementbyggnad')
@@ -85,7 +85,7 @@ test.describe('Building Model Fields', () => {
 
     const modelStateParsed = await page.evaluate(() => {
       const modelState = document.querySelector('[data-testid="model-state"]')
-      return JSON.parse(modelState.textContent)
+      return JSON.parse(modelState?.textContent ?? 'null')
     })
     
     expect(modelStateParsed.roof).toEqual({ type: 'sadel', pitch: 25 })
@@ -132,7 +132,7 @@ test.describe('Building Model Fields', () => {
 
     const modelStateParsed = await page.evaluate(() => {
       const modelState = document.querySelector('[data-testid="model-state"]')
-      return JSON.parse(modelState.textContent)
+      return JSON.parse(modelState?.textContent ?? 'null')
     })
     
     expect(modelStateParsed.wallHeight).toBe(2.4)
@@ -188,7 +188,7 @@ test.describe('Building Model Fields', () => {
 
     const modelStateParsed = await page.evaluate(() => {
       const modelState = document.querySelector('[data-testid="model-state"]')
-      return JSON.parse(modelState.textContent)
+      return JSON.parse(modelState?.textContent ?? 'null')
     })
     
     expect(modelStateParsed.installations).toEqual(['vatten', 'avlopp'])
@@ -253,7 +253,7 @@ test.describe('Building Model Fields', () => {
 
     const modelStateParsed = await page.evaluate(() => {
       const modelState = document.querySelector('[data-testid="model-state"]')
-      return JSON.parse(modelState.textContent)
+      return JSON.parse(modelState?.textContent ?? 'null')
     })
     
     expect(modelStateParsed.inomDetaljplan).toBe(true)
@@ -317,7 +317,7 @@ test.describe('Building Model Fields', () => {
 
     const modelStateParsed = await page.evaluate(() => {
       const modelState = document.querySelector('[data-testid="model-state"]')
-      return JSON.parse(modelState.textContent)
+      return JSON.parse(modelState?.textContent ?? 'null')
     })
     
     const expectedFields = [
