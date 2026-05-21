@@ -66,9 +66,7 @@ test.describe('SVG Floor Plan', () => {
     const floorPlanSvg = page.getByTestId('floor-plan-svg')
     const rect = floorPlanSvg.locator('rect[data-testid="floor-plan-rect"]')
     const rectBox = await rect.boundingBox()
-    const dimLabelWidth = page.getByTestId('dim-label-width')
-    const dimLabelLength = page.getByTestId('dim-label-length')
-    
+
     expect(rectBox?.width).toBeGreaterThan(280)
 
     await expect(page).toHaveURL(urlBeforeUpdate)
