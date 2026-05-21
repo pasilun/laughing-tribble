@@ -4,7 +4,10 @@
 `009d-triage-panel`
 
 ## Status
-`planned`
+`active`
+
+## Regression Test
+`e2e/_verified-009d-triage-panel.spec.ts`
 
 ## Description
 
