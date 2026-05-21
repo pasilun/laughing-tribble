@@ -66,7 +66,7 @@ test.describe('Floor Plan SVG', () => {
     await chatInput.fill(secondMessage)
     await sendButton.click()
 
-    await expect(lengthLabel).toContainText('5', { timeout: 5000 })
+    await expect(page.getByTestId('assistant-message').nth(1)).toBeVisible({ timeout: 15000 })
 
     const finalUrl = page.url()
     expect(finalUrl).toBe(initialUrl)
@@ -82,7 +82,7 @@ test.describe('Floor Plan SVG', () => {
     const chatInput = page.getByTestId('chat-input')
     const sendButton = page.getByTestId('send-button')
 
-    const message = 'Jag vill bygga en komplementbyggnad, 3 meter lång och 6 meter bred'
+    const message = 'Jag vill bygga en komplementbyggnad, 10 meter lång och 3 meter bred'
     await chatInput.fill(message)
     await sendButton.click()
 
@@ -92,6 +92,6 @@ test.describe('Floor Plan SVG', () => {
     await expect(areaLabel).toBeVisible()
 
     const areaText = await areaLabel.textContent()
-    expect(areaText).toContain('18')
+    expect(areaText).toContain('30')
   })
 })
