@@ -141,6 +141,6 @@ The model state is rendered as raw JSON in `[data-testid="model-state"]` for ver
   - "Vägghöjd 2.4 meter" → `set_building({ wallHeight: 2.4 })`
   - "Den ska ha dusch och avlopp" → `set_building({ installations: ["vatten", "avlopp"] })`
   - "Den ligger inom detaljplan, 4 meter från tomtgränsen" → `set_building({ inomDetaljplan: true, distanceToGrans: 4 })`
-- Keep existing fixtures working: "Jag vill bygga en komplementbyggnad..." and "Ändra långden till 5 meter"
+- Keep existing fixtures working: "Jag vill bygga en komplementbyggnad..." and "Ändra längden till 5 meter"
 - The model state JSON echo in `[data-testid="model-state"]` is raw and unformatted — this is intentional for verification
 - The mock model must continue to use the AI SDK's mock utilities (as per deterministic-chat-seam) — do not hand-author stream chunks
