@@ -129,9 +129,10 @@ jobs:
           SPEC_FILE: ${{ steps.spec.outputs.file }}
           SPEC_ID: ${{ steps.spec.outputs.spec_id }}
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        timeout-minutes: 20
         run: |
           TARGET_FILE="e2e/_verified-${SPEC_ID}.spec.ts"
-          npx opencode-ai@1.15.3 run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "
+          timeout 1080 npx opencode-ai@1.15.3 run --model zai-coding-plan/glm-4.7 --dangerously-skip-permissions "
           Read agents/verifier/system-prompt.md for your role and rules.
 
           Spec file: ${SPEC_FILE}
@@ -141,6 +142,9 @@ jobs:
           Use your Playwright browser tools to interactively test every acceptance criterion
           in ${SPEC_FILE} against ${PREVIEW_URL}. Navigate the live page, interact with it,
           and verify each Given/When/Then scenario — including the Verifier Hints section.
+
+          Time budget: complete all testing and file writing within 15 minutes.
+          Test file budget: the regression test file must be ≤ 200 lines total.
 
           When finished:
           1. Write your verdict to /tmp/verify-result.json:
