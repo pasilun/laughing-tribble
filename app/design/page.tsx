@@ -123,6 +123,16 @@ export default function DesignPage() {
                 </div>
                 <FloorPlanSVG model={buildingModel} />
 
+                {buildingModel?.footprint?.length && buildingModel?.footprint?.width ? (
+                  <a
+                    data-testid="open-situationsplan-link"
+                    href={`/situationsplan?l=${buildingModel.footprint.length}&w=${buildingModel.footprint.width}`}
+                    className="block w-full text-center px-3 py-2 bg-blue-700 text-white text-sm font-medium rounded hover:bg-blue-800"
+                  >
+                    Öppna situationsplan
+                  </a>
+                ) : null}
+
                 <div data-testid="model-state-panel" className="space-y-2 text-sm">
                   <div data-testid="field-flowType" className={buildingModel?.flowType ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
                     <span className="font-medium">Byggnadstyp:</span>{' '}
