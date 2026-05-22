@@ -121,8 +121,6 @@ export default function DesignPage() {
                     </p>
                   )}
                 </div>
-                <FloorPlanSVG model={buildingModel} />
-
                 {buildingModel?.footprint?.length && buildingModel?.footprint?.width ? (
                   <a
                     data-testid="open-situationsplan-link"
@@ -132,6 +130,8 @@ export default function DesignPage() {
                     Öppna situationsplan
                   </a>
                 ) : null}
+
+                <FloorPlanSVG model={buildingModel} />
 
                 <div data-testid="model-state-panel" className="space-y-2 text-sm">
                   <div data-testid="field-flowType" className={buildingModel?.flowType ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-600'}>
