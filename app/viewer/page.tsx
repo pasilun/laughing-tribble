@@ -2,6 +2,16 @@
 
 import { useMemo, useCallback } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+
+const IFCViewer = dynamic(() => import('@/components/IFCViewer'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[500px] rounded-lg bg-zinc-900 flex items-center justify-center text-zinc-400 text-sm">
+      Laddar 3D-visare…
+    </div>
+  ),
+})
 import { friggebodFixture } from '@/lib/friggebod-fixture'
 import { generateIFC } from '@/lib/ifc-generator'
 import { BuildingModelV2, Wall, Opening, Vector2 } from '@/types/building-v2'
@@ -332,6 +342,11 @@ export default function ViewerPage() {
 
   const ifcContent = useMemo(() => generateIFC(model), [model])
 
+  const ifcBytes = useMemo(() => {
+    if (!ifcContent) return new Uint8Array(0)
+    return new TextEncoder().encode(ifcContent)
+  }, [ifcContent])
+
   const handleDownload = useCallback(() => {
     const blob = new Blob([ifcContent], { type: 'application/x-step' })
     const url = URL.createObjectURL(blob)
@@ -371,6 +386,17 @@ export default function ViewerPage() {
           <FloorPlanV2 model={model} />
           <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
             Blå = dörr (öppningsriktning), Gult = fönster
+          </p>
+        </section>
+
+        {/* 3D model */}
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
+            3D-modell
+          </h2>
+          <IFCViewer ifcData={ifcBytes} />
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Renderas via @thatopen/components + three.js i webbläsaren.
           </p>
         </section>
 
