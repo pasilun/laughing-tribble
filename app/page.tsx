@@ -11,12 +11,18 @@ export default function Home() {
           <p className="text-lg sm:text-xl font-normal text-zinc-600 dark:text-zinc-400 leading-relaxed">
             Skapa ansökan för friggebod, attefallshus och andra små byggnader enkelt och snabbt
           </p>
-          <div className="pt-4">
+          <div className="pt-4 flex flex-col sm:flex-row gap-3 items-center justify-center">
             <Link
               href="/design"
               className="inline-flex items-center justify-center px-8 py-4 bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900 rounded-lg font-normal hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
             >
               Kom igång
+            </Link>
+            <Link
+              href="/viewer"
+              className="inline-flex items-center justify-center px-8 py-4 bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-600 rounded-lg font-normal hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+            >
+              IFC Viewer (spike)
             </Link>
           </div>
         </div>
