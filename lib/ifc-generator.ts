@@ -389,16 +389,25 @@ export function generateIFC(model: BuildingModelV2): string {
     const pitch = model.roof.pitch
     const overhang = model.roof.overhang
     const wallH = model.walls[0]?.edges[0]?.height ?? 2.4
-    const halfSpan = 1.5 // 3m / 2
+    const vertices = model.walls[0]?.vertices ?? []
+    const xs = vertices.map(v => v.x)
+    const ys = vertices.map(v => v.y)
+    const minX = Math.min(...xs)
+    const maxX = Math.max(...xs)
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    const buildingWidth = maxY - minY
+    const buildingLength = maxX - minX
+    const halfSpan = buildingWidth / 2
+    const extrudeLen = buildingLength + 2 * overhang
     const pitchRad = (pitch * Math.PI) / 180
     const ridgeH = wallH + halfSpan * Math.tan(pitchRad)
     const eaveH = wallH - overhang * Math.tan(pitchRad)
     const roofThickness = 0.15
-    const extrudeLen = 4 + 2 * overhang
 
-    // Profile placement: origin at (-overhang, 0, 0), axis=east(X), refDir=north(Y)
+    // Profile placement: origin at (-overhang, minY, 0), axis=east(X), refDir=north(Y)
     const roofOriginId = w.next()
-    w.add(roofOriginId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(0.)},${fmt(0.)})`)
+    w.add(roofOriginId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(minY)},${fmt(0.)})`)
 
     const roofAxisDirId = w.next() // local Z = extrude direction = global X (east)
     w.add(roofAxisDirId, 'IFCDIRECTION', `(${fmt(1.)},${fmt(0.)},${fmt(0.)})`)
@@ -422,13 +431,13 @@ export function generateIFC(model: BuildingModelV2): string {
     const ptBId = w.next()
     w.add(ptBId, 'IFCCARTESIANPOINT', `(${fmt(halfSpan)},${fmt(ridgeH)})`)
 
-    // C = (3+overhang, eaveH)
+    // C = (buildingWidth+overhang, eaveH)
     const ptCId = w.next()
-    w.add(ptCId, 'IFCCARTESIANPOINT', `(${fmt(3 + overhang)},${fmt(eaveH)})`)
+    w.add(ptCId, 'IFCCARTESIANPOINT', `(${fmt(buildingWidth + overhang)},${fmt(eaveH)})`)
 
-    // D = (3+overhang, eaveH-0.15)
+    // D = (buildingWidth+overhang, eaveH-0.15)
     const ptDId = w.next()
-    w.add(ptDId, 'IFCCARTESIANPOINT', `(${fmt(3 + overhang)},${fmt(eaveH - roofThickness)})`)
+    w.add(ptDId, 'IFCCARTESIANPOINT', `(${fmt(buildingWidth + overhang)},${fmt(eaveH - roofThickness)})`)
 
     // E = (-overhang, eaveH-0.15)
     const ptEId = w.next()
@@ -469,11 +478,15 @@ export function generateIFC(model: BuildingModelV2): string {
     const roofProdDefShapeId = w.next()
     w.add(roofProdDefShapeId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${roofShapeRepId})`)
 
+    const roofEntityOriginId = w.next()
+    w.add(roofEntityOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+    const roofEntityPlacement3dId = w.next()
+    w.add(roofEntityPlacement3dId, 'IFCAXIS2PLACEMENT3D', `#${roofEntityOriginId},$,$`)
     const roofLocalPlacementId = w.next()
     w.add(
       roofLocalPlacementId,
       'IFCLOCALPLACEMENT',
-      `#${storeyLocalPlacementId},#${roofPlacement3dId}`
+      `#${storeyLocalPlacementId},#${roofEntityPlacement3dId}`
     )
 
     roofId = w.next()
