@@ -85,13 +85,14 @@ const TOOL_DEF = {
   },
 }
 
-function mcpResp(body: unknown, status = 200) {
-  return Response.json(body, { status, headers: CORS })
+function mcpResp(body: unknown, status = 200, extra: Record<string, string> = {}) {
+  return Response.json(body, { status, headers: { ...CORS, ...extra } })
 }
+
+const SESSION_ID = 'ifc-stateless-1'
 
 export async function GET() {
   return mcpResp({ name: 'ifc-building-generator', version: '1.0.0', transport: 'streamable-http' })
-
 }
 
 export async function POST(request: Request) {
@@ -113,11 +114,11 @@ export async function POST(request: Request) {
       jsonrpc: '2.0',
       id,
       result: {
-        protocolVersion: '2024-11-05',
+        protocolVersion: '2025-03-26',
         capabilities: { tools: {} },
         serverInfo: { name: 'ifc-building-generator', version: '1.0.0' },
       },
-    })
+    }, 200, { 'Mcp-Session-Id': SESSION_ID })
   }
 
   if (method === 'tools/list') {
