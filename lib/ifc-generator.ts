@@ -36,6 +36,19 @@ function fmt(v: number): string {
 export function generateIFC(model: BuildingModelV2): string {
   const w = new StepWriter()
 
+  function styleItem(solidId: number, r: number, g: number, b: number, transparency: number): void {
+    const colorId = w.next()
+    w.add(colorId, 'IFCCOLOURRGB', `$,${fmt(r)},${fmt(g)},${fmt(b)}`)
+    const renderingId = w.next()
+    w.add(renderingId, 'IFCSURFACESTYLERENDERING',
+      `#${colorId},${fmt(transparency)},$,$,$,$,$,$,.FLAT.`)
+    const surfStyleId = w.next()
+    w.add(surfStyleId, 'IFCSURFACESTYLE', `$,.BOTH.,(#${renderingId})`)
+    const pStyleId = w.next()
+    w.add(pStyleId, 'IFCPRESENTATIONSTYLEASSIGNMENT', `(#${surfStyleId})`)
+    w.add(w.next(), 'IFCSTYLEDITEM', `#${solidId},(#${pStyleId}),$`)
+  }
+
   // ── Boilerplate owner/app entities ──────────────────────────────────────
   const orgId = w.next()
   w.add(orgId, 'IFCORGANIZATION', `$,'CustomGenerator',$,$,$`)
@@ -211,6 +224,7 @@ export function generateIFC(model: BuildingModelV2): string {
 
   // ── Walls ────────────────────────────────────────────────────────────────
   const wallEntityIds: number[] = []
+  const fillerIds: number[] = []
 
   for (const loop of model.walls) {
     for (let edgeIdx = 0; edgeIdx < loop.edges.length; edgeIdx++) {
@@ -324,16 +338,70 @@ export function generateIFC(model: BuildingModelV2): string {
           `'rel-void-${opening.id}',#${ownerHistId},$,$,#${wallEntityId},#${openingElementId}`)
 
         if (opening.type === 'door') {
+          // Panel geometry: width × panelDepth rectangle extruded upward for height
+          const panelDepth = 0.045
+          const dProfOriginId = w.next()
+          w.add(dProfOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)})`)
+          const dProfPlacId = w.next()
+          w.add(dProfPlacId, 'IFCAXIS2PLACEMENT2D', `#${dProfOriginId},$`)
+          const dProfId = w.next()
+          w.add(dProfId, 'IFCRECTANGLEPROFILEDEF',
+            `.AREA.,$,#${dProfPlacId},${fmt(opening.width)},${fmt(panelDepth)}`)
+          const dSolidOriginId = w.next()
+          w.add(dSolidOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+          const dSolidPlacId = w.next()
+          w.add(dSolidPlacId, 'IFCAXIS2PLACEMENT3D', `#${dSolidOriginId},$,$`)
+          const dExtDirId = w.next()
+          w.add(dExtDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+          const dSolidId = w.next()
+          w.add(dSolidId, 'IFCEXTRUDEDAREASOLID',
+            `#${dProfId},#${dSolidPlacId},#${dExtDirId},${fmt(opening.height)}`)
+          styleItem(dSolidId, 0.55, 0.35, 0.15, 0.)   // wood brown, opaque
+
+          const dShapeRepId = w.next()
+          w.add(dShapeRepId, 'IFCSHAPEREPRESENTATION',
+            `#${geomCtx3dId},'Body','SweptSolid',(#${dSolidId})`)
+          const dProdDefId = w.next()
+          w.add(dProdDefId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${dShapeRepId})`)
+
           const doorId = w.next()
           w.add(doorId, 'IFCDOOR',
-            `'${opening.id}-door',#${ownerHistId},'Door',$,$,#${openLocalPlacementId},$,${fmt(opening.height)},${fmt(opening.width)}`)
+            `'${opening.id}-door',#${ownerHistId},'Door',$,$,#${openLocalPlacementId},#${dProdDefId},${fmt(opening.height)},${fmt(opening.width)}`)
+          fillerIds.push(doorId)
           const relFillId = w.next()
           w.add(relFillId, 'IFCRELFILLSELEMENT',
             `'rel-fill-${opening.id}',#${ownerHistId},$,$,#${openingElementId},#${doorId}`)
         } else {
+          // Pane geometry: width × paneDepth rectangle extruded upward for height
+          const paneDepth = 0.02
+          const wProfOriginId = w.next()
+          w.add(wProfOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)})`)
+          const wProfPlacId = w.next()
+          w.add(wProfPlacId, 'IFCAXIS2PLACEMENT2D', `#${wProfOriginId},$`)
+          const wProfId = w.next()
+          w.add(wProfId, 'IFCRECTANGLEPROFILEDEF',
+            `.AREA.,$,#${wProfPlacId},${fmt(opening.width)},${fmt(paneDepth)}`)
+          const wSolidOriginId = w.next()
+          w.add(wSolidOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+          const wSolidPlacId = w.next()
+          w.add(wSolidPlacId, 'IFCAXIS2PLACEMENT3D', `#${wSolidOriginId},$,$`)
+          const wExtDirId = w.next()
+          w.add(wExtDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+          const wSolidId = w.next()
+          w.add(wSolidId, 'IFCEXTRUDEDAREASOLID',
+            `#${wProfId},#${wSolidPlacId},#${wExtDirId},${fmt(opening.height)}`)
+          styleItem(wSolidId, 0.6, 0.85, 1.0, 0.55)   // glass blue, 45% opaque
+
+          const wShapeRepId = w.next()
+          w.add(wShapeRepId, 'IFCSHAPEREPRESENTATION',
+            `#${geomCtx3dId},'Body','SweptSolid',(#${wSolidId})`)
+          const wProdDefId = w.next()
+          w.add(wProdDefId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${wShapeRepId})`)
+
           const windowId = w.next()
           w.add(windowId, 'IFCWINDOW',
-            `'${opening.id}-window',#${ownerHistId},'Window',$,$,#${openLocalPlacementId},$,${fmt(opening.height)},${fmt(opening.width)}`)
+            `'${opening.id}-window',#${ownerHistId},'Window',$,$,#${openLocalPlacementId},#${wProdDefId},${fmt(opening.height)},${fmt(opening.width)}`)
+          fillerIds.push(windowId)
           const relFillId = w.next()
           w.add(relFillId, 'IFCRELFILLSELEMENT',
             `'rel-fill-${opening.id}',#${ownerHistId},$,$,#${openingElementId},#${windowId}`)
@@ -506,7 +574,7 @@ export function generateIFC(model: BuildingModelV2): string {
   }
 
   // ── Containment relationships ────────────────────────────────────────────
-  const allElements = [...wallEntityIds, ...spaceIds]
+  const allElements = [...wallEntityIds, ...fillerIds, ...spaceIds]
   if (roofId !== null) allElements.push(roofId)
   if (allElements.length > 0) {
     const relContainsId = w.next()
