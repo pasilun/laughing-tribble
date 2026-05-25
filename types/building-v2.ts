@@ -28,6 +28,14 @@ export type Room = {
   polygon: Vector2[]   // floor outline, closed
 }
 
+export type Partition = {
+  id: string
+  start: Vector2   // metres from building origin
+  end: Vector2
+  thickness: number  // default 0.1
+  height?: number    // default = same as exterior wall height
+}
+
 export type Roof = {
   type: 'sadel' | 'pulpet' | 'flat'
   pitch: number        // degrees
@@ -52,4 +60,5 @@ export type BuildingModelV2 = {
   roof: Roof
   slabThickness: number   // floor slab, default 0.2
   site?: Site
+  partitions?: Partition[]
 }

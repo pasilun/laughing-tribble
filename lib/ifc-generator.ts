@@ -410,6 +410,63 @@ export function generateIFC(model: BuildingModelV2): string {
     }
   }
 
+  // ── Interior partition walls ─────────────────────────────────────────────
+  const partitionEntityIds: number[] = []
+
+  for (const part of (model.partitions ?? [])) {
+    const dx = part.end.x - part.start.x
+    const dy = part.end.y - part.start.y
+    const len = Math.sqrt(dx * dx + dy * dy)
+    if (len < 0.01) continue
+
+    const dirX = dx / len
+    const dirY = dy / len
+    const partH = part.height ?? (model.walls[0]?.edges[0]?.height ?? 2.4)
+    const t = part.thickness ?? 0.1
+
+    // Place entity at start point, refDir = wall direction, axis = Z up
+    const partOriginId = w.next()
+    w.add(partOriginId, 'IFCCARTESIANPOINT', `(${fmt(part.start.x)},${fmt(part.start.y)},${fmt(0.)})`)
+    const zUpId = w.next()
+    w.add(zUpId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+    const xDirId = w.next()
+    w.add(xDirId, 'IFCDIRECTION', `(${fmt(dirX)},${fmt(dirY)},${fmt(0.)})`)
+    const axis3dId = w.next()
+    w.add(axis3dId, 'IFCAXIS2PLACEMENT3D', `#${partOriginId},#${zUpId},#${xDirId}`)
+    const localPlacementId = w.next()
+    w.add(localPlacementId, 'IFCLOCALPLACEMENT', `#${storeyLocalPlacementId},#${axis3dId}`)
+
+    // Profile: rectangle len × t, centered at (len/2, 0) in local XY
+    const profOriginId = w.next()
+    w.add(profOriginId, 'IFCCARTESIANPOINT', `(${fmt(len / 2)},${fmt(0.)})`)
+    const profPlacId = w.next()
+    w.add(profPlacId, 'IFCAXIS2PLACEMENT2D', `#${profOriginId},$`)
+    const profId = w.next()
+    w.add(profId, 'IFCRECTANGLEPROFILEDEF', `.AREA.,$,#${profPlacId},${fmt(len)},${fmt(t)}`)
+
+    // Solid: identity placement + extrude upward
+    const solidOriginId = w.next()
+    w.add(solidOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+    const solidPlacId = w.next()
+    w.add(solidPlacId, 'IFCAXIS2PLACEMENT3D', `#${solidOriginId},$,$`)
+    const extDirId = w.next()
+    w.add(extDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+    const solidId = w.next()
+    w.add(solidId, 'IFCEXTRUDEDAREASOLID', `#${profId},#${solidPlacId},#${extDirId},${fmt(partH)}`)
+
+    const shapeRepId = w.next()
+    w.add(shapeRepId, 'IFCSHAPEREPRESENTATION',
+      `#${geomCtx3dId},'Body','SweptSolid',(#${solidId})`)
+    const prodDefId = w.next()
+    w.add(prodDefId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${shapeRepId})`)
+
+    const wallId = w.next()
+    w.add(wallId, 'IFCWALLSTANDARDCASE',
+      `'${part.id}',#${ownerHistId},'${part.id}',$,$,#${localPlacementId},#${prodDefId},$`)
+
+    partitionEntityIds.push(wallId)
+  }
+
   // ── Rooms (IFCSPACE) ─────────────────────────────────────────────────────
   const spaceIds: number[] = []
 
@@ -574,7 +631,7 @@ export function generateIFC(model: BuildingModelV2): string {
   }
 
   // ── Containment relationships ────────────────────────────────────────────
-  const allElements = [...wallEntityIds, ...fillerIds, ...spaceIds]
+  const allElements = [...wallEntityIds, ...partitionEntityIds, ...fillerIds, ...spaceIds]
   if (roofId !== null) allElements.push(roofId)
   if (allElements.length > 0) {
     const relContainsId = w.next()

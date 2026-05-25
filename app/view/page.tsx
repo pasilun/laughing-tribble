@@ -228,6 +228,20 @@ function FloorPlanV2({ model }: FloorPlanProps) {
         }
       })}
 
+      {/* ── Partition walls ──────────────────────────────────────────────────── */}
+      {(model.partitions ?? []).map((part) => (
+        <line
+          key={part.id}
+          x1={tx(part.start.x)}
+          y1={ty(part.start.y)}
+          x2={tx(part.end.x)}
+          y2={ty(part.end.y)}
+          stroke="#27272a"
+          strokeWidth={Math.max(2, (part.thickness ?? 0.1) * scale)}
+          strokeLinecap="square"
+        />
+      ))}
+
       {/* ── Room labels ──────────────────────────────────────────────────── */}
       {model.rooms.map((room) => {
         // Centroid of polygon

@@ -49,6 +49,27 @@ const TOOL_DEF = {
           required: ['wall', 'type'],
         },
       },
+      partitions: {
+        type: 'array',
+        description: 'Interior partition walls that divide the building',
+        items: {
+          type: 'object',
+          properties: {
+            direction: {
+              type: 'string',
+              enum: ['ew', 'ns'],
+              description: 'ew = runs east-west (divides building north/south), ns = runs north-south (divides building east/west)',
+            },
+            offset: {
+              type: 'number',
+              description: 'Distance in metres from the south wall (ew) or west wall (ns)',
+            },
+            thickness: { type: 'number', description: 'Wall thickness in metres, default 0.1' },
+            height: { type: 'number', description: 'Wall height in metres, default same as exterior walls' },
+          },
+          required: ['direction', 'offset'],
+        },
+      },
     },
     required: ['length', 'width', 'roof'],
   },

@@ -1,4 +1,4 @@
-import { BuildingModelV2, WallLoop, Opening, Room } from '@/types/building-v2'
+import { BuildingModelV2, WallLoop, Opening, Room, Partition } from '@/types/building-v2'
 
 export interface BuildingParams {
   name?: string
@@ -21,6 +21,12 @@ export interface BuildingParams {
     sillHeight?: number       // default 0 for door, 0.9 for window
   }>
   slabThickness?: number  // default 0.2
+  partitions?: Array<{
+    direction: 'ew' | 'ns'  // east-west (runs along X axis) or north-south (runs along Y axis)
+    offset: number           // metres from south wall (ew) or west wall (ns)
+    thickness?: number       // default 0.1
+    height?: number          // default: same as wallHeight
+  }>
 }
 
 export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
@@ -88,6 +94,26 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
     ],
   }
 
+  const partitions: Partition[] = (p.partitions ?? []).map((part, index) => {
+    if (part.direction === 'ew') {
+      return {
+        id: `partition-${index}`,
+        start: { x: 0, y: part.offset },
+        end: { x: p.length, y: part.offset },
+        thickness: part.thickness ?? 0.1,
+        height: part.height,
+      }
+    } else {
+      return {
+        id: `partition-${index}`,
+        start: { x: part.offset, y: 0 },
+        end: { x: part.offset, y: p.width },
+        thickness: part.thickness ?? 0.1,
+        height: part.height,
+      }
+    }
+  })
+
   return {
     id: `building-${Date.now()}`,
     name: p.name ?? 'Byggnad',
@@ -101,5 +127,6 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
       overhang: p.roof.overhang ?? 0.3,
     },
     slabThickness,
+    partitions,
   }
 }
