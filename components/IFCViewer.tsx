@@ -66,8 +66,41 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
     // Parse IFC with web-ifc
     async function loadIFC() {
       const ifcApi = new WebIFC.IfcAPI()
-      ifcApi.SetWasmPath('/')
-      await ifcApi.Init()
+
+      const origFetch = window.fetch
+      window.fetch = async (input, init) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url
+        if (url.includes('.wasm') || url.includes('web-ifc')) {
+          console.log('[IFC] fetch attempt:', url)
+          setStatus('Hämtar WASM: ' + url.split('/').pop())
+        }
+        try {
+          const res = await origFetch(input, init)
+          if (url.includes('.wasm') || url.includes('web-ifc')) {
+            console.log('[IFC] fetch response:', url, res.status, res.headers.get('content-type'))
+          }
+          return res
+        } catch (e) {
+          if (url.includes('.wasm') || url.includes('web-ifc')) {
+            console.error('[IFC] fetch FAILED:', url, e)
+          }
+          throw e
+        }
+      }
+
+      const wasmPath = window.location.origin + '/'
+      console.log('[IFC] SetWasmPath:', wasmPath)
+      ifcApi.SetWasmPath(wasmPath)
+      try {
+        await ifcApi.Init()
+        console.log('[IFC] Init() succeeded')
+      } catch (initErr) {
+        console.error('[IFC] Init() failed:', initErr)
+        // restore fetch before re-throwing
+        window.fetch = origFetch
+        throw initErr
+      }
+      window.fetch = origFetch
 
       setStatus('Analyserar IFC…')
       const modelID = ifcApi.OpenModel(ifcData, { COORDINATE_TO_ORIGIN: true })
@@ -161,7 +194,8 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
 
     loadIFC().catch(err => {
       console.error('IFC load error:', err)
-      setStatus('✗ Fel: ' + String(err))
+      const msg = err instanceof Error ? err.message + (err.stack ? '\n' + err.stack.split('\n').slice(0,3).join('\n') : '') : String(err)
+      setStatus('✗ ' + msg.substring(0, 200))
     })
 
     return () => {
