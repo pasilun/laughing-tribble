@@ -1,12 +1,15 @@
 export type Vector2 = { x: number; y: number }
 export type Vector3 = { x: number; y: number; z: number }
 
-export type Wall = {
+export type WallEdge = {
   id: string
-  start: Vector2
-  end: Vector2
-  height: number      // metres
-  thickness: number   // metres, default 0.12
+  thickness: number
+  height: number
+}
+
+export type WallLoop = {
+  vertices: Vector2[]   // N vertices, CCW winding, implicitly closed (last→first)
+  edges: WallEdge[]     // N edges — edge[i] goes vertex[i] → vertex[(i+1)%N]
 }
 
 export type Opening = {
@@ -43,7 +46,7 @@ export type BuildingModelV2 = {
   id: string
   name: string
   flowType?: 'friggebod' | 'attefallshus' | 'komplementbyggnad' | 'komplementbostadshus' | 'attefallstillbyggnad'
-  walls: Wall[]
+  walls: WallLoop[]
   openings: Opening[]
   rooms: Room[]
   roof: Roof

@@ -1,4 +1,5 @@
-import { BuildingModelV2, Wall, Opening } from '@/types/building-v2'
+import { BuildingModelV2 } from '@/types/building-v2'
+import { wallFootprint } from '@/lib/wall-geometry'
 
 /**
  * Generates a minimal valid IFC4 STEP file from a BuildingModelV2.
@@ -30,17 +31,6 @@ class StepWriter {
 function fmt(v: number): string {
   // IFC real numbers must have a decimal point
   return Number.isInteger(v) ? `${v}.` : `${v}`
-}
-
-function wallLength(w: Wall): number {
-  const dx = w.end.x - w.start.x
-  const dy = w.end.y - w.start.y
-  return Math.sqrt(dx * dx + dy * dy)
-}
-
-/** Angle of wall in XY plane, radians, measured from +X axis */
-function wallAngle(w: Wall): number {
-  return Math.atan2(w.end.y - w.start.y, w.end.x - w.start.x)
 }
 
 export function generateIFC(model: BuildingModelV2): string {
@@ -222,187 +212,124 @@ export function generateIFC(model: BuildingModelV2): string {
   // ── Walls ────────────────────────────────────────────────────────────────
   const wallEntityIds: number[] = []
 
-  for (const wall of model.walls) {
-    const len = wallLength(wall)
-    const angle = wallAngle(wall)
-    const cosA = Math.cos(angle)
-    const sinA = Math.sin(angle)
+  for (const loop of model.walls) {
+    for (let edgeIdx = 0; edgeIdx < loop.edges.length; edgeIdx++) {
+      const edge = loop.edges[edgeIdx]
+      const footprint = wallFootprint(loop, edgeIdx)  // [outerStart, outerEnd, innerEnd, innerStart]
 
-    // Wall placement: origin at wall start, X-axis along wall direction
-    const wallOriginId = w.next()
-    w.add(
-      wallOriginId,
-      'IFCCARTESIANPOINT',
-      `(${fmt(wall.start.x)},${fmt(wall.start.y)},${fmt(0.)})`
-    )
+      // Shared world-space placement (origin at 0,0,0, Z up, X east)
+      const originId = w.next()
+      w.add(originId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+      const zUpId = w.next()
+      w.add(zUpId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+      const xEastId = w.next()
+      w.add(xEastId, 'IFCDIRECTION', `(${fmt(1.)},${fmt(0.)},${fmt(0.)})`)
+      const axis3dId = w.next()
+      w.add(axis3dId, 'IFCAXIS2PLACEMENT3D', `#${originId},#${zUpId},#${xEastId}`)
+      const wallLocalPlacementId = w.next()
+      w.add(wallLocalPlacementId, 'IFCLOCALPLACEMENT', `#${storeyLocalPlacementId},#${axis3dId}`)
 
-    const wallXDirId = w.next()
-    w.add(wallXDirId, 'IFCDIRECTION', `(${fmt(cosA)},${fmt(sinA)},${fmt(0.)})`)
+      // Profile: IFCARBITRARYCLOSEDPROFILEDEF with the 4-corner miter footprint
+      const ptIds = footprint.map(pt => {
+        const id = w.next()
+        w.add(id, 'IFCCARTESIANPOINT', `(${fmt(pt.x)},${fmt(pt.y)})`)
+        return id
+      })
+      // Close the polyline by repeating first point
+      const closePtId = w.next()
+      w.add(closePtId, 'IFCCARTESIANPOINT', `(${fmt(footprint[0].x)},${fmt(footprint[0].y)})`)
+      const polylineId = w.next()
+      w.add(polylineId, 'IFCPOLYLINE', `(${[...ptIds, closePtId].map(id => `#${id}`).join(',')})`)
+      const profileId = w.next()
+      w.add(profileId, 'IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,$,#${polylineId}`)
 
-    const wallZDirId = w.next()
-    w.add(wallZDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+      // Extrude upward
+      const extrudeDirId = w.next()
+      w.add(extrudeDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+      const solidId = w.next()
+      w.add(solidId, 'IFCEXTRUDEDAREASOLID', `#${profileId},#${axis3dId},#${extrudeDirId},${fmt(edge.height)}`)
 
-    const wallAxis2p3dId = w.next()
-    w.add(
-      wallAxis2p3dId,
-      'IFCAXIS2PLACEMENT3D',
-      `#${wallOriginId},#${wallZDirId},#${wallXDirId}`
-    )
+      // Shape representation
+      const shapeRepId = w.next()
+      w.add(shapeRepId, 'IFCSHAPEREPRESENTATION', `#${geomCtx3dId},'Body','SweptSolid',(#${solidId})`)
+      const prodDefShapeId = w.next()
+      w.add(prodDefShapeId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${shapeRepId})`)
 
-    const wallLocalPlacementId = w.next()
-    w.add(
-      wallLocalPlacementId,
-      'IFCLOCALPLACEMENT',
-      `#${storeyLocalPlacementId},#${wallAxis2p3dId}`
-    )
+      const wallEntityId = w.next()
+      w.add(wallEntityId, 'IFCWALLSTANDARDCASE',
+        `'${edge.id}',#${ownerHistId},'Wall',$,$,#${wallLocalPlacementId},#${prodDefShapeId},$`)
+      wallEntityIds.push(wallEntityId)
 
-    // Profile: wall footprint rectangle in local XY plane (X=along wall, Y=perpendicular)
-    // Centered along the wall at (len/2, 0)
-    const profilePtId = w.next()
-    w.add(profilePtId, 'IFCCARTESIANPOINT', `(${fmt(len / 2)},${fmt(0.)})`)
+      // Openings for this edge
+      const edgeOpenings = model.openings.filter(o => o.wallId === edge.id)
+      for (const opening of edgeOpenings) {
+        // Wall edge direction vector (for placing opening along wall)
+        const vStart = loop.vertices[edgeIdx]
+        const vEnd = loop.vertices[(edgeIdx + 1) % loop.vertices.length]
+        const dx = vEnd.x - vStart.x, dy = vEnd.y - vStart.y
+        const len = Math.sqrt(dx * dx + dy * dy)
+        const dirX = dx / len, dirY = dy / len
 
-    const profilePlacementId = w.next()
-    w.add(profilePlacementId, 'IFCAXIS2PLACEMENT2D', `#${profilePtId},$`)
+        // Opening origin in world space: walk along edge from start by offsetFromStart, up by sillHeight
+        const sillH = opening.sillHeight ?? (opening.type === 'door' ? 0 : 0.9)
+        const ox = vStart.x + dirX * opening.offsetFromStart
+        const oy = vStart.y + dirY * opening.offsetFromStart
 
-    const profileId = w.next()
-    w.add(
-      profileId,
-      'IFCRECTANGLEPROFILEDEF',
-      `.AREA.,$,#${profilePlacementId},${fmt(len)},${fmt(wall.thickness)}`
-    )
+        const openOriginId = w.next()
+        w.add(openOriginId, 'IFCCARTESIANPOINT', `(${fmt(ox)},${fmt(oy)},${fmt(sillH)})`)
 
-    // Extrude upward along local Z axis
-    const extrudeDirId = w.next()
-    w.add(extrudeDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+        // Opening X axis = wall direction, Z axis = up
+        const openXId = w.next()
+        w.add(openXId, 'IFCDIRECTION', `(${fmt(dirX)},${fmt(dirY)},${fmt(0.)})`)
+        const openAxis3dId = w.next()
+        w.add(openAxis3dId, 'IFCAXIS2PLACEMENT3D', `#${openOriginId},#${zUpId},#${openXId}`)
+        const openLocalPlacementId = w.next()
+        w.add(openLocalPlacementId, 'IFCLOCALPLACEMENT', `#${storeyLocalPlacementId},#${openAxis3dId}`)
 
-    const solidId = w.next()
-    w.add(
-      solidId,
-      'IFCEXTRUDEDAREASOLID',
-      `#${profileId},#${wallAxis2p3dId},#${extrudeDirId},${fmt(wall.height)}`
-    )
+        // Opening void: width along wall (local X), height up (local Z), depth through wall (local Y)
+        // Profile in local XY: width × depth (wall thickness + tolerance)
+        const openPtId = w.next()
+        w.add(openPtId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(-(edge.thickness / 2 + 0.05))})`)
+        const openProfilePlacementId = w.next()
+        w.add(openProfilePlacementId, 'IFCAXIS2PLACEMENT2D', `#${openPtId},$`)
+        const openProfileId = w.next()
+        w.add(openProfileId, 'IFCRECTANGLEPROFILEDEF',
+          `.AREA.,$,#${openProfilePlacementId},${fmt(opening.width)},${fmt(edge.thickness + 0.1)}`)
+        const openExtDirId = w.next()
+        w.add(openExtDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+        const openSolidId = w.next()
+        w.add(openSolidId, 'IFCEXTRUDEDAREASOLID',
+          `#${openProfileId},#${openAxis3dId},#${openExtDirId},${fmt(opening.height)}`)
 
-    // Shape representation
-    const shapeRepId = w.next()
-    w.add(
-      shapeRepId,
-      'IFCSHAPEREPRESENTATION',
-      `#${geomCtx3dId},'Body','SweptSolid',(#${solidId})`
-    )
+        const openShapeRepId = w.next()
+        w.add(openShapeRepId, 'IFCSHAPEREPRESENTATION',
+          `#${geomCtx3dId},'Body','SweptSolid',(#${openSolidId})`)
+        const openProdDefId = w.next()
+        w.add(openProdDefId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${openShapeRepId})`)
 
-    const prodDefShapeId = w.next()
-    w.add(prodDefShapeId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${shapeRepId})`)
+        const openingElementId = w.next()
+        w.add(openingElementId, 'IFCOPENINGELEMENT',
+          `'${opening.id}',#${ownerHistId},'Opening',$,$,#${openLocalPlacementId},#${openProdDefId},$`)
 
-    const wallEntityId = w.next()
-    w.add(
-      wallEntityId,
-      'IFCWALLSTANDARDCASE',
-      `'${wall.id}',#${ownerHistId},'Wall',$,$,#${wallLocalPlacementId},#${prodDefShapeId},$`
-    )
+        const relVoidId = w.next()
+        w.add(relVoidId, 'IFCRELVOIDSELEMENT',
+          `'rel-void-${opening.id}',#${ownerHistId},$,$,#${wallEntityId},#${openingElementId}`)
 
-    wallEntityIds.push(wallEntityId)
-
-    // Add openings for this wall
-    const wallOpenings = model.openings.filter((o: Opening) => o.wallId === wall.id)
-    for (const opening of wallOpenings) {
-      // Opening placement: positioned along the wall at offsetFromStart
-      const openOriginId = w.next()
-      // Opening is offset along wall X axis, sill height up Z axis
-      const sillH = opening.sillHeight ?? (opening.type === 'door' ? 0 : 0.9)
-      w.add(
-        openOriginId,
-        'IFCCARTESIANPOINT',
-        `(${fmt(opening.offsetFromStart)},${fmt(0.)},${fmt(sillH)})`
-      )
-
-      const openAxis2p3dId = w.next()
-      w.add(openAxis2p3dId, 'IFCAXIS2PLACEMENT3D', `#${openOriginId},$,$`)
-
-      const openLocalPlacementId = w.next()
-      w.add(
-        openLocalPlacementId,
-        'IFCLOCALPLACEMENT',
-        `#${wallLocalPlacementId},#${openAxis2p3dId}`
-      )
-
-      // Opening shape
-      const openPtId = w.next()
-      w.add(openPtId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)})`)
-
-      const openProfilePlacementId = w.next()
-      w.add(openProfilePlacementId, 'IFCAXIS2PLACEMENT2D', `#${openPtId},$`)
-
-      const openProfileId = w.next()
-      w.add(
-        openProfileId,
-        'IFCRECTANGLEPROFILEDEF',
-        `.AREA.,$,#${openProfilePlacementId},${fmt(opening.width)},${fmt(opening.height)}`
-      )
-
-      const openExtDirId = w.next()
-      w.add(openExtDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(1.)},${fmt(0.)})`)
-
-      const openSolidId = w.next()
-      w.add(
-        openSolidId,
-        'IFCEXTRUDEDAREASOLID',
-        `#${openProfileId},#${openAxis2p3dId},#${openExtDirId},${fmt(wall.thickness + 0.1)}`
-      )
-
-      const openShapeRepId = w.next()
-      w.add(
-        openShapeRepId,
-        'IFCSHAPEREPRESENTATION',
-        `#${geomCtx3dId},'Body','SweptSolid',(#${openSolidId})`
-      )
-
-      const openProdDefId = w.next()
-      w.add(openProdDefId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${openShapeRepId})`)
-
-      const openingElementId = w.next()
-      w.add(
-        openingElementId,
-        'IFCOPENINGELEMENT',
-        `'${opening.id}',#${ownerHistId},'${opening.type === 'door' ? 'Door' : 'Window'} Opening',$,$,#${openLocalPlacementId},#${openProdDefId},$`
-      )
-
-      // Void relationship
-      const relVoidId = w.next()
-      w.add(
-        relVoidId,
-        'IFCRELVOIDSELEMENT',
-        `'rel-void-${opening.id}',#${ownerHistId},$,$,#${wallEntityId},#${openingElementId}`
-      )
-
-      // Door or window element filling the opening
-      if (opening.type === 'door') {
-        const doorId = w.next()
-        w.add(
-          doorId,
-          'IFCDOOR',
-          `'${opening.id}-door',#${ownerHistId},'Door',$,$,#${openLocalPlacementId},$,${fmt(opening.height)},${fmt(opening.width)}`
-        )
-
-        const relFillId = w.next()
-        w.add(
-          relFillId,
-          'IFCRELFILLSELEMENT',
-          `'rel-fill-${opening.id}',#${ownerHistId},$,$,#${openingElementId},#${doorId}`
-        )
-      } else {
-        const windowId = w.next()
-        w.add(
-          windowId,
-          'IFCWINDOW',
-          `'${opening.id}-window',#${ownerHistId},'Window',$,$,#${openLocalPlacementId},$,${fmt(opening.height)},${fmt(opening.width)}`
-        )
-
-        const relFillId = w.next()
-        w.add(
-          relFillId,
-          'IFCRELFILLSELEMENT',
-          `'rel-fill-${opening.id}',#${ownerHistId},$,$,#${openingElementId},#${windowId}`
-        )
+        if (opening.type === 'door') {
+          const doorId = w.next()
+          w.add(doorId, 'IFCDOOR',
+            `'${opening.id}-door',#${ownerHistId},'Door',$,$,#${openLocalPlacementId},$,${fmt(opening.height)},${fmt(opening.width)}`)
+          const relFillId = w.next()
+          w.add(relFillId, 'IFCRELFILLSELEMENT',
+            `'rel-fill-${opening.id}',#${ownerHistId},$,$,#${openingElementId},#${doorId}`)
+        } else {
+          const windowId = w.next()
+          w.add(windowId, 'IFCWINDOW',
+            `'${opening.id}-window',#${ownerHistId},'Window',$,$,#${openLocalPlacementId},$,${fmt(opening.height)},${fmt(opening.width)}`)
+          const relFillId = w.next()
+          w.add(relFillId, 'IFCRELFILLSELEMENT',
+            `'rel-fill-${opening.id}',#${ownerHistId},$,$,#${openingElementId},#${windowId}`)
+        }
       }
     }
   }
@@ -461,7 +388,7 @@ export function generateIFC(model: BuildingModelV2): string {
   if (model.roof.type === 'sadel') {
     const pitch = model.roof.pitch
     const overhang = model.roof.overhang
-    const wallH = model.walls[0].height
+    const wallH = model.walls[0]?.edges[0]?.height ?? 2.4
     const halfSpan = 1.5 // 3m / 2
     const pitchRad = (pitch * Math.PI) / 180
     const ridgeH = wallH + halfSpan * Math.tan(pitchRad)
@@ -570,7 +497,7 @@ export function generateIFC(model: BuildingModelV2): string {
   }
 
   // ── Assemble the STEP file ───────────────────────────────────────────────
-  const now = new Date().toISOString().replace(/\.\d+Z$/, '')
+  const now = '2025-01-01T00:00:00'
   const header = [
     'ISO-10303-21;',
     'HEADER;',

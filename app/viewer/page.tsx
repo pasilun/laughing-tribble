@@ -14,22 +14,36 @@ const IFCViewer = dynamic(() => import('@/components/IFCViewer'), {
 })
 import { friggebodFixture } from '@/lib/friggebod-fixture'
 import { generateIFC } from '@/lib/ifc-generator'
-import { BuildingModelV2, Wall, Opening, Vector2 } from '@/types/building-v2'
+import { BuildingModelV2, Opening, Vector2 } from '@/types/building-v2'
 
 // ── Geometry helpers ────────────────────────────────────────────────────────
 
-function wallLength(w: Wall): number {
+type EdgeRecord = { id: string; start: Vector2; end: Vector2; thickness: number; height: number }
+
+function allEdges(model: BuildingModelV2): EdgeRecord[] {
+  return model.walls.flatMap((loop) =>
+    loop.edges.map((edge, i) => ({
+      id: edge.id,
+      thickness: edge.thickness,
+      height: edge.height,
+      start: loop.vertices[i],
+      end: loop.vertices[(i + 1) % loop.vertices.length],
+    }))
+  )
+}
+
+function wallLength(w: EdgeRecord): number {
   const dx = w.end.x - w.start.x
   const dy = w.end.y - w.start.y
   return Math.sqrt(dx * dx + dy * dy)
 }
 
-function wallAngle(w: Wall): number {
+function wallAngle(w: EdgeRecord): number {
   return Math.atan2(w.end.y - w.start.y, w.end.x - w.start.x)
 }
 
 /** Point along wall at offset metres from start */
-function pointAlongWall(wall: Wall, offset: number): Vector2 {
+function pointAlongWall(wall: EdgeRecord, offset: number): Vector2 {
   const len = wallLength(wall)
   const t = offset / len
   return {
@@ -64,9 +78,10 @@ function FloorPlanV2({ model }: FloorPlanProps) {
   const viewBoxH = 400
   const padding = 60
 
+  const edges = allEdges(model)
   // Compute bounding box of all wall endpoints
-  const allX = model.walls.flatMap((w) => [w.start.x, w.end.x])
-  const allY = model.walls.flatMap((w) => [w.start.y, w.end.y])
+  const allX = edges.flatMap((e) => [e.start.x, e.end.x])
+  const allY = edges.flatMap((e) => [e.start.y, e.end.y])
   const minX = Math.min(...allX)
   const maxX = Math.max(...allX)
   const minY = Math.min(...allY)
@@ -98,7 +113,7 @@ function FloorPlanV2({ model }: FloorPlanProps) {
     niceDivisions.find((d) => d >= rawMetres * 0.5) ?? niceDivisions[niceDivisions.length - 1]
   const barPx = barMetres * scale
 
-  const firstWallThickness = model.walls[0]?.thickness ?? 0.12
+  const firstWallThickness = model.walls[0]?.edges[0]?.thickness ?? 0.12
   const wallStrokeW = Math.max(2, firstWallThickness * scale)
 
   return (
@@ -111,28 +126,22 @@ function FloorPlanV2({ model }: FloorPlanProps) {
       aria-label="Floor plan"
     >
       {/* ── Walls ────────────────────────────────────────────────────────── */}
-      {model.walls.map((wall) => {
-        const x1 = tx(wall.start.x)
-        const y1 = ty(wall.start.y)
-        const x2 = tx(wall.end.x)
-        const y2 = ty(wall.end.y)
-        return (
-          <line
-            key={wall.id}
-            x1={x1}
-            y1={y1}
-            x2={x2}
-            y2={y2}
-            stroke="#27272a"
-            strokeWidth={wallStrokeW}
-            strokeLinecap="square"
-          />
-        )
-      })}
+      {edges.map((edge) => (
+        <line
+          key={edge.id}
+          x1={tx(edge.start.x)}
+          y1={ty(edge.start.y)}
+          x2={tx(edge.end.x)}
+          y2={ty(edge.end.y)}
+          stroke="#27272a"
+          strokeWidth={wallStrokeW}
+          strokeLinecap="square"
+        />
+      ))}
 
       {/* ── Openings (doors & windows) ───────────────────────────────────── */}
       {model.openings.map((opening: Opening) => {
-        const wall = model.walls.find((wl) => wl.id === opening.wallId)
+        const wall = edges.find((e) => e.id === opening.wallId)
         if (!wall) return null
 
         const angle = wallAngle(wall)
@@ -298,12 +307,13 @@ function FloorPlanV2({ model }: FloorPlanProps) {
 // ── Stats panel ─────────────────────────────────────────────────────────────
 
 function StatsPanel({ model }: { model: BuildingModelV2 }) {
-  const allX = model.walls.flatMap((w) => [w.start.x, w.end.x])
-  const allY = model.walls.flatMap((w) => [w.start.y, w.end.y])
+  const edges = allEdges(model)
+  const allX = edges.flatMap((e) => [e.start.x, e.end.x])
+  const allY = edges.flatMap((e) => [e.start.y, e.end.y])
   const width = Math.max(...allX) - Math.min(...allX)
   const depth = Math.max(...allY) - Math.min(...allY)
   const footprintArea = width * depth
-  const totalWallLength = model.walls.reduce((s, w) => s + wallLength(w), 0)
+  const totalWallLength = edges.reduce((s, e) => s + wallLength(e), 0)
   const doorCount = model.openings.filter((o) => o.type === 'door').length
   const windowCount = model.openings.filter((o) => o.type === 'window').length
 
@@ -311,10 +321,10 @@ function StatsPanel({ model }: { model: BuildingModelV2 }) {
     { label: 'Dimensioner', value: `${width.toFixed(1)} × ${depth.toFixed(1)} m` },
     { label: 'Byggnadsarea (BYA)', value: `${footprintArea.toFixed(1)} m²` },
     { label: 'Väggars totallängd', value: `${totalWallLength.toFixed(1)} m` },
-    { label: 'Antal väggar', value: `${model.walls.length}` },
+    { label: 'Antal väggar', value: `${edges.length}` },
     { label: 'Dörrar', value: `${doorCount}` },
     { label: 'Fönster', value: `${windowCount}` },
-    { label: 'Rumshöjd', value: `${model.walls[0]?.height ?? 0} m` },
+    { label: 'Rumshöjd', value: `${model.walls[0]?.edges[0]?.height ?? 0} m` },
     { label: 'Taktyp', value: model.roof.type },
     { label: 'Takvinkel', value: `${model.roof.pitch}°` },
   ]
@@ -422,7 +432,7 @@ export default function ViewerPage() {
               Ladda ned .ifc
             </button>
             <div className="text-xs text-zinc-500 dark:text-zinc-400 self-center">
-              {(ifcContent.length / 1024).toFixed(1)} KB · IFC4 STEP · {model.walls.length} väggar ·{' '}
+              {(ifcContent.length / 1024).toFixed(1)} KB · IFC4 STEP · {model.walls.reduce((s, l) => s + l.edges.length, 0)} väggar ·{' '}
               {model.openings.length} öppningar
             </div>
           </div>

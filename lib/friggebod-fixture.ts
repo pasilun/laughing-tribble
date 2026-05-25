@@ -1,4 +1,4 @@
-import { BuildingModelV2 } from '@/types/building-v2'
+import { BuildingModelV2, WallLoop } from '@/types/building-v2'
 
 /**
  * Hardcoded 4×3m friggebod fixture for IFC pipeline spike.
@@ -11,39 +11,21 @@ export const friggebodFixture: BuildingModelV2 = {
   flowType: 'friggebod',
 
   walls: [
-    // South wall: (0,0) → (4,0)
     {
-      id: 'wall-south',
-      start: { x: 0, y: 0 },
-      end: { x: 4, y: 0 },
-      height: 2.4,
-      thickness: 0.12,
+      vertices: [
+        { x: 0, y: 0 },  // SW
+        { x: 4, y: 0 },  // SE
+        { x: 4, y: 3 },  // NE
+        { x: 0, y: 3 },  // NW
+      ],
+      edges: [
+        { id: 'wall-south', thickness: 0.12, height: 2.4 },
+        { id: 'wall-east',  thickness: 0.12, height: 2.4 },
+        { id: 'wall-north', thickness: 0.12, height: 2.4 },
+        { id: 'wall-west',  thickness: 0.12, height: 2.4 },
+      ],
     },
-    // East wall: (4,0) → (4,3)
-    {
-      id: 'wall-east',
-      start: { x: 4, y: 0 },
-      end: { x: 4, y: 3 },
-      height: 2.4,
-      thickness: 0.12,
-    },
-    // North wall: (4,3) → (0,3)
-    {
-      id: 'wall-north',
-      start: { x: 4, y: 3 },
-      end: { x: 0, y: 3 },
-      height: 2.4,
-      thickness: 0.12,
-    },
-    // West wall: (0,3) → (0,0)
-    {
-      id: 'wall-west',
-      start: { x: 0, y: 3 },
-      end: { x: 0, y: 0 },
-      height: 2.4,
-      thickness: 0.12,
-    },
-  ],
+  ] as WallLoop[],
 
   openings: [
     // Door: south wall, 0.9m wide, 2.1m high, centred at 4/2 - 0.9/2 = 1.55m from start
