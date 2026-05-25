@@ -263,43 +263,51 @@ export function generateIFC(model: BuildingModelV2): string {
       // Openings for this edge
       const edgeOpenings = model.openings.filter(o => o.wallId === edge.id)
       for (const opening of edgeOpenings) {
-        // Wall edge direction vector (for placing opening along wall)
         const vStart = loop.vertices[edgeIdx]
         const vEnd = loop.vertices[(edgeIdx + 1) % loop.vertices.length]
         const dx = vEnd.x - vStart.x, dy = vEnd.y - vStart.y
         const len = Math.sqrt(dx * dx + dy * dy)
         const dirX = dx / len, dirY = dy / len
 
-        // Opening origin in world space: walk along edge from start by offsetFromStart, up by sillHeight
         const sillH = opening.sillHeight ?? (opening.type === 'door' ? 0 : 0.9)
-        const ox = vStart.x + dirX * opening.offsetFromStart
-        const oy = vStart.y + dirY * opening.offsetFromStart
+        // Entity origin at MIDPOINT of opening along wall
+        const midOffset = opening.offsetFromStart + opening.width / 2
+        const ox = vStart.x + dirX * midOffset
+        const oy = vStart.y + dirY * midOffset
 
+        // Entity placement
         const openOriginId = w.next()
         w.add(openOriginId, 'IFCCARTESIANPOINT', `(${fmt(ox)},${fmt(oy)},${fmt(sillH)})`)
-
-        // Opening X axis = wall direction, Z axis = up
-        const openXId = w.next()
-        w.add(openXId, 'IFCDIRECTION', `(${fmt(dirX)},${fmt(dirY)},${fmt(0.)})`)
+        const openZUpId = w.next()
+        w.add(openZUpId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+        const openXDirId = w.next()
+        w.add(openXDirId, 'IFCDIRECTION', `(${fmt(dirX)},${fmt(dirY)},${fmt(0.)})`)
         const openAxis3dId = w.next()
-        w.add(openAxis3dId, 'IFCAXIS2PLACEMENT3D', `#${openOriginId},#${zUpId},#${openXId}`)
+        w.add(openAxis3dId, 'IFCAXIS2PLACEMENT3D', `#${openOriginId},#${openZUpId},#${openXDirId}`)
         const openLocalPlacementId = w.next()
         w.add(openLocalPlacementId, 'IFCLOCALPLACEMENT', `#${storeyLocalPlacementId},#${openAxis3dId}`)
 
-        // Opening void: width along wall (local X), height up (local Z), depth through wall (local Y)
-        // Profile in local XY: width × depth (wall thickness + tolerance)
-        const openPtId = w.next()
-        w.add(openPtId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(-(edge.thickness / 2 + 0.05))})`)
-        const openProfilePlacementId = w.next()
-        w.add(openProfilePlacementId, 'IFCAXIS2PLACEMENT2D', `#${openPtId},$`)
-        const openProfileId = w.next()
-        w.add(openProfileId, 'IFCRECTANGLEPROFILEDEF',
-          `.AREA.,$,#${openProfilePlacementId},${fmt(opening.width)},${fmt(edge.thickness + 0.1)}`)
+        // Void solid: centered at entity origin, full wall thickness + tolerance
+        const voidDepth = edge.thickness + 0.1
+        const profileOriginId = w.next()
+        w.add(profileOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)})`)
+        const profilePlacementId = w.next()
+        w.add(profilePlacementId, 'IFCAXIS2PLACEMENT2D', `#${profileOriginId},$`)
+        const voidProfileId = w.next()
+        w.add(voidProfileId, 'IFCRECTANGLEPROFILEDEF',
+          `.AREA.,$,#${profilePlacementId},${fmt(opening.width)},${fmt(voidDepth)}`)
+
+        // Solid placement: identity in entity local space (fixes double-placement)
+        const solidOriginId = w.next()
+        w.add(solidOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+        const solidPlacementId = w.next()
+        w.add(solidPlacementId, 'IFCAXIS2PLACEMENT3D', `#${solidOriginId},$,$`)
+
         const openExtDirId = w.next()
         w.add(openExtDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
         const openSolidId = w.next()
         w.add(openSolidId, 'IFCEXTRUDEDAREASOLID',
-          `#${openProfileId},#${openAxis3dId},#${openExtDirId},${fmt(opening.height)}`)
+          `#${voidProfileId},#${solidPlacementId},#${openExtDirId},${fmt(opening.height)}`)
 
         const openShapeRepId = w.next()
         w.add(openShapeRepId, 'IFCSHAPEREPRESENTATION',
