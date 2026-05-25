@@ -401,9 +401,9 @@ export function generateIFC(model: BuildingModelV2): string {
     const halfSpan = buildingWidth / 2
     const extrudeLen = buildingLength + 2 * overhang
     const pitchRad = (pitch * Math.PI) / 180
-    const ridgeH = wallH + halfSpan * Math.tan(pitchRad)
-    const eaveH = wallH - overhang * Math.tan(pitchRad)
     const roofThickness = 0.15
+    const eaveH = wallH + roofThickness
+    const ridgeH = eaveH + (halfSpan + overhang) * Math.tan(pitchRad)
 
     // Profile placement: origin at (-overhang, minY, 0), axis=east(X), refDir=north(Y)
     const roofOriginId = w.next()
