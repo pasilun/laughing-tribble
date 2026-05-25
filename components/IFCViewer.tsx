@@ -28,12 +28,15 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
 
     window.addEventListener('message', onMessage)
 
-    // Also try sending on load in case ready fired before listener attached
-    iframe.addEventListener('load', sendData)
+    // iframe may already be loaded — send immediately and retry
+    sendData()
+    const t1 = setTimeout(sendData, 300)
+    const t2 = setTimeout(sendData, 1000)
 
     return () => {
       window.removeEventListener('message', onMessage)
-      iframe.removeEventListener('load', sendData)
+      clearTimeout(t1)
+      clearTimeout(t2)
     }
   }, [ifcData])
 

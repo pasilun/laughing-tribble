@@ -185,12 +185,16 @@
       setTimeout(() => status.remove(), 3000);
     }
 
-    // Listen for IFC bytes from parent page
+    // Listen for IFC bytes from parent page — ignore duplicates once loaded
+    let loaded = false;
     window.addEventListener('message', (e) => {
+      if (loaded) return;
       if (e.data?.type === 'load-ifc' && e.data.bytes instanceof Uint8Array) {
+        loaded = true;
         loadIFC(e.data.bytes).catch(err => {
           console.error('IFC load failed:', err);
           status.textContent = '✗ Fel: ' + err.message;
+          loaded = false;
         });
       }
     });
