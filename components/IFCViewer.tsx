@@ -90,7 +90,7 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
 
       const wasmPath = window.location.origin + '/'
       console.log('[IFC] SetWasmPath:', wasmPath)
-      ifcApi.SetWasmPath(wasmPath)
+      ifcApi.SetWasmPath(wasmPath, true)
       try {
         await ifcApi.Init()
         console.log('[IFC] Init() succeeded')
@@ -162,9 +162,8 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
           )
           mesh.matrixAutoUpdate = false
           meshGroup.add(mesh)
-          geom.delete()
+          if (typeof geom.delete === 'function') geom.delete()
         }
-        flatMesh.delete()
       }
 
       ifcApi.CloseModel(modelID)
