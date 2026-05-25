@@ -3,6 +3,16 @@ import { buildingFromParams } from '@/lib/building-factory'
 
 export const runtime = 'nodejs'
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Mcp-Session-Id',
+}
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS })
+}
+
 const TOOL_DEF = {
   name: 'generate_building_link',
   description:
@@ -75,12 +85,13 @@ const TOOL_DEF = {
   },
 }
 
+function mcpResp(body: unknown, status = 200) {
+  return Response.json(body, { status, headers: CORS })
+}
+
 export async function GET() {
-  return Response.json({
-    name: 'ifc-building-generator',
-    version: '1.0.0',
-    transport: 'streamable-http',
-  })
+  return mcpResp({ name: 'ifc-building-generator', version: '1.0.0', transport: 'streamable-http' })
+
 }
 
 export async function POST(request: Request) {
@@ -88,20 +99,17 @@ export async function POST(request: Request) {
   try {
     body = await request.json()
   } catch {
-    return Response.json(
-      { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } },
-      { status: 400 }
-    )
+    return mcpResp({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400)
   }
 
   const { id = null, method, params = {} } = body
 
   if (method === 'notifications/initialized') {
-    return new Response(null, { status: 204 })
+    return new Response(null, { status: 204, headers: CORS })
   }
 
   if (method === 'initialize') {
-    return Response.json({
+    return mcpResp({
       jsonrpc: '2.0',
       id,
       result: {
@@ -113,11 +121,7 @@ export async function POST(request: Request) {
   }
 
   if (method === 'tools/list') {
-    return Response.json({
-      jsonrpc: '2.0',
-      id,
-      result: { tools: [TOOL_DEF] },
-    })
+    return mcpResp({ jsonrpc: '2.0', id, result: { tools: [TOOL_DEF] } })
   }
 
   if (method === 'tools/call') {
@@ -127,11 +131,7 @@ export async function POST(request: Request) {
     }
 
     if (name !== 'generate_building_link') {
-      return Response.json({
-        jsonrpc: '2.0',
-        id,
-        error: { code: -32602, message: 'Unknown tool' },
-      })
+      return mcpResp({ jsonrpc: '2.0', id, error: { code: -32602, message: 'Unknown tool' } })
     }
 
     try {
@@ -149,26 +149,15 @@ export async function POST(request: Request) {
         : 'http://localhost:3000'
       const url = `${host}/view#${encoded}`
 
-      return Response.json({
-        jsonrpc: '2.0',
-        id,
-        result: { content: [{ type: 'text', text: url }] },
-      })
+      return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: url }] } })
     } catch (err) {
-      return Response.json({
+      return mcpResp({
         jsonrpc: '2.0',
         id,
-        error: {
-          code: -32603,
-          message: err instanceof Error ? err.message : 'Internal error',
-        },
+        error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' },
       })
     }
   }
 
-  return Response.json({
-    jsonrpc: '2.0',
-    id,
-    error: { code: -32601, message: 'Method not found' },
-  })
+  return mcpResp({ jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } })
 }
