@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test'
 
 const currentYear = String(new Date().getFullYear())
 
-for (const path of ['/', '/design']) {
+for (const path of ['/']) {
   test(`footer is present on ${path}`, async ({ page }) => {
     await page.goto(path)
     const footer = page.getByRole('contentinfo')

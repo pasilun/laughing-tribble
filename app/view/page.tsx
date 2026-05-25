@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useCallback } from 'react'
-import Link from 'next/link'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
+import { BuildingModelV2, Opening, Vector2 } from '@/types/building-v2'
+import { generateIFC } from '@/lib/ifc-generator'
 
 const IFCViewer = dynamic(() => import('@/components/IFCViewer'), {
   ssr: false,
@@ -12,9 +13,6 @@ const IFCViewer = dynamic(() => import('@/components/IFCViewer'), {
     </div>
   ),
 })
-import { friggebodFixture } from '@/lib/friggebod-fixture'
-import { generateIFC } from '@/lib/ifc-generator'
-import { BuildingModelV2, Opening, Vector2 } from '@/types/building-v2'
 
 // ── Geometry helpers ────────────────────────────────────────────────────────
 
@@ -145,7 +143,6 @@ function FloorPlanV2({ model }: FloorPlanProps) {
         if (!wall) return null
 
         const angle = wallAngle(wall)
-        const mid = pointAlongWall(wall, opening.offsetFromStart + opening.width / 2)
         const startPt = pointAlongWall(wall, opening.offsetFromStart)
         const endPt = pointAlongWall(wall, opening.offsetFromStart + opening.width)
 
@@ -348,40 +345,78 @@ function StatsPanel({ model }: { model: BuildingModelV2 }) {
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 
-export default function ViewerPage() {
-  const model: BuildingModelV2 = friggebodFixture
+export default function ViewPage() {
+  const [model, setModel] = useState<BuildingModelV2 | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const ifcContent = useMemo(() => generateIFC(model), [model])
+  useEffect(() => {
+    async function decode() {
+      const hash = window.location.hash.slice(1)
+      if (!hash) {
+        setError('Ingen byggnadsmodell i URL')
+        return
+      }
 
+      // base64url → Uint8Array
+      const b64 = hash.replace(/-/g, '+').replace(/_/g, '/')
+      const binary = atob(b64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+
+      // DecompressionStream (browser native, no pako needed)
+      const ds = new DecompressionStream('deflate-raw')
+      const writer = ds.writable.getWriter()
+      writer.write(bytes)
+      writer.close()
+
+      const buf = await new Response(ds.readable).arrayBuffer()
+      const text = new TextDecoder().decode(buf)
+      setModel(JSON.parse(text) as BuildingModelV2)
+    }
+    decode().catch((e) => setError(String(e)))
+  }, [])
+
+  const ifcContent = useMemo(() => (model ? generateIFC(model) : ''), [model])
   const ifcBytes = useMemo(() => new TextEncoder().encode(ifcContent), [ifcContent])
 
   const handleDownload = useCallback(() => {
+    if (!model) return
     const blob = new Blob([ifcContent], { type: 'application/x-step' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'friggebod.ifc'
+    a.download = `${model.name ?? 'byggnad'}.ifc`
     a.click()
     URL.revokeObjectURL(url)
-  }, [ifcContent])
+  }, [ifcContent, model])
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 font-sans flex items-center justify-center">
+        <div className="text-center px-6">
+          <p className="text-red-600 dark:text-red-400 text-sm font-medium mb-2">Fel vid laddning</p>
+          <p className="text-zinc-500 dark:text-zinc-400 text-sm">{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!model) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 font-sans flex items-center justify-center">
+        <p className="text-zinc-500 dark:text-zinc-400 text-sm">Laddar byggnadsmodell…</p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 font-sans">
       {/* Header */}
       <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
-          <Link
-            href="/"
-            className="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-          >
-            ← Tillbaka
-          </Link>
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            IFC Viewer (spike) — {model.name}
+            {model.name}
           </h1>
-          <span className="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 rounded font-medium">
-            Spike
-          </span>
         </div>
       </header>
 
@@ -433,21 +468,11 @@ export default function ViewerPage() {
               Ladda ned .ifc
             </button>
             <div className="text-xs text-zinc-500 dark:text-zinc-400 self-center">
-              {(ifcContent.length / 1024).toFixed(1)} KB · IFC4 STEP · {model.walls.reduce((s, l) => s + l.edges.length, 0)} väggar ·{' '}
+              {(ifcContent.length / 1024).toFixed(1)} KB · IFC4 STEP ·{' '}
+              {model.walls.reduce((s, l) => s + l.edges.length, 0)} väggar ·{' '}
               {model.openings.length} öppningar
             </div>
           </div>
-
-          {/* Preview of IFC content */}
-          <details className="mt-4">
-            <summary className="text-xs text-zinc-500 dark:text-zinc-400 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-200 select-none">
-              Visa IFC-innehåll (förhandsvisning)
-            </summary>
-            <pre className="mt-2 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 rounded p-3 overflow-auto max-h-64 font-mono leading-relaxed">
-              {ifcContent.slice(0, 2000)}
-              {ifcContent.length > 2000 ? '\n…[trunkerad]' : ''}
-            </pre>
-          </details>
         </section>
       </main>
     </div>

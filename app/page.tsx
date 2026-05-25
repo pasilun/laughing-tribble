@@ -1,5 +1,3 @@
-import Link from 'next/link'
-
 export default function Home() {
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-white font-sans dark:bg-black">
@@ -12,18 +10,9 @@ export default function Home() {
             Skapa ansökan för friggebod, attefallshus och andra små byggnader enkelt och snabbt
           </p>
           <div className="pt-4 flex flex-col sm:flex-row gap-3 items-center justify-center">
-            <Link
-              href="/design"
-              className="inline-flex items-center justify-center px-8 py-4 bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900 rounded-lg font-normal hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
-            >
-              Kom igång
-            </Link>
-            <Link
-              href="/viewer"
-              className="inline-flex items-center justify-center px-8 py-4 bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-600 rounded-lg font-normal hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
-            >
-              IFC Viewer (spike)
-            </Link>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Anslut Claude via MCP på <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">/api/mcp</code> och be om en 3D-modell
+            </p>
           </div>
         </div>
       </main>

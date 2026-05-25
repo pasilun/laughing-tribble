@@ -10,16 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
     "test:golden-cases": "playwright test --grep @golden-case",
-    "postinstall": "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});['web-ifc.wasm','web-ifc-mt.wasm'].forEach(f=>fs.copyFileSync('node_modules/web-ifc/'+f,'public/'+f));fs.copyFileSync('node_modules/@thatopen/fragments/dist/Worker/worker.mjs','public/fragments-worker.mjs')\""
+    "postinstall": "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});['web-ifc.wasm','web-ifc-mt.wasm'].forEach(f=>fs.copyFileSync('node_modules/web-ifc/'+f,'public/'+f))\""
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.77",
-    "@ai-sdk/react": "^3.0.184",
-    "@thatopen/components": "^3.4.6",
-    "@thatopen/fragments": "^3.4.0",
-    "ai": "^6.0.182",
-    "camera-controls": "^3.1.2",
-    "jspdf": "^4.2.1",
     "next": "16.2.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
