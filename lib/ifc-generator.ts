@@ -256,10 +256,10 @@ export function generateIFC(model: BuildingModelV2): string {
       `#${storeyLocalPlacementId},#${wallAxis2p3dId}`
     )
 
-    // Profile: rectangle in local XZ plane (X=along wall length, Z=height)
-    // IFCRECTANGLEPROFILEDEF positioned at center of cross-section
+    // Profile: wall footprint rectangle in local XY plane (X=along wall, Y=perpendicular)
+    // Centered along the wall at (len/2, 0)
     const profilePtId = w.next()
-    w.add(profilePtId, 'IFCCARTESIANPOINT', `(${fmt(wall.thickness / 2)},${fmt(0.)})`)
+    w.add(profilePtId, 'IFCCARTESIANPOINT', `(${fmt(len / 2)},${fmt(0.)})`)
 
     const profilePlacementId = w.next()
     w.add(profilePlacementId, 'IFCAXIS2PLACEMENT2D', `#${profilePtId},$`)
@@ -268,18 +268,18 @@ export function generateIFC(model: BuildingModelV2): string {
     w.add(
       profileId,
       'IFCRECTANGLEPROFILEDEF',
-      `.AREA.,$,#${profilePlacementId},${fmt(wall.thickness)},${fmt(wall.height)}`
+      `.AREA.,$,#${profilePlacementId},${fmt(len)},${fmt(wall.thickness)}`
     )
 
-    // Extrude along wall local X axis (length direction)
+    // Extrude upward along local Z axis
     const extrudeDirId = w.next()
-    w.add(extrudeDirId, 'IFCDIRECTION', `(${fmt(1.)},${fmt(0.)},${fmt(0.)})`)
+    w.add(extrudeDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
 
     const solidId = w.next()
     w.add(
       solidId,
       'IFCEXTRUDEDAREASOLID',
-      `#${profileId},#${wallAxis2p3dId},#${extrudeDirId},${fmt(len)}`
+      `#${profileId},#${wallAxis2p3dId},#${extrudeDirId},${fmt(wall.height)}`
     )
 
     // Shape representation
