@@ -1,5 +1,7 @@
 import { deflateRawSync } from 'zlib'
 import { buildingFromParams } from '@/lib/building-factory'
+import { assessPermitRequirement } from '@/lib/triage-engine'
+import type { TriageInput } from '@/lib/triage-engine'
 
 export const runtime = 'nodejs'
 
@@ -85,6 +87,39 @@ const TOOL_DEF = {
   },
 }
 
+const TRIAGE_TOOL_DEF = {
+  name: 'assess_permit_requirement',
+  description:
+    'Assess whether a Swedish building project requires bygglov, anmälan, or is permit-free (lovfri). Returns a bucket verdict and the finding IDs that drove it. Regulatory version: PBL post-2025-12-01.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      flow_type: {
+        type: 'string',
+        enum: ['komplementbyggnad', 'komplementbostadshus', 'tillbyggnad', 'eldstad', 'plank', 'mur', 'other'],
+        description: 'Type of building project',
+      },
+      inom_detaljplan: { type: 'boolean', description: 'Is the property within a detaljplan area?' },
+      planned_area_m2: { type: 'number', description: 'Planned building footprint area in m² (BYA)' },
+      planned_nockhoejd_m: { type: 'number', description: 'Planned ridge height in metres' },
+      existing_lovfri_area_m2: { type: 'number', description: 'Sum of existing lovfri komplement building areas on the property (BYA), default 0' },
+      planned_distance_to_grans_m: { type: 'number', description: 'Smallest distance to any property boundary in metres' },
+      planned_distance_to_allman_plats_m: { type: 'number', description: 'Distance to nearest allmän plats (public space) in metres, omit if none nearby' },
+      installations: {
+        type: 'array',
+        items: { type: 'string', enum: ['vatten', 'avlopp', 'eldstad', 'rökkanal', 'ventilation', 'ändrad_bärande_konstruktion'] },
+        description: 'Planned installations that may trigger anmälan',
+      },
+      strandskyddsomrade: { type: 'boolean', description: 'Is the property within 300m of water (strandskyddsområde)?' },
+      k_marking: { type: 'boolean', description: 'Is the building or area culturally protected (k-märkt)?' },
+      huvudbyggnad_type: { type: 'string', description: 'Type of main building on the property, must be "en-/tvåbostadshus" for komplement/tillbyggnad to be allowed' },
+      detaljplan_violated: { type: 'boolean', description: 'Does the planned building violate any detaljplan bestämmelse?' },
+      utokad_lovplikt: { type: 'boolean', description: 'Does the detaljplan explicitly require bygglov for this type of building?' },
+    },
+    required: ['flow_type', 'inom_detaljplan', 'planned_area_m2', 'planned_nockhoejd_m', 'planned_distance_to_grans_m'],
+  },
+}
+
 function mcpResp(body: unknown, status = 200, extra: Record<string, string> = {}) {
   return Response.json(body, { status, headers: { ...CORS, ...extra } })
 }
@@ -122,13 +157,23 @@ export async function POST(request: Request) {
   }
 
   if (method === 'tools/list') {
-    return mcpResp({ jsonrpc: '2.0', id, result: { tools: [TOOL_DEF] } })
+    return mcpResp({ jsonrpc: '2.0', id, result: { tools: [TOOL_DEF, TRIAGE_TOOL_DEF] } })
   }
 
   if (method === 'tools/call') {
     const { name, arguments: args = {} } = params as {
       name?: string
       arguments?: Record<string, unknown>
+    }
+
+    if (name === 'assess_permit_requirement') {
+      try {
+        const result = assessPermitRequirement(args as unknown as TriageInput)
+        const text = JSON.stringify(result, null, 2)
+        return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }] } })
+      } catch (err) {
+        return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' } })
+      }
     }
 
     if (name !== 'generate_building_link') {
