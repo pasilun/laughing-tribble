@@ -13,6 +13,7 @@
     "postinstall": "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});['web-ifc.wasm','web-ifc-mt.wasm'].forEach(f=>fs.copyFileSync('node_modules/web-ifc/'+f,'public/'+f))\""
   },
   "dependencies": {
+    "@vercel/blob": "^2.4.0",
     "next": "16.2.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",

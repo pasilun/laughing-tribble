@@ -377,6 +377,15 @@ export default function ViewPage() {
         return
       }
 
+      const id = params.get('id')
+      if (id) {
+        const res = await fetch(`/api/model/${id}`)
+        if (!res.ok) throw new Error(`Model not found: ${id}`)
+        const model = await res.json() as BuildingModelV2
+        setModel(model)
+        return
+      }
+
       // Strip any trailing chars that aren't valid base64url (e.g. punctuation added by renderers)
       const hash = window.location.hash.slice(1).replace(/[^A-Za-z0-9\-_]+$/, '')
       if (!hash) {

@@ -1,4 +1,5 @@
 import { deflateRawSync } from 'zlib'
+import { put } from '@vercel/blob'
 import { buildingFromParams } from '@/lib/building-factory'
 import { assessPermitRequirement } from '@/lib/triage-engine'
 import type { TriageInput } from '@/lib/triage-engine'
@@ -183,12 +184,6 @@ export async function POST(request: Request) {
     try {
       const model = buildingFromParams(args as unknown as Parameters<typeof buildingFromParams>[0])
       const json = JSON.stringify(model)
-      const compressed = deflateRawSync(Buffer.from(json, 'utf-8'))
-      const encoded = compressed
-        .toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '')
 
       // VERCEL_PROJECT_PRODUCTION_URL is the stable alias; VERCEL_URL is deployment-specific
       const host = process.env.VERCEL_PROJECT_PRODUCTION_URL
@@ -196,14 +191,36 @@ export async function POST(request: Request) {
         : process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : 'http://localhost:3000'
-      const url = `${host}/view#${encoded}`
-      const params = JSON.stringify(args, null, 2)
+
+      let url: string
+      const blobToken = process.env.BLOB_READ_WRITE_TOKEN
+      if (blobToken) {
+        // Store model in Vercel Blob and return a clean /view?id=<id> URL
+        const id = model.id
+        await put(`buildings/${id}.json`, json, {
+          access: 'public',
+          contentType: 'application/json',
+          addRandomSuffix: false,
+        })
+        url = `${host}/view?id=${id}`
+      } else {
+        // Fallback: encode model as deflate-raw+base64url hash in URL (local dev)
+        const compressed = deflateRawSync(Buffer.from(json, 'utf-8'))
+        const encoded = compressed
+          .toString('base64')
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=/g, '')
+        url = `${host}/view#${encoded}`
+      }
+
+      const argsJson = JSON.stringify(args, null, 2)
       const text = `${url}
 
 ⚠️ VIKTIGT: Återanvänd eller modifiera aldrig denna URL. Kalla alltid generate_building_link igen med uppdaterade parametrar om du behöver göra ändringar.
 
 Parametrar som användes:
-${params}`
+${argsJson}`
 
       return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }] } })
     } catch (err) {
