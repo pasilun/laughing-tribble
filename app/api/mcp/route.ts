@@ -197,8 +197,15 @@ export async function POST(request: Request) {
         ? `https://${process.env.VERCEL_URL}`
         : 'http://localhost:3000'
       const url = `${host}/view#${encoded}`
+      const params = JSON.stringify(args, null, 2)
+      const text = `${url}
 
-      return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: url }] } })
+⚠️ VIKTIGT: Återanvänd eller modifiera aldrig denna URL. Kalla alltid generate_building_link igen med uppdaterade parametrar om du behöver göra ändringar.
+
+Parametrar som användes:
+${params}`
+
+      return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }] } })
     } catch (err) {
       return mcpResp({
         jsonrpc: '2.0',
