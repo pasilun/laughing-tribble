@@ -29,10 +29,61 @@ export interface BuildingParams {
   }>
 }
 
+function validateOpenings(params: BuildingParams, length: number, width: number) {
+  const wallLength: Record<string, number> = { south: length, north: length, east: width, west: width }
+  const { openings = [], partitions = [], wallThickness = 0.12 } = params
+  const minClearance = 0.1  // metres minimum gap between opening edge and partition
+
+  for (const op of openings) {
+    const wl = wallLength[op.wall]
+    const opStart = op.offsetFromStart ?? (wl - (op.width ?? 1)) / 2
+    const opWidth = op.width ?? (op.type === 'door' ? 0.9 : 1.2)
+    const opEnd = opStart + opWidth
+
+    // Check opening doesn't go off the wall
+    if (opStart < wallThickness || opEnd > wl - wallThickness) {
+      throw new Error(
+        `Öppning på ${op.wall}-väggen (${op.type}) går utanför väggen. ` +
+        `Offset ${opStart.toFixed(2)}–${opEnd.toFixed(2)}m, vägg är ${wl}m lång (netto ${(wl - wallThickness * 2).toFixed(2)}m).`
+      )
+    }
+
+    // Check opening doesn't overlap a partition wall junction
+    for (const part of partitions) {
+      let junctionPos: number | null = null
+
+      if (op.wall === 'south' || op.wall === 'north') {
+        // NS partition meets south/north wall at x = part.offset
+        if (part.direction === 'ns') junctionPos = part.offset
+      } else {
+        // EW partition meets east/west wall at y = part.offset
+        if (part.direction === 'ew') junctionPos = part.offset
+      }
+
+      if (junctionPos !== null) {
+        const partThickness = part.thickness ?? 0.1
+        const partStart = junctionPos - partThickness / 2
+        const partEnd = junctionPos + partThickness / 2
+        // Opening must be at least minClearance away from partition wall zone
+        const overlap = opStart < partEnd + minClearance && opEnd > partStart - minClearance
+        if (overlap) {
+          throw new Error(
+            `Öppning på ${op.wall}-väggen (${op.type}) kolliderar med en innervägg vid position ${junctionPos}m. ` +
+            `Flytta öppningen minst ${minClearance * 100}cm från innerväggen.`
+          )
+        }
+      }
+    }
+  }
+}
+
 export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
   const wallHeight = p.wallHeight ?? 2.4
   const wallThickness = p.wallThickness ?? 0.12
   const slabThickness = p.slabThickness ?? 0.2
+
+  // Validate openings before building the model
+  validateOpenings(p, p.length, p.width)
 
   // CCW rectangle: SW → SE → NE → NW
   const wallLoop: WallLoop = {

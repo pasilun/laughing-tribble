@@ -12,6 +12,7 @@ interface IFCViewerProps {
 export default function IFCViewer({ ifcData }: IFCViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const statusRef = useRef<HTMLDivElement>(null)
+  const compassRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!containerRef.current || ifcData.length === 0) return
@@ -45,6 +46,24 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
 
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
+
+    // Compass update: rotate SVG so N always points toward building North on screen.
+    // In Three.js after web-ifc transform, building North (IFC Y) maps to -Z axis.
+    // Azimuth = angle of camera around Y axis from -Z (North).
+    // If the compass points the wrong direction after testing, negate azimuth below.
+    const updateCompass = () => {
+      if (!compassRef.current) return
+      const dx = camera.position.x - controls.target.x
+      const dz = camera.position.z - controls.target.z
+      const azimuth = Math.atan2(dx, -dz)  // 0 = camera south of building (looking north)
+      const compassEl = compassRef.current.querySelector('svg')
+      if (compassEl) {
+        ;(compassEl as unknown as HTMLElement).style.transform = `rotate(${azimuth}rad)`
+        ;(compassEl as unknown as HTMLElement).style.transformOrigin = 'center'
+      }
+    }
+    controls.addEventListener('change', updateCompass)
+    updateCompass() // initial
 
     let animId: number
     function animate() {
@@ -183,6 +202,7 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
         camera.lookAt(center)
         controls.target.copy(center)
         controls.update()
+        updateCompass()
       }
 
       setStatus('✓ Modell laddad')
@@ -200,6 +220,7 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
     return () => {
       cancelAnimationFrame(animId)
       window.removeEventListener('resize', onResize)
+      controls.removeEventListener('change', updateCompass)
       controls.dispose()
       renderer.dispose()
       if (container.contains(renderer.domElement)) {
@@ -216,6 +237,29 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
         className="absolute top-3 left-3 text-xs text-zinc-300 bg-black/50 px-2 py-1 rounded pointer-events-none"
       >
         Laddar…
+      </div>
+      {/* Compass overlay — top-right corner of the 3D viewport */}
+      <div
+        ref={compassRef}
+        style={{
+          position: 'absolute', top: 12, right: 12,
+          width: 56, height: 56,
+          pointerEvents: 'none',
+        }}
+      >
+        {/* SVG compass — N at top by default, rotates with camera azimuth */}
+        <svg viewBox="0 0 56 56" style={{ width: '100%', height: '100%' }}>
+          <circle cx="28" cy="28" r="26" fill="rgba(0,0,0,0.55)" stroke="rgba(255,255,255,0.2)" strokeWidth="1"/>
+          {/* N marker (red, top) */}
+          <polygon points="28,6 24,24 28,20 32,24" fill="#e05555"/>
+          {/* S marker (white, bottom) */}
+          <polygon points="28,50 24,32 28,36 32,32" fill="rgba(255,255,255,0.7)"/>
+          {/* Axis labels */}
+          <text x="28" y="5" textAnchor="middle" fill="white" fontSize="8" fontWeight="bold" fontFamily="sans-serif">N</text>
+          <text x="28" y="55" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="7" fontFamily="sans-serif">S</text>
+          <text x="54" y="31" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="7" fontFamily="sans-serif">E</text>
+          <text x="2" y="31" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="7" fontFamily="sans-serif">W</text>
+        </svg>
       </div>
     </div>
   )
