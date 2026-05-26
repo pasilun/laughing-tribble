@@ -34,6 +34,10 @@ A catalog of all wiki entries for the bygglov assistant project.
 - [[boverket-apis]] - Integration with Boverket open APIs: Planbestämmelsekatalogen, Ändamålskatalogen, ÖP-katalogen, Författnings-API
 - [[lantmateriet-wms]] - Lantmäteriet WMS/API integration: Topowebb WMTS (background tiles, free API key), Fastighetsindelning Direkt (property boundary GeoJSON, OAuth2, free as EU HVD since 2025-02). Auth setup: register at opendata.lantmateriet.se → Geotorget consumer → apimanager.lantmateriet.se for client credentials.
 
+## IFC Pipeline
+
+- [[ifc-pipeline]] — IFC4 STEP generator + web-ifc viewer: double-placement trap, void geometry, wall topology, roof-wall junction, WASM loading, SVG Y-flip, door symbol, screenshot verification discipline ✓
+
 ## Dev Loop Infrastructure
 
 - [[dev-loop-workflows]] - GitHub Actions: spec → dev → verify → auto-merge → deploy. Independent interactive Playwright verifier against a Vercel preview. ✓
@@ -91,4 +95,6 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 ---
 
-**Last updated:** 2026-05-18 — loop hardened (3-attempt cap + glm-5.1 escalation gate, actionlint, pinned tooling, lossless verifier feedback, contract-vs-preview regression); spec corpus re-baselined into a living specification; loop decoupled from product ([[product-context]]); first chat capability ([[deterministic-chat-seam]]) shipped fully autonomously; [[design-screen]] genuinely re-verified. See [[log]] 2026-05-18.
+**Last updated:** 2026-05-25 — [[ifc-pipeline]] added: 9 lessons from the IFC STEP generator + web-ifc viewer spike (double-placement trap, void geometry, wall topology, roof soffit, WASM loading, SVG Y-inversion, door symbol, screenshot-first discipline). See [[log]] 2026-05-25.
+
+**Previously:** 2026-05-18 — loop hardened (3-attempt cap + glm-5.1 escalation gate, actionlint, pinned tooling, lossless verifier feedback, contract-vs-preview regression); spec corpus re-baselined into a living specification; loop decoupled from product ([[product-context]]); first chat capability ([[deterministic-chat-seam]]) shipped fully autonomously; [[design-screen]] genuinely re-verified. See [[log]] 2026-05-18.

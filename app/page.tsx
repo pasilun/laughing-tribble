@@ -1,5 +1,3 @@
-import Link from 'next/link'
-
 export default function Home() {
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-white font-sans dark:bg-black">
@@ -11,13 +9,10 @@ export default function Home() {
           <p className="text-lg sm:text-xl font-normal text-zinc-600 dark:text-zinc-400 leading-relaxed">
             Skapa ansökan för friggebod, attefallshus och andra små byggnader enkelt och snabbt
           </p>
-          <div className="pt-4">
-            <Link
-              href="/design"
-              className="inline-flex items-center justify-center px-8 py-4 bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900 rounded-lg font-normal hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
-            >
-              Kom igång
-            </Link>
+          <div className="pt-4 flex flex-col sm:flex-row gap-3 items-center justify-center">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Anslut Claude via MCP på <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1 rounded">/api/mcp</code> och be om en 3D-modell
+            </p>
           </div>
         </div>
       </main>

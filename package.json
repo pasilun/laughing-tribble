@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
-    "test:golden-cases": "playwright test --grep @golden-case"
+    "test:golden-cases": "playwright test --grep @golden-case",
+    "postinstall": "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});['web-ifc.wasm','web-ifc-mt.wasm'].forEach(f=>fs.copyFileSync('node_modules/web-ifc/'+f,'public/'+f))\""
   },
   "dependencies": {
     "next": "16.2.5",
@@ -24,10 +25,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.184.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.5",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "@types/three": "^0.184.1"
+    "typescript": "^5"
   }
 }

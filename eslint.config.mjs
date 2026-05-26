@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Generated output — not application code
     "playwright-report/**",
     "test-results/**",
+    // Bundled third-party worker files copied from node_modules
+    "public/fragments-worker.mjs",
   ]),
 ]);
 

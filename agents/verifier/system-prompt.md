@@ -133,7 +133,8 @@ Rules:
 - Use `baseURL` (Playwright config sets it from `BASE_URL` env var — do NOT hardcode the preview URL)
 - Prefer `getByTestId()`, `getByRole()`, `getByText()` over raw CSS selectors
 - Include the same negative assertions you tested interactively
-- Tests must be self-contained and runnable in any order
+- **Use `beforeEach` for shared setup** (common navigation, page reset) — tests do NOT need to be fully self-contained if they share a common starting state
+- **Keep the file concise**: aim for ≤ 12 lines per `test()` block; the entire file (excluding imports and `beforeEach`) must not exceed 160 lines. Assert the key observable outcome of each scenario — skip redundant intermediate checks that are already covered by a prior scenario.
 
 ## Success Condition
 

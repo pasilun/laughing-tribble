@@ -2,6 +2,19 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
+## [2026-05-25] ifc-pipeline | IFC STEP generator + web-ifc viewer — lessons learned ✅
+
+**Summary:** Distilled 9 hard-won rules from the IFC pipeline spike into [[ifc-pipeline]].
+Covers the double-placement trap (same IFCAXIS2PLACEMENT3D reused for entity placement
+AND solid position — offset applied twice), void geometry correctness (profile must span
+full wall thickness, entity origin at opening midpoint), wall polygon ring topology with
+miter corners, roof-wall soffit junction (eaveH = wallH + roofThickness prevents wall
+penetration), WASM absolute-path flag for web-ifc, SVG Y-axis inversion in 2D floor plan,
+correct door swing symbol (hinge at startPt not mid), and screenshot-first verification
+discipline (IFC geometry failures are silent — typecheck proves nothing).
+
+---
+
 ## [2026-05-18] overhaul | Dev loop hardened, spec corpus re-baselined, first chat feature shipped autonomously ✅
 
 **Summary:** Large session reworking the loop into a self-defending system, turning `specs/` into a living specification, decoupling the machinery from the product, and shipping the first chat capability end-to-end with no human intervention.

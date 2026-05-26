@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1c1c2e; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #status {
+      position: absolute; top: 12px; left: 12px;
+      color: #aaa; font: 13px/1.4 system-ui;
+      background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Väntar på IFC-data…</div>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.150.1/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.150.1/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const status = document.getElementById('status');
+
+    // ── Three.js setup ───────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1c1c2e);
+
+    const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 1000);
+    camera.position.set(10, 8, 10);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(devicePixelRatio);
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    sun.position.set(10, 20, 10);
+    scene.add(sun);
+
+    // Grid
+    scene.add(new THREE.GridHelper(30, 30, 0x333355, 0x222244));
+
+    // Orbit controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    // Animation loop
+    (function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    })();
+
+    // ── IFC loading ──────────────────────────────────────────────────
+    async function loadIFC(bytes) {
+      status.textContent = 'Laddar web-ifc…';
+
+      // Dynamically import web-ifc from unpkg (ES module)
+      const WebIFC = await import('https://unpkg.com/web-ifc@0.0.77/web-ifc-api.js');
+      const ifcApi = new WebIFC.IfcAPI();
+
+      // Use local WASM served from public/
+      ifcApi.SetWasmPath(window.location.origin + '/');
+
+      await ifcApi.Init();
+      status.textContent = 'Analyserar IFC…';
+
+      const modelID = ifcApi.OpenModel(bytes, { COORDINATE_TO_ORIGIN: true });
+
+      // Extract all geometry
+      const geometries = ifcApi.LoadAllGeometry(modelID);
+      const meshGroup = new THREE.Group();
+
+      const matCache = new Map();
+      function getMat(r, g, b, a) {
+        const key = `${r.toFixed(3)},${g.toFixed(3)},${b.toFixed(3)},${a.toFixed(3)}`;
+        if (!matCache.has(key)) {
+          const mat = new THREE.MeshLambertMaterial({
+            color: new THREE.Color(r, g, b),
+            transparent: a < 1,
+            opacity: a,
+            side: THREE.DoubleSide,
+          });
+          matCache.set(key, mat);
+        }
+        return matCache.get(key);
+      }
+
+      for (let i = 0; i < geometries.size(); i++) {
+        const flatMesh = geometries.get(i);
+        for (let j = 0; j < flatMesh.geometries.size(); j++) {
+          const placedGeom = flatMesh.geometries.get(j);
+          const geom = ifcApi.GetGeometry(modelID, placedGeom.geometryExpressID);
+
+          // web-ifc@0.0.77 API: GetVertexData()/GetVertexDataSize() return ptr/size
+          // then call GetVertexArray(ptr, size) / GetIndexArray(ptr, size)
+          const vPtr = geom.GetVertexData();
+          const vSize = geom.GetVertexDataSize();
+          const iPtr = geom.GetIndexData();
+          const iSize = geom.GetIndexDataSize();
+
+          const vData = ifcApi.GetVertexArray(vPtr, vSize);
+          const iData = ifcApi.GetIndexArray(iPtr, iSize);
+
+          // web-ifc vertex layout: x,y,z,nx,ny,nz per vertex (6 floats)
+          const positions = new Float32Array(vData.length / 2);
+          const normals = new Float32Array(vData.length / 2);
+          let pi = 0, ni = 0;
+          for (let v = 0; v < vData.length; v += 6) {
+            positions[pi++] = vData[v];
+            positions[pi++] = vData[v + 1];
+            positions[pi++] = vData[v + 2];
+            normals[ni++] = vData[v + 3];
+            normals[ni++] = vData[v + 4];
+            normals[ni++] = vData[v + 5];
+          }
+
+          const bufGeo = new THREE.BufferGeometry();
+          bufGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+          bufGeo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+          bufGeo.setIndex(new THREE.BufferAttribute(iData, 1));
+
+          const c = placedGeom.color;
+          const mat = getMat(c.x, c.y, c.z, c.w);
+
+          const mesh = new THREE.Mesh(bufGeo, mat);
+
+          // Apply placement matrix from web-ifc (column-major flat array)
+          // THREE.Matrix4.set() takes row-major arguments, so we transpose:
+          // flatTransformation is column-major: [c0r0, c0r1, c0r2, c0r3, c1r0, ...]
+          const m = placedGeom.flatTransformation;
+          mesh.matrix.set(
+            m[0],  m[4],  m[8],  m[12],
+            m[1],  m[5],  m[9],  m[13],
+            m[2],  m[6],  m[10], m[14],
+            m[3],  m[7],  m[11], m[15]
+          );
+          mesh.matrixAutoUpdate = false;
+
+          meshGroup.add(mesh);
+          geom.delete();
+        }
+        flatMesh.delete();
+      }
+
+      ifcApi.CloseModel(modelID);
+      scene.add(meshGroup);
+
+      // Fit camera to model
+      const bbox = new THREE.Box3().setFromObject(meshGroup);
+      if (!bbox.isEmpty()) {
+        const center = bbox.getCenter(new THREE.Vector3());
+        const size = bbox.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        camera.position.set(
+          center.x + maxDim * 2,
+          center.y + maxDim * 1.5,
+          center.z + maxDim * 2
+        );
+        camera.lookAt(center);
+        controls.target.copy(center);
+        controls.update();
+      }
+
+      status.textContent = '✓ Modell laddad';
+      setTimeout(() => status.remove(), 3000);
+    }
+
+    // Listen for IFC bytes from parent page — ignore duplicates once loaded
+    let loaded = false;
+    window.addEventListener('message', (e) => {
+      if (loaded) return;
+      if (e.data?.type === 'load-ifc' && e.data.bytes instanceof Uint8Array) {
+        loaded = true;
+        loadIFC(e.data.bytes).catch(err => {
+          console.error('IFC load failed:', err);
+          status.textContent = '✗ Fel: ' + err.message;
+          loaded = false;
+        });
+      }
+    });
+
+    // Signal to parent that viewer is ready
+    window.parent.postMessage({ type: 'viewer-ready' }, '*');
+  </script>
+</body>
+</html>
