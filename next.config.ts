@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@thatopen/components', '@thatopen/fragments', 'three', 'camera-controls'],
+  transpilePackages: ['three'],
   async headers() {
     return [
       {

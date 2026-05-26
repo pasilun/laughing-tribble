@@ -4,7 +4,7 @@
 `building-model-fields`
 
 ## Status
-`active`
+`obsolete`
 
 ## Regression Test
 `e2e/_verified-building-model-fields.spec.ts`

@@ -4,7 +4,7 @@
 `design-screen`
 
 ## Status
-`active`
+`obsolete`
 
 ## Regression Test
 `e2e/design-screen.spec.ts`

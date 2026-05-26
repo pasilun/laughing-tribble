@@ -4,7 +4,7 @@
 `design-page-split-panel-layout`
 
 ## Status
-`planned`
+`obsolete`
 
 ## Regression Test
 `e2e/_verified-design-page-split-panel-layout.spec.ts`

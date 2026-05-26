@@ -4,7 +4,7 @@
 `009d-triage-panel`
 
 ## Status
-`active`
+`obsolete`
 
 ## Regression Test
 `e2e/_verified-009d-triage-panel.spec.ts`
