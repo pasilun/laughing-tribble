@@ -59,7 +59,7 @@ test.describe('Landing Page', () => {
     await page.goto('/')
 
     const hasOverflow = await page.evaluate(() => {
-      const scrollWidth = document.scrollingElement.scrollWidth
+      const scrollWidth = (document.scrollingElement ?? document.documentElement).scrollWidth
       const innerWidth = window.innerWidth
       return scrollWidth > innerWidth + 1
     })
