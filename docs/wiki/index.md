@@ -38,43 +38,51 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 - [[ifc-pipeline]] — IFC4 STEP generator + web-ifc viewer: double-placement trap, void geometry, wall topology, roof-wall junction, WASM loading, SVG Y-flip, door symbol, screenshot verification discipline ✓
 
-## Dev Loop Infrastructure
+## MCP Tools
 
-- [[dev-loop-workflows]] - GitHub Actions: spec → dev → verify → auto-merge → deploy. Independent interactive Playwright verifier against a Vercel preview. ✓
+The product is a **Claude MCP tool server**. All user interaction happens in Claude conversations. The web app at `/view` is a 3D/2D model viewer only — not the product.
 
-  **Current behaviour (2026-05-18 — see [[log]] 2026-05-18 entry):**
-  - **Attempt cap** = `LOOP_MAX_ATTEMPTS` repo var (3), read by `dev.yml` + `verify.yml`. Counter = commits-ahead-of-main on the cumulative `feat/<spec>` branch (no force-push; empty commit on no-op). Every failure comments `Attempt N/MAX`.
-  - **Escalation**: after the cap, one attempt on `zai-coding-plan/glm-5.1`, gated by the `escalation` GitHub Environment (manual approval). Exhaustion opens a `🆘` issue. Cross-workflow chain uses `LOOP_PAT` (the old PAT TODO — **done**); failed dispatch opens a loud issue.
-  - **Spec status lifecycle**: `active` (binding; requires an existing regression test, enforced by `spec-guard.yml`), `planned` (not built), `superseded`/`obsolete` (tombstone/delete), `chore` (transient, auto-pruned after merge). New capabilities are `planned`; the dev cycle creates the test and flips `planned → active` in the same PR.
-  - **spec.yml** path-agnostic + resilient to a rogue self-committing agent; the spec agent must not run git/gh. **dev.yml** skips superseded tombstones when selecting the spec and creates a PR when no *open* PR exists.
-  - **Verifier feedback** is lossless + evidence-rich (network/console captured; full structured verdict in a `VERIFY-VERDICT` PR comment; dev prompt built from a file).
-  - **deploy.yml**: deterministic `_verified-*` contract suite runs vs a fresh **preview** (fake); separate environment-agnostic **production smoke**.
-  - **actionlint CI** gates all workflow changes; agent tooling pinned (`opencode-ai@1.15.3`, `@playwright/mcp@0.0.75`, `vercel@54.1.0`).
-  - **Loop is product-agnostic**: `CLAUDE.md` is the loop contract + invariants; product domain in [[product-context]] (`docs/product-context.md`). Secrets: `ZHIPU_API_KEY`, `VERCEL_TOKEN`/`VERCEL_ORG_ID`/`VERCEL_PROJECT_ID`, `LOOP_PAT`; vars: `LOOP_MAX_ATTEMPTS`, `PROD_URL`.
+**MCP endpoint:** `https://laughing-tribble-psi.vercel.app/api/mcp` (Streamable HTTP, JSON-RPC 2.0)
 
-## Agent Configuration
+Architecture:
+```
+Claude conversation
+  ├─ generate_building_link(params)       → shareable 3D/2D viewer URL  ✓ live
+  ├─ assess_permit_requirement(...)       → LOVFRI / ANMÄLAN / BYGGLOV verdict  ✓ live
+  └─ generate_permit_packet(...)          → PDFs (planned)
+```
 
-- [[spec-agent-prompt]] - System prompt for the spec agent (`agents/spec/system-prompt.md`) ✓
-- [[dev-agent-prompt]] - System prompt for the dev agent (`agents/dev/system-prompt.md`) ✓
-- [[verifier-agent-prompt]] - System prompt for the verifier agent (`agents/verifier/system-prompt.md`) ✓
-- [[tjansteman-agent-prompt]] - System prompt for the tjänsteman agent (product-embedded, protected path)
+**Live tools:**
 
-## Capability Specs (the living specification — `specs/`)
+- `generate_building_link` — takes building parameters, returns a shareable `/view` URL with the model encoded in the hash. ✓
+- `assess_permit_requirement` — triage engine (`lib/triage-engine.ts`). Input: flow_type, dimensions, distances, installations, strandskydd, k-marking, etc. Output: `{ bucket: LOVFRI|ANMALAN|BYGGLOV|null, bucket_reasons, obligations, out_of_scope }`. Implements T-001 to T-016 bucket rules + O-001/002/003/004/006 obligations. Regulatory version: PBL post-2025-12-01. ✓
 
-**Active (built + genuinely verified):**
-- [[landing-page]] — homepage: headline, single `Kom igång` CTA → `/design`. ✓
-- [[design-screen]] — `/design` streaming chat shell; Scenario 3 genuinely re-verified via the seam. ✓
-- [[footer]] — global copyright footer on every page. ✓
-- [[deterministic-chat-seam]] — `/api/design/chat` serves a deterministic mock model in preview (real model in prod), so the loop can verify chat without an LLM key. **First chat capability shipped fully autonomously.** ✓
+**Planned tools:**
 
-**Planned (roadmap, not built):**
-- [[009b-building-model-tools]] → [[building-model-extraction]] / [[building-model-panel]] / [[building-model-computed]] — chat tool-calls → structured BuildingModel (split for loop-sized delivery).
-- [[009c-floor-plan-svg]] — dimensioned SVG floor plan from the BuildingModel.
-- [[009d-triage-panel]] — live LOVFRI/ANMÄLAN/BYGGLOV verdict from the model.
-- [[009e-validation-loop]] — API validates the model vs regulatory limits, feeds constraints back.
-- [[007-situationsplan]] — footprint on a Lantmäteriet map, boundary distances, PDF (needs Lantmäteriet creds).
+- `generate_permit_packet` — assembles PDFs for the determined bucket (LOVFRI documentation, ANMALAN packet, BYGGLOV application).
 
-**Superseded/obsolete:** spec 008 (planritning, → 009 line), 009/009a, and the old delta specs (001–006, 010) — tombstoned during the re-baseline.
+## Viewer
+
+The `/view` page renders 3D and 2D floor plans for buildings described in MCP tool results. Two loading modes coexist in the same component:
+
+- **`?file=<name>` mode** — reads `public/models/<name>.json` (BuildingModelV2 JSON). Intended for design iteration where Claude edits JSON files directly; git tracks version history. Example: `/view?file=sample-house`.
+- **`#hash` mode** — decodes the model from the URL hash. Used by `generate_building_link` for shareable links. Stateless and elegant; no server round-trip.
+
+Both modes feed the same pipeline: `BuildingModelV2 → generateIFC → web-ifc → Three.js renderer`.
+
+`public/models/sample-house.json` — 10×6m sadel roof example, live at `/view?file=sample-house`.
+
+## Dev Loop Infrastructure (archived — removed 2026-05-26)
+
+The CI/CD loop (spec → dev → verify → auto-merge) and its 8 GitHub Actions workflows were removed on 2026-05-26. Only `deploy.yml` remains (for Vercel deployment). The loop architecture is documented in the [[log]] entries up to 2026-05-18 for historical reference.
+
+## Agent Configuration (archived — removed 2026-05-26)
+
+The spec/dev/verifier agent system prompts (`agents/spec/`, `agents/dev/`, `agents/verifier/`) were part of the CI/CD loop and are no longer in use. See [[log]] entries up to 2026-05-18 for historical context.
+
+## Capability Specs (archived — removed 2026-05-26)
+
+The living spec system (`specs/`) drove the CI/CD loop. With the loop removed, the active specs at time of removal were: [[landing-page]], [[footer]]. The web chat screens ([[design-screen]], [[deterministic-chat-seam]]) were superseded by the MCP product pivot. Planned specs (009b–009e, 007) were abandoned in favour of the MCP tool architecture.
 
 ## UI & UX
 
@@ -95,6 +103,6 @@ A catalog of all wiki entries for the bygglov assistant project.
 
 ---
 
-**Last updated:** 2026-05-25 — [[ifc-pipeline]] added: 9 lessons from the IFC STEP generator + web-ifc viewer spike (double-placement trap, void geometry, wall topology, roof soffit, WASM loading, SVG Y-inversion, door symbol, screenshot-first discipline). See [[log]] 2026-05-25.
+**Last updated:** 2026-05-26 — Product pivot to MCP tools: `assess_permit_requirement` triage engine shipped, file-based model viewer added, CI/CD loop workflows removed. See [[log]] 2026-05-26.
 
-**Previously:** 2026-05-18 — loop hardened (3-attempt cap + glm-5.1 escalation gate, actionlint, pinned tooling, lossless verifier feedback, contract-vs-preview regression); spec corpus re-baselined into a living specification; loop decoupled from product ([[product-context]]); first chat capability ([[deterministic-chat-seam]]) shipped fully autonomously; [[design-screen]] genuinely re-verified. See [[log]] 2026-05-18.
+**Previously:** 2026-05-25 — [[ifc-pipeline]] added: 9 lessons from the IFC STEP generator + web-ifc viewer spike (double-placement trap, void geometry, wall topology, roof soffit, WASM loading, SVG Y-inversion, door symbol, screenshot-first discipline). See [[log]] 2026-05-25.

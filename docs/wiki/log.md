@@ -2,6 +2,49 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
+## [2026-05-26] feat | Product pivot to MCP tools — assess_permit_requirement shipped, file-based viewer
+
+**Summary:** The product pivoted from a web chat app to a Claude MCP tool server. The web UI at `/view` is now only a 3D/2D model viewer; all user interaction happens in Claude conversations via MCP tools. Two tools are live: `generate_building_link` (existed) and `assess_permit_requirement` (new). A planned third, `generate_permit_packet`, will produce PDFs.
+
+### What was built
+
+**`assess_permit_requirement` MCP tool** — A triage engine (`lib/triage-engine.ts`) wired into the MCP route (`app/api/mcp/route.ts`). Implements T-001 to T-016 bucket rules and O-001/002/003/004/006 always-applies obligations from the triage-rules wiki. Inputs: flow_type, dimensions, distances, installations, strandskydd, k-marking, and more. Output: `{ bucket: LOVFRI|ANMALAN|BYGGLOV|null, bucket_reasons, obligations, out_of_scope }`. Regulatory version: PBL post-2025-12-01.
+
+**File-based model viewer** — `app/view/page.tsx` updated to support a `?file=<name>` query parameter. The viewer reads `public/models/<name>.json` (BuildingModelV2 JSON) from the public directory. The existing `#hash` encoding still works for MCP-generated shareable links. `public/models/sample-house.json` added as a 10×6m sadel roof example, live at `/view?file=sample-house`.
+
+**`docs/product-context.md` updated** — Reflects MCP architecture as the product direction.
+
+### Design decision: file-based vs hash encoding
+
+Both modes exist in the viewer and serve different purposes:
+
+- **`#hash` mode** (MCP-generated links): stateless and elegant — the full model is encoded in the URL, no server state needed. Ideal for Claude to hand a link to the user in conversation.
+- **`?file=` mode** (design iteration): Claude writes `public/models/<name>.json` directly and the viewer reads it. No need to re-call the MCP tool or re-specify all parameters from scratch. Git tracks version history for free.
+
+The key insight: URL hash encoding is great for sharing a finished design, but it is awkward for iterative design work. When Claude is helping a user refine dimensions step by step, editing a JSON file and reloading is far smoother than re-specifying the entire model each time.
+
+### What was removed
+
+**8 CI/CD loop workflows removed** — `spec.yml`, `dev.yml`, `verify.yml`, `merge.yml`, `actionlint.yml`, `spec-guard.yml`, `escalation.yml`, and related workflow files were all deleted. Only `deploy.yml` (Vercel deployment) remains. The autonomous dev loop was product-agnostic infrastructure that no longer fits the MCP-server product model — Claude conversations replace the dev-loop UX entirely.
+
+**Dead code removed** — `app/design/page.tsx` and `app/api/design/chat/route.ts` were deleted. These were the web chat UI pages from the previous product direction; they had broken `ai`/`@ai-sdk` imports that were causing Vercel build failures.
+
+### Key lessons
+
+**`package.json` is the source of truth for dependencies.** `three` and `web-ifc` were present in `node_modules` (installed locally during development) but not listed in `package.json`. Vercel's clean install skips `node_modules` entirely and installs from `package.json` — so both packages were missing on Vercel, causing silent build failures. Always add new packages to `package.json` explicitly.
+
+**Merge conflicts can silently wipe configuration.** During branch merges, `next.config.ts` lost two critical settings: `transpilePackages: ['three']` (needed for Three.js ESM) and the WASM MIME-type response headers (needed for web-ifc). These were removed during conflict resolution without anyone noticing — the build would succeed locally (where the old config was still cached) but fail on Vercel's clean build. After any merge, check config files carefully, especially when WASM or bundler-sensitive dependencies are involved.
+
+**The MCP pattern separates UX from tools cleanly.** Claude is the full UX: conversation, triage advice, design iteration, clarifying questions. The server is stateless JSON-RPC tools. There is no need for a web-based chat UI, a streaming AI SDK, or any concept of "session state." This is the right architecture for a phone-first advisory tool.
+
+**MCP endpoint:** `https://laughing-tribble-psi.vercel.app/api/mcp` (Streamable HTTP, JSON-RPC 2.0).
+
+**Pages updated:**
+- Updated: [[wiki-index]] (MCP Tools section added; Dev Loop Infrastructure, Agent Configuration, Capability Specs archived)
+- Updated: [[log]] (this entry)
+
+---
+
 ## [2026-05-25] ifc-pipeline | IFC STEP generator + web-ifc viewer — lessons learned ✅
 
 **Summary:** Distilled 9 hard-won rules from the IFC pipeline spike into [[ifc-pipeline]].
