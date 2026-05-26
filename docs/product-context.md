@@ -5,29 +5,35 @@
 > Change the product by editing this file and the specs — never by editing
 > the agent prompts or workflows.
 
-## What the app is (current direction — still iterating)
+## What the app is
 
-A web app that helps Swedish users prepare **bygglov / anmälan** packets for
-small structures (friggebod, attefallshus, attefallstillbyggnad,
-komplementbyggnad, liten tillbyggnad).
+A **Claude MCP tool server** that helps Swedish users plan and permit small
+structures (komplementbyggnad, komplementbostadshus, tillbyggnad, eldstad).
 
-The MVP scope is **not fixed** — it grows spec by spec. Treat the active
-specs in `specs/` (Status: `active`) as the authoritative description of what
-exists today. This section is orientation, not a contract.
+The product is a set of Claude tools that work together in conversation:
+
+```
+Claude conversation
+  ├─ generate_building_link(params)    → shareable 3D viewer URL  ✓ built
+  ├─ assess_permit_requirement(...)    → LOVFRI / ANMÄLAN / BYGGLOV verdict
+  └─ generate_permit_packet(...)       → situationsplan, planritning, PDFs  (planned)
+```
+
+The web app at `/view` is the 3D model viewer only — it is not a standalone
+product. All user interaction happens in Claude.
+
+MCP server endpoint: `/api/mcp` (Streamable HTTP, JSON-RPC 2.0 over POST)
+Viewer URL format: `/view#<base64url-deflated-BuildingModelV2-json>`
 
 ## Principles
 
 - Focus on simple flows. Not architect-grade commercial submissions.
 - The app never makes binding legal judgments itself.
+- Regulatory version: PBL post-2025-12-01 (Prop 2024/25:181)
 
 ## Planned / not built yet
 
-These are aspirational and live as `planned` specs (`specs/007`, `008`,
-`009b`–`009e`) and the knowledge base under `docs/wiki/` (see
-`docs/wiki/index.md`):
-
-- Parametric design conversation → structured building model
-- Generated documentation (situationsplan, planritning, PDFs)
+- `generate_permit_packet` — PDF documents: situationsplan, planritning, kontrollplan
 - A "tjänsteman" review layer that checks packets against PBL/BBR
 
 The tjänsteman/legal-review layer (`agents/tjansteman/`, golden cases) is
@@ -38,6 +44,8 @@ until a spec brings it into `active`.
 
 - **bygglov** — building permit
 - **anmälan** — notification (lighter than full permit)
-- **friggebod** — ≤15 m² outbuilding, permit-free
-- **attefallshus** — ≤30 m² outbuilding, requires anmälan
+- **LOVFRI** — no submission required, only byggherre-dokumentation
+- **komplementbyggnad** — outbuilding (replaces "friggebod"/"attefallshus" post-2025-12-01)
+- **komplementbostadshus** — outbuilding intended for habitation
 - **PBL / BBR** — the Swedish planning & building regulations
+- **pott** — shared quota of lovfri building area per fastighet
