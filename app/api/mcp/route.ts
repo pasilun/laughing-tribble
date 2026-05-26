@@ -190,7 +190,10 @@ export async function POST(request: Request) {
         .replace(/\//g, '_')
         .replace(/=/g, '')
 
-      const host = process.env.VERCEL_URL
+      // VERCEL_PROJECT_PRODUCTION_URL is the stable alias; VERCEL_URL is deployment-specific
+      const host = process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : 'http://localhost:3000'
       const url = `${host}/view#${encoded}`

@@ -1,14 +1,13 @@
 name: Deploy to Vercel
 
 on:
-  workflow_run:
-    workflows: ["Auto Merge"]
-    types: [completed]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   deploy:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: true
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -74,7 +73,7 @@ jobs:
           PROD_URL: ${{ vars.PROD_URL }}
         run: |
           ok=true
-          for path in / /design; do
+          for path in / /view; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "${PROD_URL}${path}")
             echo "GET ${path} -> ${code}"
             [ "$code" = "200" ] || ok=false

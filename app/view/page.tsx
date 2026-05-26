@@ -377,7 +377,8 @@ export default function ViewPage() {
         return
       }
 
-      const hash = window.location.hash.slice(1)
+      // Strip any trailing chars that aren't valid base64url (e.g. punctuation added by renderers)
+      const hash = window.location.hash.slice(1).replace(/[^A-Za-z0-9\-_]+$/, '')
       if (!hash) {
         setError('Ingen byggnadsmodell i URL')
         return
