@@ -131,18 +131,43 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
     }
   })
 
-  // Room: inset rectangle by wallThickness on all sides
+  // Rooms: split building into grid using partition offsets
   const t = wallThickness
-  const room: Room = {
-    id: 'room-main',
-    name: 'Rum',
-    polygon: [
-      { x: t, y: t },
-      { x: p.length - t, y: t },
-      { x: p.length - t, y: p.width - t },
-      { x: t, y: p.width - t },
-      { x: t, y: t }, // closed
-    ],
+  const nsOffsets = (p.partitions ?? [])
+    .filter((part) => part.direction === 'ns')
+    .map((part) => part.offset)
+    .sort((a, b) => a - b)
+  const ewOffsets = (p.partitions ?? [])
+    .filter((part) => part.direction === 'ew')
+    .map((part) => part.offset)
+    .sort((a, b) => a - b)
+
+  const xBreaks = [t, ...nsOffsets, p.length - t]
+  const yBreaks = [t, ...ewOffsets, p.width - t]
+
+  const totalRooms = (xBreaks.length - 1) * (yBreaks.length - 1)
+  const rooms: Room[] = []
+  let roomIndex = 1
+
+  for (let i = 0; i < xBreaks.length - 1; i++) {
+    for (let j = 0; j < yBreaks.length - 1; j++) {
+      const x0 = xBreaks[i]
+      const x1 = xBreaks[i + 1]
+      const y0 = yBreaks[j]
+      const y1 = yBreaks[j + 1]
+      rooms.push({
+        id: `room-${roomIndex}`,
+        name: totalRooms === 1 ? 'Rum' : `Rum ${roomIndex}`,
+        polygon: [
+          { x: x0, y: y0 },
+          { x: x1, y: y0 },
+          { x: x1, y: y1 },
+          { x: x0, y: y1 },
+          { x: x0, y: y0 }, // closed
+        ],
+      })
+      roomIndex++
+    }
   }
 
   const partitions: Partition[] = (p.partitions ?? []).map((part, index) => {
@@ -171,7 +196,7 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
     flowType: p.flowType,
     walls: [wallLoop],
     openings,
-    rooms: [room],
+    rooms,
     roof: {
       type: p.roof.type,
       pitch: p.roof.pitch ?? 22,

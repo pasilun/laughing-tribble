@@ -252,14 +252,16 @@ function FloorPlanV2({ model }: FloorPlanProps) {
         const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
         const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
         const area = polygonArea(pts)
+        const roomW = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x))
+        const roomD = Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y))
 
         return (
           <g key={room.id}>
             <text
               x={tx(cx)}
-              y={ty(cy) - 8}
+              y={ty(cy) - 12}
               textAnchor="middle"
-              fontSize={12}
+              fontSize={11}
               fill="#52525b"
               fontFamily="sans-serif"
             >
@@ -267,7 +269,17 @@ function FloorPlanV2({ model }: FloorPlanProps) {
             </text>
             <text
               x={tx(cx)}
-              y={ty(cy) + 8}
+              y={ty(cy)}
+              textAnchor="middle"
+              fontSize={10}
+              fill="#71717a"
+              fontFamily="sans-serif"
+            >
+              {roomW.toFixed(1)} × {roomD.toFixed(1)} m
+            </text>
+            <text
+              x={tx(cx)}
+              y={ty(cy) + 12}
               textAnchor="middle"
               fontSize={10}
               fill="#71717a"
