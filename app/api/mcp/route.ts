@@ -3,6 +3,75 @@ import { put } from '@vercel/blob'
 import { buildingFromParams } from '@/lib/building-factory'
 import { assessPermitRequirement } from '@/lib/triage-engine'
 import type { TriageInput } from '@/lib/triage-engine'
+import type { BuildingModelV2 } from '@/types/building-v2'
+
+function summariseModel(model: BuildingModelV2): string {
+  const length = (model.walls[0]?.vertices[1]?.x ?? 0) - (model.walls[0]?.vertices[0]?.x ?? 0)
+  const width = (model.walls[0]?.vertices[2]?.y ?? 0) - (model.walls[0]?.vertices[1]?.y ?? 0)
+  const wallH = model.walls[0]?.edges[0]?.height ?? 2.4
+  const wt = model.walls[0]?.edges[0]?.thickness ?? 0.12
+
+  const wallLengths: Record<string, number> = {
+    'wall-south': length, 'wall-north': length,
+    'wall-east': width,   'wall-west': width,
+  }
+  const wallNames: Record<string, string> = {
+    'wall-south': 'Sydvägg', 'wall-north': 'Nordvägg',
+    'wall-east': 'Östvägg',  'wall-west': 'Västvägg',
+  }
+
+  const lines: string[] = []
+  lines.push(`Byggnad: ${length.toFixed(2)} × ${width.toFixed(2)} m, väggshöjd ${wallH.toFixed(2)} m, väggtjocklek ${wt.toFixed(2)} m`)
+
+  // Rooms
+  for (const room of model.rooms) {
+    const pts = room.polygon.filter((_, i, arr) =>
+      !(i === arr.length - 1 && arr[i].x === arr[0].x && arr[i].y === arr[0].y))
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y)
+    const rw = Math.max(...xs) - Math.min(...xs)
+    const rd = Math.max(...ys) - Math.min(...ys)
+    const area = Math.abs(pts.reduce((s, p, i) => {
+      const j = (i + 1) % pts.length
+      return s + p.x * pts[j].y - pts[j].x * p.y
+    }, 0) / 2)
+    lines.push(`  ${room.name}: ${rw.toFixed(2)} × ${rd.toFixed(2)} m = ${area.toFixed(1)} m²`)
+  }
+
+  // Openings
+  if (model.openings.length > 0) {
+    lines.push('Öppningar:')
+    for (const op of model.openings) {
+      const wl = wallLengths[op.wallId] ?? 0
+      const wName = wallNames[op.wallId] ?? op.wallId
+      const start = op.offsetFromStart
+      const end = start + op.width
+      const fromOtherEnd = wl - end
+      const typeLabel = op.type === 'door' ? 'Dörr' : 'Fönster'
+      lines.push(`  ${typeLabel} (${wName}): x=${start.toFixed(2)}–${end.toFixed(2)} m, ${start.toFixed(2)} m från ena ände, ${fromOtherEnd.toFixed(2)} m från andra`)
+    }
+  }
+
+  // Partitions
+  if ((model.partitions ?? []).length > 0) {
+    lines.push('Innerväggar:')
+    for (const part of model.partitions ?? []) {
+      const isNS = Math.abs(part.end.x - part.start.x) < 0.01  // runs north-south
+      const isEW = Math.abs(part.end.y - part.start.y) < 0.01  // runs east-west
+      if (isNS) {
+        lines.push(`  NS-vägg vid x=${part.start.x.toFixed(2)} m från väst (tjocklek ${(part.thickness ?? 0.1).toFixed(2)} m)`)
+      } else if (isEW) {
+        lines.push(`  ÖV-vägg vid y=${part.start.y.toFixed(2)} m från syd (tjocklek ${(part.thickness ?? 0.1).toFixed(2)} m)`)
+      }
+    }
+  }
+
+  // Roof
+  const rd = model.roof.ridgeDirection ?? 'ew'
+  const rdLabel = rd === 'ew' ? 'ö-v' : 'n-s'
+  lines.push(`Tak: ${model.roof.type}, lutning ${model.roof.pitch}°, överhäng ${model.roof.overhang} m, nock ${rdLabel}`)
+
+  return lines.join('\n')
+}
 
 export const runtime = 'nodejs'
 
@@ -221,9 +290,13 @@ export async function POST(request: Request) {
       }
 
       const argsJson = JSON.stringify(args, null, 2)
+      const summary = summariseModel(model)
       const text = `${url}
 
 ⚠️ VIKTIGT: Återanvänd eller modifiera aldrig denna URL. Kalla alltid generate_building_link igen med uppdaterade parametrar om du behöver göra ändringar.
+
+Modellsammanfattning (faktiska mått i den genererade modellen):
+${summary}
 
 Parametrar som användes:
 ${argsJson}`
