@@ -42,7 +42,8 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
     const sun = new THREE.DirectionalLight(0xffffff, 1.0)
     sun.position.set(10, 20, 10)
     scene.add(sun)
-    scene.add(new THREE.GridHelper(30, 30, 0x333355, 0x222244))
+    const grid = new THREE.GridHelper(30, 30, 0x333355, 0x222244)
+    scene.add(grid)
 
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
@@ -191,6 +192,7 @@ export default function IFCViewer({ ifcData }: IFCViewerProps) {
       // Fit camera
       const bbox = new THREE.Box3().setFromObject(meshGroup)
       if (!bbox.isEmpty()) {
+        grid.position.y = bbox.min.y   // align grid to building floor
         const center = bbox.getCenter(new THREE.Vector3())
         const size = bbox.getSize(new THREE.Vector3())
         const maxDim = Math.max(size.x, size.y, size.z)

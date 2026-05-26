@@ -11,6 +11,7 @@ export interface BuildingParams {
     type: 'sadel' | 'pulpet' | 'flat'
     pitch?: number    // degrees, default 22
     overhang?: number // metres, default 0.3
+    ridgeDirection?: 'ew' | 'ns'
   }
   openings?: Array<{
     wall: 'south' | 'north' | 'east' | 'west'
@@ -36,8 +37,8 @@ function validateOpenings(params: BuildingParams, length: number, width: number)
 
   for (const op of openings) {
     const wl = wallLength[op.wall]
-    const opStart = op.offsetFromStart ?? (wl - (op.width ?? 1)) / 2
     const opWidth = op.width ?? (op.type === 'door' ? 0.9 : 1.2)
+    const opStart = op.offsetFromStart ?? (wl - opWidth) / 2
     const opEnd = opStart + opWidth
 
     // Check opening doesn't go off the wall
@@ -84,6 +85,8 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
 
   // Validate openings before building the model
   validateOpenings(p, p.length, p.width)
+
+  const ridgeDirection = p.roof.ridgeDirection ?? (p.length >= p.width ? 'ew' : 'ns')
 
   // CCW rectangle: SW → SE → NE → NW
   const wallLoop: WallLoop = {
@@ -201,6 +204,7 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
       type: p.roof.type,
       pitch: p.roof.pitch ?? 22,
       overhang: p.roof.overhang ?? 0.3,
+      ridgeDirection,
     },
     slabThickness,
     partitions,

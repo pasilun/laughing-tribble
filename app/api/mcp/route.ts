@@ -38,6 +38,11 @@ const TOOL_DEF = {
           },
           pitch: { type: 'number', description: 'Roof pitch in degrees, default 22' },
           overhang: { type: 'number', description: 'Roof overhang in metres, default 0.3' },
+          ridgeDirection: {
+            type: 'string',
+            enum: ['ew', 'ns'],
+            description: 'Ridge direction: ew = ridge runs east-west (default for wider-than-tall buildings), ns = ridge runs north-south',
+          },
         },
         required: ['type'],
       },

@@ -521,6 +521,7 @@ export function generateIFC(model: BuildingModelV2): string {
   if (model.roof.type === 'sadel') {
     const pitch = model.roof.pitch
     const overhang = model.roof.overhang
+    const ridgeDir = model.roof.ridgeDirection ?? 'ew'
     const wallH = model.walls[0]?.edges[0]?.height ?? 2.4
     const vertices = model.walls[0]?.vertices ?? []
     const xs = vertices.map(v => v.x)
@@ -528,78 +529,153 @@ export function generateIFC(model: BuildingModelV2): string {
     const minX = Math.min(...xs)
     const maxX = Math.max(...xs)
     const minY = Math.min(...ys)
-    const maxY = Math.max(...ys)
-    const buildingWidth = maxY - minY
+    const buildingWidth = Math.max(...ys) - minY
     const buildingLength = maxX - minX
-    const halfSpan = buildingWidth / 2
-    const extrudeLen = buildingLength + 2 * overhang
     const pitchRad = (pitch * Math.PI) / 180
     const roofThickness = 0.15
     const eaveH = wallH + roofThickness
-    const ridgeH = eaveH + (halfSpan + overhang) * Math.tan(pitchRad)
 
-    // Profile placement: origin at (-overhang, minY, 0), axis=east(X), refDir=north(Y)
-    const roofOriginId = w.next()
-    w.add(roofOriginId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(minY)},${fmt(0.)})`)
+    let roofSolidId: number
 
-    const roofAxisDirId = w.next() // local Z = extrude direction = global X (east)
-    w.add(roofAxisDirId, 'IFCDIRECTION', `(${fmt(1.)},${fmt(0.)},${fmt(0.)})`)
+    if (ridgeDir === 'ns') {
+      // NS ridge: ridge runs north-south, pitches east-west
+      const halfSpan = buildingLength / 2
+      const extrudeLen = buildingWidth + 2 * overhang
+      const ridgeH = eaveH + (halfSpan + overhang) * Math.tan(pitchRad)
 
-    const roofRefDirId = w.next() // local X = global Y (north)
-    w.add(roofRefDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(1.)},${fmt(0.)})`)
+      // Profile placement: origin at (maxX + overhang, minY - overhang, 0)
+      // axis (local Z = extrude direction) = (0, 1, 0) north
+      // refDir (local X) = (-1, 0, 0) west
+      const roofOriginId = w.next()
+      w.add(roofOriginId, 'IFCCARTESIANPOINT', `(${fmt(maxX + overhang)},${fmt(minY - overhang)},${fmt(0.)})`)
 
-    const roofPlacement3dId = w.next()
-    w.add(
-      roofPlacement3dId,
-      'IFCAXIS2PLACEMENT3D',
-      `#${roofOriginId},#${roofAxisDirId},#${roofRefDirId}`
-    )
+      const roofAxisDirId = w.next() // local Z = extrude direction = global Y (north)
+      w.add(roofAxisDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(1.)},${fmt(0.)})`)
 
-    // Pentagon profile vertices (2D in local XY = global YZ plane)
-    // A = (-overhang, eaveH)
-    const ptAId = w.next()
-    w.add(ptAId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(eaveH)})`)
+      const roofRefDirId = w.next() // local X = global -X (west)
+      w.add(roofRefDirId, 'IFCDIRECTION', `(${fmt(-1.)},${fmt(0.)},${fmt(0.)})`)
 
-    // B = (halfSpan, ridgeH)
-    const ptBId = w.next()
-    w.add(ptBId, 'IFCCARTESIANPOINT', `(${fmt(halfSpan)},${fmt(ridgeH)})`)
+      const roofPlacement3dId = w.next()
+      w.add(
+        roofPlacement3dId,
+        'IFCAXIS2PLACEMENT3D',
+        `#${roofOriginId},#${roofAxisDirId},#${roofRefDirId}`
+      )
 
-    // C = (buildingWidth+overhang, eaveH)
-    const ptCId = w.next()
-    w.add(ptCId, 'IFCCARTESIANPOINT', `(${fmt(buildingWidth + overhang)},${fmt(eaveH)})`)
+      // Pentagon profile vertices (local XY: local X = west, local Y = up)
+      // P1 = (0, eaveH) — east eave top
+      const ptP1Id = w.next()
+      w.add(ptP1Id, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(eaveH)})`)
 
-    // D = (buildingWidth+overhang, eaveH-0.15)
-    const ptDId = w.next()
-    w.add(ptDId, 'IFCCARTESIANPOINT', `(${fmt(buildingWidth + overhang)},${fmt(eaveH - roofThickness)})`)
+      // P2 = (buildingLength/2 + overhang, ridgeH) — ridge center
+      const ptP2Id = w.next()
+      w.add(ptP2Id, 'IFCCARTESIANPOINT', `(${fmt(buildingLength / 2 + overhang)},${fmt(ridgeH)})`)
 
-    // E = (-overhang, eaveH-0.15)
-    const ptEId = w.next()
-    w.add(ptEId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(eaveH - roofThickness)})`)
+      // P3 = (buildingLength + 2*overhang, eaveH) — west eave top
+      const ptP3Id = w.next()
+      w.add(ptP3Id, 'IFCCARTESIANPOINT', `(${fmt(buildingLength + 2 * overhang)},${fmt(eaveH)})`)
 
-    // A_copy to close the polyline
-    const ptACloseId = w.next()
-    w.add(ptACloseId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(eaveH)})`)
+      // P4 = (buildingLength + 2*overhang, eaveH - roofThickness) — west eave bottom
+      const ptP4Id = w.next()
+      w.add(ptP4Id, 'IFCCARTESIANPOINT', `(${fmt(buildingLength + 2 * overhang)},${fmt(eaveH - roofThickness)})`)
 
-    const roofPolylineId = w.next()
-    w.add(
-      roofPolylineId,
-      'IFCPOLYLINE',
-      `(#${ptAId},#${ptBId},#${ptCId},#${ptDId},#${ptEId},#${ptACloseId})`
-    )
+      // P5 = (0, eaveH - roofThickness) — east eave bottom
+      const ptP5Id = w.next()
+      w.add(ptP5Id, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(eaveH - roofThickness)})`)
 
-    const roofProfileId = w.next()
-    w.add(roofProfileId, 'IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,$,#${roofPolylineId}`)
+      // P1_close to close the polyline
+      const ptP1CloseId = w.next()
+      w.add(ptP1CloseId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(eaveH)})`)
 
-    // Extrude along local Z = global X (east)
-    const roofExtrudeDirId = w.next()
-    w.add(roofExtrudeDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+      const roofPolylineId = w.next()
+      w.add(
+        roofPolylineId,
+        'IFCPOLYLINE',
+        `(#${ptP1Id},#${ptP2Id},#${ptP3Id},#${ptP4Id},#${ptP5Id},#${ptP1CloseId})`
+      )
 
-    const roofSolidId = w.next()
-    w.add(
-      roofSolidId,
-      'IFCEXTRUDEDAREASOLID',
-      `#${roofProfileId},#${roofPlacement3dId},#${roofExtrudeDirId},${fmt(extrudeLen)}`
-    )
+      const roofProfileId = w.next()
+      w.add(roofProfileId, 'IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,$,#${roofPolylineId}`)
+
+      // Extrude along local Z = global Y (north)
+      const roofExtrudeDirId = w.next()
+      w.add(roofExtrudeDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+
+      roofSolidId = w.next()
+      w.add(
+        roofSolidId,
+        'IFCEXTRUDEDAREASOLID',
+        `#${roofProfileId},#${roofPlacement3dId},#${roofExtrudeDirId},${fmt(extrudeLen)}`
+      )
+    } else {
+      // EW ridge (default): ridge runs east-west, pitches north-south
+      const halfSpan = buildingWidth / 2
+      const extrudeLen = buildingLength + 2 * overhang
+      const ridgeH = eaveH + (halfSpan + overhang) * Math.tan(pitchRad)
+
+      // Profile placement: origin at (-overhang, minY, 0), axis=east(X), refDir=north(Y)
+      const roofOriginId = w.next()
+      w.add(roofOriginId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(minY)},${fmt(0.)})`)
+
+      const roofAxisDirId = w.next() // local Z = extrude direction = global X (east)
+      w.add(roofAxisDirId, 'IFCDIRECTION', `(${fmt(1.)},${fmt(0.)},${fmt(0.)})`)
+
+      const roofRefDirId = w.next() // local X = global Y (north)
+      w.add(roofRefDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(1.)},${fmt(0.)})`)
+
+      const roofPlacement3dId = w.next()
+      w.add(
+        roofPlacement3dId,
+        'IFCAXIS2PLACEMENT3D',
+        `#${roofOriginId},#${roofAxisDirId},#${roofRefDirId}`
+      )
+
+      // Pentagon profile vertices (2D in local XY = global YZ plane)
+      // A = (-overhang, eaveH)
+      const ptAId = w.next()
+      w.add(ptAId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(eaveH)})`)
+
+      // B = (halfSpan, ridgeH)
+      const ptBId = w.next()
+      w.add(ptBId, 'IFCCARTESIANPOINT', `(${fmt(halfSpan)},${fmt(ridgeH)})`)
+
+      // C = (buildingWidth+overhang, eaveH)
+      const ptCId = w.next()
+      w.add(ptCId, 'IFCCARTESIANPOINT', `(${fmt(buildingWidth + overhang)},${fmt(eaveH)})`)
+
+      // D = (buildingWidth+overhang, eaveH-0.15)
+      const ptDId = w.next()
+      w.add(ptDId, 'IFCCARTESIANPOINT', `(${fmt(buildingWidth + overhang)},${fmt(eaveH - roofThickness)})`)
+
+      // E = (-overhang, eaveH-0.15)
+      const ptEId = w.next()
+      w.add(ptEId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(eaveH - roofThickness)})`)
+
+      // A_copy to close the polyline
+      const ptACloseId = w.next()
+      w.add(ptACloseId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(eaveH)})`)
+
+      const roofPolylineId = w.next()
+      w.add(
+        roofPolylineId,
+        'IFCPOLYLINE',
+        `(#${ptAId},#${ptBId},#${ptCId},#${ptDId},#${ptEId},#${ptACloseId})`
+      )
+
+      const roofProfileId = w.next()
+      w.add(roofProfileId, 'IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,$,#${roofPolylineId}`)
+
+      // Extrude along local Z = global X (east)
+      const roofExtrudeDirId = w.next()
+      w.add(roofExtrudeDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+
+      roofSolidId = w.next()
+      w.add(
+        roofSolidId,
+        'IFCEXTRUDEDAREASOLID',
+        `#${roofProfileId},#${roofPlacement3dId},#${roofExtrudeDirId},${fmt(extrudeLen)}`
+      )
+    }
 
     const roofShapeRepId = w.next()
     w.add(

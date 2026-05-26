@@ -40,6 +40,7 @@ export type Roof = {
   type: 'sadel' | 'pulpet' | 'flat'
   pitch: number        // degrees
   overhang: number     // metres
+  ridgeDirection?: 'ew' | 'ns'   // 'ew' = ridge runs east-west (pitches N-S), 'ns' = ridge runs north-south (pitches E-W)
 }
 
 export type Site = {
