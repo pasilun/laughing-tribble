@@ -193,7 +193,7 @@ export async function POST(request: Request) {
         : 'http://localhost:3000'
 
       let url: string
-      const blobToken = process.env.BLOB_READ_WRITE_TOKEN
+      const blobToken = process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
       if (blobToken) {
         // Store model in Vercel Blob and return a clean /view?id=<id> URL
         const id = model.id
@@ -201,6 +201,7 @@ export async function POST(request: Request) {
           access: 'public',
           contentType: 'application/json',
           addRandomSuffix: false,
+          token: blobToken,
         })
         url = `${host}/view?id=${id}`
       } else {

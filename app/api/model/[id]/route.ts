@@ -9,8 +9,9 @@ export async function GET(
 ) {
   const { id } = await params
 
+  const blobToken = process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
   // List blobs to find the one with this id
-  const { blobs } = await list({ prefix: `buildings/${id}` })
+  const { blobs } = await list({ prefix: `buildings/${id}`, token: blobToken })
   const blob = blobs.find(b => b.pathname === `buildings/${id}.json`)
 
   if (!blob) {
