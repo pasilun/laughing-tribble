@@ -364,7 +364,19 @@ export default function ViewPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    async function decode() {
+    async function load() {
+      // ?file=<name> takes precedence over #hash
+      const params = new URLSearchParams(window.location.search)
+      const file = params.get('file')
+
+      if (file) {
+        const res = await fetch(`/models/${file}.json`)
+        if (!res.ok) throw new Error(`Model not found: ${file}`)
+        const model = await res.json() as BuildingModelV2
+        setModel(model)
+        return
+      }
+
       const hash = window.location.hash.slice(1)
       if (!hash) {
         setError('Ingen byggnadsmodell i URL')
@@ -387,7 +399,7 @@ export default function ViewPage() {
       const text = new TextDecoder().decode(buf)
       setModel(JSON.parse(text) as BuildingModelV2)
     }
-    decode().catch((e) => setError(String(e)))
+    load().catch((e) => setError(String(e)))
   }, [])
 
   const ifcContent = useMemo(() => (model ? generateIFC(model) : ''), [model])
