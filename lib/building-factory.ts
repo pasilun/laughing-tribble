@@ -45,8 +45,8 @@ function validateOpenings(params: BuildingParams, length: number, width: number)
 
   for (const op of openings) {
     const wl = wallLength[op.wall]
-    const opWidth = op.width ?? (op.type === 'door' ? 0.9 : 1.2)
-    const opStart = universalToWallStart(op, wl, opWidth)
+    const opWidth = op.width ?? (op.type === 'door' ? 0.9 : 0.8)
+    const opStart = op.offsetFromStart ?? (wl - opWidth) / 2  // universal: from west (EW walls) or from south (NS walls)
     const opEnd = opStart + opWidth
 
     // Check opening doesn't go off the wall
@@ -121,7 +121,7 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
   }
 
   // Build openings
-  const openings: Opening[] = (p.openings ?? []).map((o) => {
+  const openings: Opening[] = (p.openings ?? []).map((o, idx) => {
     const isDoor = o.type === 'door'
     const defaultWidth = isDoor ? 0.9 : 0.8
     const defaultHeight = isDoor ? 2.1 : 1.2
@@ -150,7 +150,7 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
     }
 
     return {
-      id: `${o.type}-${o.wall}`,
+      id: `${o.type}-${o.wall}-${idx}`,
       wallId: `wall-${o.wall}`,
       type: o.type,
       width: openingWidth,
