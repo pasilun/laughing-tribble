@@ -18,7 +18,7 @@ export interface BuildingParams {
     type: 'door' | 'window'
     width?: number            // door default 0.9, window default 0.8
     height?: number           // door default 2.1, window default 1.2
-    offsetFromStart?: number  // default: centered on wall
+    offsetFromStart?: number  // For south/north: metres from WEST end. For east/west: metres from SOUTH end. Default: centered.
     sillHeight?: number       // default 0 for door, 0.9 for window
   }>
   slabThickness?: number  // default 0.2
@@ -30,6 +30,14 @@ export interface BuildingParams {
   }>
 }
 
+type OpeningParam = NonNullable<BuildingParams['openings']>[0]
+
+function universalToWallStart(o: OpeningParam, wl: number, opWidth: number): number {
+  if (o.offsetFromStart === undefined) return (wl - opWidth) / 2
+  if (o.wall === 'north' || o.wall === 'west') return wl - o.offsetFromStart - opWidth
+  return o.offsetFromStart
+}
+
 function validateOpenings(params: BuildingParams, length: number, width: number) {
   const wallLength: Record<string, number> = { south: length, north: length, east: width, west: width }
   const { openings = [], partitions = [], wallThickness = 0.12 } = params
@@ -38,7 +46,7 @@ function validateOpenings(params: BuildingParams, length: number, width: number)
   for (const op of openings) {
     const wl = wallLength[op.wall]
     const opWidth = op.width ?? (op.type === 'door' ? 0.9 : 1.2)
-    const opStart = op.offsetFromStart ?? (wl - opWidth) / 2
+    const opStart = universalToWallStart(op, wl, opWidth)
     const opEnd = opStart + opWidth
 
     // Check opening doesn't go off the wall
@@ -121,7 +129,25 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
 
     const openingWidth = o.width ?? defaultWidth
     const wallLen = wallLengths[o.wall]
-    const offsetFromStart = o.offsetFromStart ?? (wallLen - openingWidth) / 2
+
+    // Universal offset (from west for EW walls, from south for NS walls).
+    // Convert to wall-specific offsetFromStart (which follows wall direction).
+    let offsetFromStart: number
+    if (o.offsetFromStart === undefined) {
+      offsetFromStart = (wallLen - openingWidth) / 2  // centered
+    } else if (o.wall === 'north') {
+      // north wall runs NE→NW, so offsetFromStart=0 is at east end
+      // universal offset is from west, so convert:
+      offsetFromStart = wallLen - o.offsetFromStart - openingWidth
+    } else if (o.wall === 'west') {
+      // west wall runs NW→SW, so offsetFromStart=0 is at north end
+      // universal offset is from south, so convert:
+      offsetFromStart = wallLen - o.offsetFromStart - openingWidth
+    } else {
+      // south: SW→SE (from west) ✓
+      // east:  SE→NE (from south) ✓
+      offsetFromStart = o.offsetFromStart
+    }
 
     return {
       id: `${o.type}-${o.wall}`,

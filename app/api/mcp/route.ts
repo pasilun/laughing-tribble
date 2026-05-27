@@ -43,11 +43,20 @@ function summariseModel(model: BuildingModelV2): string {
     for (const op of model.openings) {
       const wl = wallLengths[op.wallId] ?? 0
       const wName = wallNames[op.wallId] ?? op.wallId
-      const start = op.offsetFromStart
-      const end = start + op.width
-      const fromOtherEnd = wl - end
       const typeLabel = op.type === 'door' ? 'Dörr' : 'Fönster'
-      lines.push(`  ${typeLabel} (${wName}): x=${start.toFixed(2)}–${end.toFixed(2)} m, ${start.toFixed(2)} m från ena ände, ${fromOtherEnd.toFixed(2)} m från andra`)
+      // Convert wall-specific offsetFromStart to universal coordinates
+      // (always from west for EW walls, from south for NS walls)
+      let uStart: number
+      if (op.wallId === 'wall-north') {
+        uStart = wl - op.offsetFromStart - op.width
+      } else if (op.wallId === 'wall-west') {
+        uStart = wl - op.offsetFromStart - op.width
+      } else {
+        uStart = op.offsetFromStart
+      }
+      const uEnd = uStart + op.width
+      const fromOtherEnd = wl - uEnd
+      lines.push(`  ${typeLabel} (${wName}): ${uStart.toFixed(2)}–${uEnd.toFixed(2)} m från väst/syd, ${fromOtherEnd.toFixed(2)} m till andra änden`)
     }
   }
 
@@ -212,7 +221,7 @@ const TOOL_DEF = {
             height: { type: 'number' },
             offsetFromStart: {
               type: 'number',
-              description: 'Metres from start of wall; default: centered',
+              description: 'For south/north walls: metres from WEST end. For east/west walls: metres from SOUTH end. Default: centered. Always measured from the building SW corner.',
             },
             sillHeight: {
               type: 'number',
