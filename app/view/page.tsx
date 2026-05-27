@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { BuildingModelV2, Opening, Vector2 } from '@/types/building-v2'
 import { generateIFC } from '@/lib/ifc-generator'
@@ -102,6 +102,19 @@ function FloorPlanV2({ model }: FloorPlanProps) {
   function ty(y: number): number {
     return offsetY + (maxY - y) * scale
   }
+
+  // ── Dimension annotation helpers ────────────────────────────────────────
+  // NS partitions (vertical walls): x is constant → split south/north walls
+  const nsXs = (model.partitions ?? [])
+    .filter((p) => Math.abs(p.start.x - p.end.x) < 1e-4)
+    .map((p) => p.start.x)
+    .sort((a, b) => a - b)
+
+  // EW partitions (horizontal walls): y is constant → split east/west walls
+  const ewYs = (model.partitions ?? [])
+    .filter((p) => Math.abs(p.start.y - p.end.y) < 1e-4)
+    .map((p) => p.start.y)
+    .sort((a, b) => a - b)
 
   // Scale bar: pick a nice metre value
   const targetBarWidthPx = 80
@@ -241,6 +254,152 @@ function FloorPlanV2({ model }: FloorPlanProps) {
           strokeLinecap="square"
         />
       ))}
+
+      {/* ── Dimension annotations ── */}
+      {(() => {
+        const dimColor = '#9ca3af'
+        const textColor = '#6b7280'
+
+        // South wall (bottom): dim line below, split by NS partitions
+        const southXBreaks = [minX, ...nsXs, maxX]
+        const southWallY = minY
+        const svgSouthY = ty(southWallY)
+        const dimSouthY = svgSouthY + 20
+
+        // North wall (top): dim line above, split by NS partitions
+        const northXBreaks = [minX, ...nsXs, maxX]
+        const northWallY = maxY
+        const svgNorthY = ty(northWallY)
+        const dimNorthY = svgNorthY - 20
+
+        // East wall (right): dim line to right, split by EW partitions
+        const eastYBreaks = [minY, ...ewYs, maxY]
+        const eastWallX = maxX
+        const svgEastX = tx(eastWallX)
+        const dimEastX = svgEastX + 20
+
+        // West wall (left): dim line to left, split by EW partitions
+        const westYBreaks = [minY, ...ewYs, maxY]
+        const westWallX = minX
+        const svgWestX = tx(westWallX)
+        const dimWestX = svgWestX - 20
+
+        const elements: React.ReactNode[] = []
+
+        // Helper: horizontal dim segments (south or north)
+        function hSegments(
+          xBreaks: number[],
+          dimY: number,
+          wallY: number,
+          above: boolean,
+          keyPrefix: string
+        ) {
+          for (let i = 0; i < xBreaks.length - 1; i++) {
+            const xFrom = xBreaks[i]
+            const xTo = xBreaks[i + 1]
+            const svgX1 = tx(xFrom)
+            const svgX2 = tx(xTo)
+            const midX = (svgX1 + svgX2) / 2
+            const segLen = xTo - xFrom
+            const svgWY = ty(wallY)
+            const tickExtend = above ? dimY - 3 : dimY + 3
+            const textY = above ? dimY - 3 : dimY + 10
+
+            elements.push(
+              <g key={`${keyPrefix}-seg-${i}`}>
+                {/* Tick at x1 */}
+                <line x1={svgX1} y1={svgWY} x2={svgX1} y2={tickExtend} stroke={dimColor} strokeWidth={0.75} />
+                {/* Tick at x2 */}
+                <line x1={svgX2} y1={svgWY} x2={svgX2} y2={tickExtend} stroke={dimColor} strokeWidth={0.75} />
+                {/* Dim line */}
+                <line x1={svgX1} y1={dimY} x2={svgX2} y2={dimY} stroke={dimColor} strokeWidth={0.75} />
+                {/* Left arrow (pointing right) */}
+                <polygon
+                  points={`${svgX1},${dimY} ${svgX1 + 5},${dimY - 2} ${svgX1 + 5},${dimY + 2}`}
+                  fill={dimColor}
+                />
+                {/* Right arrow (pointing left) */}
+                <polygon
+                  points={`${svgX2},${dimY} ${svgX2 - 5},${dimY - 2} ${svgX2 - 5},${dimY + 2}`}
+                  fill={dimColor}
+                />
+                {/* Label */}
+                <text
+                  x={midX}
+                  y={textY}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill={textColor}
+                  fontFamily="sans-serif"
+                >
+                  {segLen.toFixed(2)} m
+                </text>
+              </g>
+            )
+          }
+        }
+
+        // Helper: vertical dim segments (east or west)
+        function vSegments(
+          yBreaks: number[],
+          dimX: number,
+          wallX: number,
+          toRight: boolean,
+          keyPrefix: string
+        ) {
+          for (let i = 0; i < yBreaks.length - 1; i++) {
+            const yFrom = yBreaks[i]
+            const yTo = yBreaks[i + 1]
+            const svgY1 = ty(yFrom)   // bottom in SVG (larger y value)
+            const svgY2 = ty(yTo)     // top in SVG (smaller y value)
+            const midY = (svgY1 + svgY2) / 2
+            const segLen = yTo - yFrom
+            const svgWX = tx(wallX)
+            const tickExtend = toRight ? dimX + 3 : dimX - 3
+            const textX = toRight ? dimX + 10 : dimX - 10
+
+            elements.push(
+              <g key={`${keyPrefix}-seg-${i}`}>
+                {/* Tick at y1 (bottom) */}
+                <line x1={svgWX} y1={svgY1} x2={tickExtend} y2={svgY1} stroke={dimColor} strokeWidth={0.75} />
+                {/* Tick at y2 (top) */}
+                <line x1={svgWX} y1={svgY2} x2={tickExtend} y2={svgY2} stroke={dimColor} strokeWidth={0.75} />
+                {/* Dim line */}
+                <line x1={dimX} y1={svgY1} x2={dimX} y2={svgY2} stroke={dimColor} strokeWidth={0.75} />
+                {/* Bottom arrow (pointing up) */}
+                <polygon
+                  points={`${dimX},${svgY1} ${dimX - 2},${svgY1 - 5} ${dimX + 2},${svgY1 - 5}`}
+                  fill={dimColor}
+                />
+                {/* Top arrow (pointing down) */}
+                <polygon
+                  points={`${dimX},${svgY2} ${dimX - 2},${svgY2 + 5} ${dimX + 2},${svgY2 + 5}`}
+                  fill={dimColor}
+                />
+                {/* Label (rotated -90°) */}
+                <text
+                  x={textX}
+                  y={midY}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill={textColor}
+                  fontFamily="sans-serif"
+                  transform={`rotate(-90, ${textX}, ${midY})`}
+                >
+                  {segLen.toFixed(2)} m
+                </text>
+              </g>
+            )
+          }
+        }
+
+        hSegments(southXBreaks, dimSouthY, southWallY, false, 'south')
+        hSegments(northXBreaks, dimNorthY, northWallY, true, 'north')
+        vSegments(eastYBreaks, dimEastX, eastWallX, true, 'east')
+        vSegments(westYBreaks, dimWestX, westWallX, false, 'west')
+
+        return <>{elements}</>
+      })()}
 
       {/* ── Room labels ──────────────────────────────────────────────────── */}
       {model.rooms.map((room) => {
