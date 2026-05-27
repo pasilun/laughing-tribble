@@ -52,7 +52,9 @@ export default function GLTFViewer({ glbUrl }: GLTFViewerProps) {
       if (!compassRef.current) return
       const dx = camera.position.x - controls.target.x
       const dz = camera.position.z - controls.target.z
-      const azimuth = Math.atan2(dx, -dz)
+      // IfcConvert maps IFC Y (North) to glTF -Z, so North = -Z in THREE.js.
+      // azimuth = 0 when camera is due south (dz > 0, dx = 0) → N at top.
+      const azimuth = Math.atan2(dx, dz)
       const compassEl = compassRef.current.querySelector('svg')
       if (compassEl) {
         ;(compassEl as unknown as HTMLElement).style.transform = `rotate(${azimuth}rad)`
@@ -90,8 +92,9 @@ export default function GLTFViewer({ glbUrl }: GLTFViewerProps) {
           const center = bbox.getCenter(new THREE.Vector3())
           const size = bbox.getSize(new THREE.Vector3())
           const maxDim = Math.max(size.x, size.y, size.z)
+          // Start due south so the 3D compass initially matches the 2D plan (N at top).
           camera.position.set(
-            center.x + maxDim * 2,
+            center.x,
             center.y + maxDim * 1.5,
             center.z + maxDim * 2
           )
