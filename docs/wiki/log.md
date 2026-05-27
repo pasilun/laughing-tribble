@@ -2,6 +2,54 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
+## [2026-05-27] done | IfcConvert server-side GLB pipeline — implemented and deployed
+
+The no-sidecar IfcConvert path described in the parked idea below was implemented and is now live.
+
+### What changed
+
+| File | Change |
+|---|---|
+| `package.json` | Added `ifc-converter@0.6.1` (bundles IfcConvert Linux binary), removed `web-ifc` and its WASM postinstall script |
+| `next.config.ts` | Removed WASM MIME headers; added `serverExternalPackages: ['ifc-converter']` |
+| `app/api/convert/route.ts` | New Node.js route — POST IFC text → writes to `/tmp` → runs IfcConvert binary → returns GLB bytes |
+| `components/GLTFViewer.tsx` | New component — THREE.js `GLTFLoader` + `OrbitControls` + compass overlay; replaces `IFCViewer.tsx` |
+| `app/view/page.tsx` | Generates IFC client-side (for download), POSTs to `/api/convert`, feeds GLB blob URL to `GLTFViewer` |
+| `components/IFCViewer.tsx` | Deleted |
+
+### How it works
+
+1. `app/view/page.tsx` calls `generateIFC(model)` (existing TypeScript generator) to get IFC text
+2. Fetches `POST /api/convert` with the IFC text as the body
+3. The route writes the text to `/tmp/ifc-{id}.ifc`, runs the bundled `IfcConvert` binary, reads `/tmp/ifc-{id}.glb`, returns it
+4. The page creates a `URL.createObjectURL(glb)` and passes it to `GLTFViewer`
+5. `GLTFViewer` loads the GLB with `THREE.GLTFLoader` — no WASM, no browser-side parsing
+
+### Tricky parts
+
+**Binary path under Next.js/Turbopack:** The `ifc-converter` npm package resolves its binary using `__dirname`, which points to the Turbopack bundle output directory when the module is bundled — not to `node_modules/`. The fix was to bypass the package's JS wrapper entirely and call `execFile` directly using `process.cwd()` to resolve the binary path:
+```typescript
+const BINARY = resolve(process.cwd(), 'node_modules/ifc-converter/bin/IfcConvert')
+await execFile(BINARY, [inputPath, outputPath], { maxBuffer: 10 * 1024 * 1024 })
+```
+
+**Vercel deploy failures:** Two separate failures during rollout:
+1. `package-lock.json` didn't include `ifc-converter` in the first commit (npm install hadn't been run before committing) → Vercel `npm ci` failed. Fixed by committing the updated lock file.
+2. Debug error handler left in the route had `e.signal` which doesn't exist on `NodeJS.ErrnoException` → TypeScript build failed. Fixed by simplifying the catch block.
+
+### Result
+
+- 3D viewer: `web-ifc` WASM pipeline (260 lines, fragile CORS/path setup) → `GLTFLoader` (~50 lines)
+- Geometry quality: IfcConvert's OpenCASCADE geometry kernel vs hand-rolled web-ifc parsing
+- No WASM, no postinstall scripts, no MIME header config
+- The IFC download button still works (generates IFC client-side as before)
+
+### Still using the hand-rolled IFC generator
+
+`lib/ifc-generator.ts` still generates the IFC text via TypeScript string templates. The 3D *rendering* now uses IfcConvert, but IFC *generation* is still hand-rolled. The trade-off (no quantities, no property sets) remains acceptable; see the IfcOpenShell idea below for the eventual upgrade path.
+
+---
+
 ## [2026-05-27] idea | IfcOpenShell sidecar — deployment options researched (parked)
 
 **Question:** How to deploy a Python service running IfcOpenShell + IfcConvert alongside the existing Vercel Next.js app?
