@@ -73,6 +73,92 @@ function summariseModel(model: BuildingModelV2): string {
   return lines.join('\n')
 }
 
+function asciiFloorPlan(model: BuildingModelV2): string {
+  const length = model.walls[0]?.vertices[1]?.x ?? 0   // east-west
+  const width  = model.walls[0]?.vertices[2]?.y ?? 0   // north-south
+  if (length <= 0 || width <= 0) return ''
+
+  // Scale: target ~50 chars wide; chars are roughly 2:1 (h:w) so sy ≈ sx/2
+  const sx = Math.max(2, Math.round(50 / length))
+  const sy = Math.max(1, Math.round(sx / 2))
+
+  // Grid: west wall at col 0, east wall at col gw-1
+  //       north wall at row 0, south wall at row gh-1
+  const gw = 1 + Math.round(length * sx)
+  const gh = 1 + Math.round(width  * sy)
+
+  const grid: string[][] = Array.from({ length: gh }, () => Array(gw).fill(' '))
+
+  // Coordinate helpers (building coords → grid indices)
+  const gc = (x: number) => Math.round((x / length) * (gw - 1))
+  const gr = (y: number) => Math.round((1 - y / width) * (gh - 1))  // y=0 → bottom row, y=width → row 0
+
+  // ── Exterior walls ──────────────────────────────────────────────────────
+  for (let c = 0; c < gw; c++) { grid[0][c] = '-'; grid[gh-1][c] = '-' }
+  for (let r = 0; r < gh; r++) { grid[r][0] = '|'; grid[r][gw-1] = '|' }
+  grid[0][0] = grid[0][gw-1] = grid[gh-1][0] = grid[gh-1][gw-1] = '+'
+
+  // ── Partition walls ─────────────────────────────────────────────────────
+  for (const part of model.partitions ?? []) {
+    const isNS = Math.abs(part.end.x - part.start.x) < 0.01  // constant X → vertical line
+    if (isNS) {
+      const c = gc(part.start.x)
+      grid[0][c]    = '+'
+      grid[gh-1][c] = '+'
+      for (let r = 1; r < gh - 1; r++) grid[r][c] = '|'
+    } else {
+      const r = gr(part.start.y)
+      grid[r][0]    = '+'
+      grid[r][gw-1] = '+'
+      for (let c = 1; c < gw - 1; c++) grid[r][c] = '-'
+    }
+  }
+
+  // ── Openings (doors & windows) ──────────────────────────────────────────
+  // Wall directions (from building-factory.ts wall loop: SW→SE→NE→NW):
+  //   wall-south: SW→SE, offsetFromStart from x=0 (west), row = gh-1
+  //   wall-east:  SE→NE, offsetFromStart from y=0 (south), col = gw-1
+  //   wall-north: NE→NW, offsetFromStart from x=length (east), row = 0
+  //   wall-west:  NW→SW, offsetFromStart from y=width (north), col = 0
+  for (const op of model.openings) {
+    const mark = op.type === 'door' ? 'D' : 'W'
+    if (op.wallId === 'wall-south') {
+      const c1 = gc(op.offsetFromStart), c2 = gc(op.offsetFromStart + op.width)
+      for (let c = c1; c <= c2; c++) grid[gh-1][c] = mark
+    } else if (op.wallId === 'wall-north') {
+      const xEnd = length - op.offsetFromStart
+      const c1 = gc(xEnd - op.width), c2 = gc(xEnd)
+      for (let c = c1; c <= c2; c++) grid[0][c] = mark
+    } else if (op.wallId === 'wall-east') {
+      const r1 = gr(op.offsetFromStart + op.width), r2 = gr(op.offsetFromStart)
+      for (let r = r1; r <= r2; r++) grid[r][gw-1] = mark
+    } else if (op.wallId === 'wall-west') {
+      const yTop = width - op.offsetFromStart
+      const r1 = gr(yTop), r2 = gr(yTop - op.width)
+      for (let r = r1; r <= r2; r++) grid[r][0] = mark
+    }
+  }
+
+  // ── Room labels ─────────────────────────────────────────────────────────
+  for (const room of model.rooms) {
+    const pts = room.polygon.filter((_, i, arr) =>
+      !(i === arr.length - 1 && arr[i].x === arr[0].x && arr[i].y === arr[0].y))
+    if (pts.length === 0) continue
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
+    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
+    const r = gr(cy), startC = Math.max(1, gc(cx) - Math.floor(room.name.length / 2))
+    const structural = new Set(['+', '-', '|'])
+    for (let i = 0; i < room.name.length; i++) {
+      const c = startC + i
+      if (c > 0 && c < gw - 1 && !structural.has(grid[r][c])) grid[r][c] = room.name[i]
+    }
+  }
+
+  // ── Assemble with compass ───────────────────────────────────────────────
+  const rows = grid.map(row => row.join(''))
+  return ['N', '^', ...rows, ' '.repeat(Math.max(0, gw - 4)) + '→ E'].join('\n')
+}
+
 export const runtime = 'nodejs'
 
 const CORS = {
@@ -291,9 +377,13 @@ export async function POST(request: Request) {
 
       const argsJson = JSON.stringify(args, null, 2)
       const summary = summariseModel(model)
+      const plan = asciiFloorPlan(model)
       const text = `${url}
 
 ⚠️ VIKTIGT: Återanvänd eller modifiera aldrig denna URL. Kalla alltid generate_building_link igen med uppdaterade parametrar om du behöver göra ändringar.
+
+Planritning (D=dörr, W=fönster, N=norr):
+${plan}
 
 Modellsammanfattning (faktiska mått i den genererade modellen):
 ${summary}
