@@ -2,6 +2,77 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
+## [2026-05-27] idea | IfcOpenShell — what it could replace and improve (parked)
+
+**Source:** https://github.com/IfcOpenShell/IfcOpenShell — open-source C++/Python IFC toolkit, the de-facto standard for programmatic IFC work.
+
+### What IfcOpenShell is
+
+A suite of tools built around a C++ IFC parser (ifcparse) and geometry kernel (ifcgeom, wrapping OpenCASCADE). The Python bindings (`ifcopenshell-python`) expose a full IFC read/write/query API. Notable sub-tools:
+
+| Tool | What it does |
+|---|---|
+| `ifcopenshell-python` | Read, write, and edit IFC files via Python API |
+| `IfcConvert` | CLI — converts IFC → glTF, OBJ, SVG, collada, and others |
+| `ifcquery` | CLI — query/inspect IFC elements |
+| `ifcdiff` | Diff two IFC models, show what changed |
+| `ifcclash` | Clash detection (overlapping geometry) |
+| `ifctester` | Validate IFC against IDS rules |
+| `ifcmcp` | MCP server for LLM ↔ IFC (parallel to what we built) |
+| WASM wheels | Experimental browser builds via Pyodide |
+
+### How it could improve this project
+
+#### 1. Replace the custom IFC STEP generator *(medium value)*
+`lib/ifc-generator.ts` is 660 lines of hand-rolled STEP text. It is fragile, hard to extend, and produces minimal IFC (no property sets, no materials, no quantities). Replacing it with `ifcopenshell-python` running in a Python sidecar would give:
+- Standards-compliant IFC with proper relationships and property sets
+- Quantities (BYA, NTA, room area) computable directly from the model
+- Easy extension to new building element types
+- Schema validation on every generate call
+
+Downside: requires a Python sidecar service (not Vercel-native). Deploy on Railway/Fly.io and call it from the Next.js API route.
+
+#### 2. Replace web-ifc with IfcConvert → glTF *(high value, biggest win)*
+Currently the 3D viewer loads a WASM binary (`web-ifc.wasm`, ~5 MB), parses IFC in the browser, and manually maps geometry to Three.js meshes. It is the most fragile part of the stack (CORS headers, postinstall scripts, custom WASM path patching).
+
+Alternative: run `IfcConvert input.ifc output.glb` server-side, serve the `.glb`, load it in the browser with Three.js `GLTFLoader` (4 lines of code, no WASM). Benefits:
+- Eliminates all web-ifc complexity
+- glTF is a first-class Three.js format — materials, normals, and hierarchy come for free
+- IfcConvert geometry is more correct than our hand-rolled extrusions
+- Viewer becomes ~50 lines instead of ~260
+
+This alone justifies adding the Python sidecar.
+
+#### 3. SVG floor plan from IFC *(medium value)*
+`IfcConvert --plan` generates a proper architectural SVG floor plan (wall sections, hatch patterns, door swings). This would replace the hand-rolled SVG in `app/view/page.tsx`. The generated plan would handle non-rectangular buildings, correct wall section thickness, and proper opening symbols out of the box.
+
+#### 4. Automatic quantity extraction for permit triage *(medium value)*
+`ifcopenshell.util.element` can extract BYA (building footprint area), NTA (net floor area), and room areas directly from an IFC file. Currently `assess_permit_requirement` requires the user (or Claude) to pass `planned_area_m2` manually. With IfcOpenShell, after generating the IFC, quantities could be extracted server-side and pre-filled — removing a common source of errors.
+
+#### 5. ifcclash — opening/partition collision detection *(low value, already handled)*
+IfcOpenShell's clash detection could replace the manual `validateOpenings()` logic. Lower priority since we just fixed the validation.
+
+#### 6. ifcmcp — their MCP server *(interesting reference)*
+`ifcmcp` is their MCP server for LLM ↔ IFC interaction. Worth reading as a reference implementation — it exposes ~50 BIM tools vs our 2. The dynamic code generation mode (RAG over IfcOpenShell API docs) is especially interesting for extending beyond predefined building shapes.
+
+### Recommended integration path
+
+**Phase 1** — Add a Python sidecar (Railway, ~$5/mo):
+- `ifcopenshell-python` replaces `lib/ifc-generator.ts`
+- `IfcConvert` replaces `web-ifc` in the browser viewer
+- Serve `.glb` from Vercel Blob; viewer uses `GLTFLoader`
+- Extract BYA/NTA/room areas and return them in the MCP response
+
+**Phase 2** — SVG floor plan from `IfcConvert --plan` (replace hand-rolled SVG)
+
+**Phase 3** — Evaluate WASM wheels as they mature (would eliminate the Python sidecar)
+
+### Why parked
+
+Current priority is validating the ASCII floor plan + model summary feedback loop. The Python sidecar adds infrastructure cost and operational complexity. Revisit when geometry quality or IFC standards compliance becomes a blocker.
+
+---
+
 ## [2026-05-27] idea | MCP4IFC — visual feedback loop via screenshot (parked)
 
 **Source:** arXiv 2511.05533 — *MCP4IFC: IFC-Based Building Design using Large Language Models* (Nov 2025, 0 citations as of May 2026).
