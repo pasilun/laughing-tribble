@@ -291,21 +291,18 @@ function FloorPlanV2({ model }: FloorPlanProps) {
         )
       })}
 
-      {/* ── North arrow ──────────────────────────────────────────────────── */}
-      <g transform={`translate(${viewBoxW - 40}, 36)`}>
-        <line x1={0} y1={12} x2={0} y2={-12} stroke="#27272a" strokeWidth={2} />
-        <polygon points="0,-14 -5,-4 5,-4" fill="#27272a" />
-        <text
-          x={0}
-          y={24}
-          textAnchor="middle"
-          fontSize={11}
-          fill="#27272a"
-          fontFamily="sans-serif"
-          fontWeight="bold"
-        >
-          N
-        </text>
+      {/* ── Compass rose ─────────────────────────────────────────────────── */}
+      <g transform={`translate(${viewBoxW - 36}, 36)`}>
+        <circle cx={0} cy={0} r={26} fill="rgba(255,255,255,0.85)" stroke="#d4d4d8" strokeWidth={1}/>
+        {/* N needle (red) */}
+        <polygon points="0,-18 -5,-6 0,-10 5,-6" fill="#e05555"/>
+        {/* S needle (grey) */}
+        <polygon points="0,18 -5,6 0,10 5,6" fill="#a1a1aa"/>
+        {/* Labels */}
+        <text x={0} y={-20} textAnchor="middle" fontSize={8} fontWeight="bold" fill="#e05555" fontFamily="sans-serif">N</text>
+        <text x={0} y={27}  textAnchor="middle" fontSize={7} fill="#71717a" fontFamily="sans-serif">S</text>
+        <text x={23} y={3}  textAnchor="middle" fontSize={7} fill="#71717a" fontFamily="sans-serif">E</text>
+        <text x={-23} y={3} textAnchor="middle" fontSize={7} fill="#71717a" fontFamily="sans-serif">W</text>
       </g>
 
       {/* ── Scale bar ────────────────────────────────────────────────────── */}
