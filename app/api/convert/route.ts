@@ -27,9 +27,8 @@ export async function POST(req: Request) {
       headers: { 'Content-Type': 'model/gltf-binary' },
     })
   } catch (err) {
-    const e = err as NodeJS.ErrnoException & { stdout?: string; stderr?: string }
-    const detail = `code=${e.code} signal=${e.signal} msg=${e.message}\nstdout=${e.stdout}\nstderr=${e.stderr}`
-    return new Response(detail, { status: 500, headers: { 'Content-Type': 'text/plain' } })
+    const msg = err instanceof Error ? err.message : String(err)
+    return new Response(msg, { status: 500, headers: { 'Content-Type': 'text/plain' } })
   } finally {
     await unlink(inputPath).catch(() => {})
     await unlink(outputPath).catch(() => {})
