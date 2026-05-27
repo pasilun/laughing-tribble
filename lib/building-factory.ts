@@ -27,6 +27,13 @@ export interface BuildingParams {
     offset: number           // metres from south wall (ew) or west wall (ns)
     thickness?: number       // default 0.1
     height?: number          // default: same as wallHeight
+    openings?: Array<{
+      type: 'door' | 'window'
+      offsetFromStart: number  // metres from start of partition (west end for NS, south end for EW)
+      width?: number           // default 0.9 for door, 0.8 for window
+      height?: number          // default 2.1 for door, 1.2 for window
+      sillHeight?: number      // default 0 for door, 0.9 for window
+    }>
   }>
 }
 
@@ -218,6 +225,28 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
       }
     }
   })
+
+  // Build partition openings and append to the openings array
+  for (let index = 0; index < (p.partitions ?? []).length; index++) {
+    const part = (p.partitions ?? [])[index]
+    const partId = `partition-${index}`
+    for (let opIdx = 0; opIdx < (part.openings ?? []).length; opIdx++) {
+      const o = (part.openings ?? [])[opIdx]
+      const isDoor = o.type === 'door'
+      const defaultWidth = isDoor ? 0.9 : 0.8
+      const defaultHeight = isDoor ? 2.1 : 1.2
+      const defaultSillHeight = isDoor ? 0 : 0.9
+      openings.push({
+        id: `${partId}-op-${opIdx}`,
+        partitionId: partId,
+        type: o.type,
+        width: o.width ?? defaultWidth,
+        height: o.height ?? defaultHeight,
+        offsetFromStart: o.offsetFromStart,
+        sillHeight: o.sillHeight ?? defaultSillHeight,
+      })
+    }
+  }
 
   return {
     id: `building-${Date.now()}`,

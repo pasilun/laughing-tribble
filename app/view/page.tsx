@@ -152,6 +152,7 @@ function FloorPlanV2({ model }: FloorPlanProps) {
 
       {/* ── Openings (doors & windows) ───────────────────────────────────── */}
       {model.openings.map((opening: Opening) => {
+        if (!opening.wallId) return null
         const wall = edges.find((e) => e.id === opening.wallId)
         if (!wall) return null
 
@@ -254,6 +255,105 @@ function FloorPlanV2({ model }: FloorPlanProps) {
           strokeLinecap="square"
         />
       ))}
+
+      {/* ── Partition openings (doors & windows in interior walls) ───────────── */}
+      {model.openings.map((opening: Opening) => {
+        if (!opening.partitionId) return null
+        const part = (model.partitions ?? []).find((p) => p.id === opening.partitionId)
+        if (!part) return null
+
+        const partEdge: EdgeRecord = {
+          id: part.id,
+          start: part.start,
+          end: part.end,
+          thickness: part.thickness ?? 0.1,
+          height: part.height ?? (model.walls[0]?.edges[0]?.height ?? 2.4),
+        }
+
+        const angle = wallAngle(partEdge)
+        const startPt = pointAlongWall(partEdge, opening.offsetFromStart)
+        const endPt = pointAlongWall(partEdge, opening.offsetFromStart + opening.width)
+
+        const sx1 = tx(startPt.x)
+        const sy1 = ty(startPt.y)
+        const ex1 = tx(endPt.x)
+        const ey1 = ty(endPt.y)
+
+        const partStrokeW = Math.max(2, (part.thickness ?? 0.1) * scale)
+
+        if (opening.type === 'door') {
+          const { dx, dy } = perpDir(angle)
+          const swingR = opening.width * scale
+          const openEndX = tx(startPt.x + dx * opening.width)
+          const openEndY = ty(startPt.y + dy * opening.width)
+
+          return (
+            <g key={opening.id}>
+              {/* White gap to erase partition line */}
+              <line
+                x1={sx1}
+                y1={sy1}
+                x2={ex1}
+                y2={ey1}
+                stroke="white"
+                strokeWidth={partStrokeW + 2}
+                className="dark:stroke-zinc-900"
+              />
+              {/* Door panel: hinge → open position */}
+              <line
+                x1={sx1}
+                y1={sy1}
+                x2={openEndX}
+                y2={openEndY}
+                stroke="#3b82f6"
+                strokeWidth={1.5}
+              />
+              {/* Swing arc */}
+              <path
+                d={`M ${ex1} ${ey1} A ${swingR} ${swingR} 0 0 0 ${openEndX} ${openEndY}`}
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth={1}
+                strokeDasharray="4 2"
+              />
+            </g>
+          )
+        } else {
+          const { dx, dy } = perpDir(angle)
+          const offset = (partStrokeW / 2 + 1)
+          return (
+            <g key={opening.id}>
+              {/* White gap */}
+              <line
+                x1={sx1}
+                y1={sy1}
+                x2={ex1}
+                y2={ey1}
+                stroke="white"
+                strokeWidth={partStrokeW + 2}
+                className="dark:stroke-zinc-900"
+              />
+              {/* Window lines */}
+              <line
+                x1={sx1 - dx * offset}
+                y1={sy1 + dy * offset}
+                x2={ex1 - dx * offset}
+                y2={ey1 + dy * offset}
+                stroke="#f59e0b"
+                strokeWidth={1.5}
+              />
+              <line
+                x1={sx1 + dx * offset}
+                y1={sy1 - dy * offset}
+                x2={ex1 + dx * offset}
+                y2={ey1 - dy * offset}
+                stroke="#f59e0b"
+                strokeWidth={1.5}
+              />
+            </g>
+          )
+        }
+      })}
 
       {/* ── Dimension annotations ── */}
       {(() => {

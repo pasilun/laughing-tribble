@@ -41,22 +41,26 @@ function summariseModel(model: BuildingModelV2): string {
   if (model.openings.length > 0) {
     lines.push('Öppningar:')
     for (const op of model.openings) {
-      const wl = wallLengths[op.wallId] ?? 0
-      const wName = wallNames[op.wallId] ?? op.wallId
       const typeLabel = op.type === 'door' ? 'Dörr' : 'Fönster'
-      // Convert wall-specific offsetFromStart to universal coordinates
-      // (always from west for EW walls, from south for NS walls)
-      let uStart: number
-      if (op.wallId === 'wall-north') {
-        uStart = wl - op.offsetFromStart - op.width
-      } else if (op.wallId === 'wall-west') {
-        uStart = wl - op.offsetFromStart - op.width
+      if (op.partitionId) {
+        lines.push(`  ${typeLabel} (Innervägg ${op.partitionId}): offset ${op.offsetFromStart.toFixed(2)} m, bredd ${op.width.toFixed(2)} m`)
       } else {
-        uStart = op.offsetFromStart
+        const wl = wallLengths[op.wallId ?? ''] ?? 0
+        const wName = wallNames[op.wallId ?? ''] ?? (op.wallId ?? '')
+        // Convert wall-specific offsetFromStart to universal coordinates
+        // (always from west for EW walls, from south for NS walls)
+        let uStart: number
+        if (op.wallId === 'wall-north') {
+          uStart = wl - op.offsetFromStart - op.width
+        } else if (op.wallId === 'wall-west') {
+          uStart = wl - op.offsetFromStart - op.width
+        } else {
+          uStart = op.offsetFromStart
+        }
+        const uEnd = uStart + op.width
+        const fromOtherEnd = wl - uEnd
+        lines.push(`  ${typeLabel} (${wName}): ${uStart.toFixed(2)}–${uEnd.toFixed(2)} m från väst/syd, ${fromOtherEnd.toFixed(2)} m till andra änden`)
       }
-      const uEnd = uStart + op.width
-      const fromOtherEnd = wl - uEnd
-      lines.push(`  ${typeLabel} (${wName}): ${uStart.toFixed(2)}–${uEnd.toFixed(2)} m från väst/syd, ${fromOtherEnd.toFixed(2)} m till andra änden`)
     }
   }
 
@@ -145,6 +149,21 @@ function asciiFloorPlan(model: BuildingModelV2): string {
       const yTop = width - op.offsetFromStart
       const r1 = gr(yTop), r2 = gr(yTop - op.width)
       for (let r = r1; r <= r2; r++) grid[r][0] = mark
+    } else if (op.partitionId) {
+      // Find the partition and render opening mark along its line
+      const part = (model.partitions ?? []).find(p => p.id === op.partitionId)
+      if (part) {
+        const isNS = Math.abs(part.end.x - part.start.x) < 0.01
+        if (isNS) {
+          const c = gc(part.start.x)
+          const r1 = gr(op.offsetFromStart + op.width), r2 = gr(op.offsetFromStart)
+          for (let r = r1; r <= r2; r++) if (r > 0 && r < gh - 1) grid[r][c] = mark
+        } else {
+          const r = gr(part.start.y)
+          const c1 = gc(op.offsetFromStart), c2 = gc(op.offsetFromStart + op.width)
+          for (let c = c1; c <= c2; c++) if (c > 0 && c < gw - 1) grid[r][c] = mark
+        }
+      }
     }
   }
 
@@ -248,6 +267,21 @@ const TOOL_DEF = {
             },
             thickness: { type: 'number', description: 'Wall thickness in metres, default 0.1' },
             height: { type: 'number', description: 'Wall height in metres, default same as exterior walls' },
+            openings: {
+              type: 'array',
+              description: 'Doors or windows in this partition wall',
+              items: {
+                type: 'object',
+                properties: {
+                  type: { type: 'string', enum: ['door', 'window'] },
+                  offsetFromStart: { type: 'number', description: 'Metres from start of partition (west end for NS partitions, south end for EW partitions)' },
+                  width: { type: 'number', description: 'Opening width in metres, default 0.9 for door, 0.8 for window' },
+                  height: { type: 'number', description: 'Opening height in metres, default 2.1 for door, 1.2 for window' },
+                  sillHeight: { type: 'number', description: 'Metres from floor, default 0 for door, 0.9 for window' },
+                },
+                required: ['type', 'offsetFromStart'],
+              },
+            },
           },
           required: ['direction', 'offset'],
         },

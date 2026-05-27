@@ -275,7 +275,7 @@ export function generateIFC(model: BuildingModelV2): string {
       wallEntityIds.push(wallEntityId)
 
       // Openings for this edge
-      const edgeOpenings = model.openings.filter(o => o.wallId === edge.id)
+      const edgeOpenings = model.openings.filter(o => o.wallId === edge.id && !o.partitionId)
       for (const opening of edgeOpenings) {
         const vStart = loop.vertices[edgeIdx]
         const vEnd = loop.vertices[(edgeIdx + 1) % loop.vertices.length]

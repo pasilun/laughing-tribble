@@ -14,7 +14,8 @@ export type WallLoop = {
 
 export type Opening = {
   id: string
-  wallId: string
+  wallId?: string          // set for exterior wall openings
+  partitionId?: string     // set for partition wall openings
   type: 'door' | 'window'
   width: number
   height: number
