@@ -465,6 +465,132 @@ export function generateIFC(model: BuildingModelV2): string {
       `'${part.id}',#${ownerHistId},'${part.id}',$,$,#${localPlacementId},#${prodDefId},$`)
 
     partitionEntityIds.push(wallId)
+
+    // Openings for this partition
+    const partOpenings = model.openings.filter(o => o.partitionId === part.id)
+    for (const opening of partOpenings) {
+      const sillH = opening.sillHeight ?? (opening.type === 'door' ? 0 : 0.9)
+      // Entity origin at MIDPOINT of opening along partition
+      const midOffset = opening.offsetFromStart + opening.width / 2
+      const ox = part.start.x + dirX * midOffset
+      const oy = part.start.y + dirY * midOffset
+
+      // Entity placement
+      const openOriginId = w.next()
+      w.add(openOriginId, 'IFCCARTESIANPOINT', `(${fmt(ox)},${fmt(oy)},${fmt(sillH)})`)
+      const openZUpId = w.next()
+      w.add(openZUpId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+      const openXDirId = w.next()
+      w.add(openXDirId, 'IFCDIRECTION', `(${fmt(dirX)},${fmt(dirY)},${fmt(0.)})`)
+      const openAxis3dId = w.next()
+      w.add(openAxis3dId, 'IFCAXIS2PLACEMENT3D', `#${openOriginId},#${openZUpId},#${openXDirId}`)
+      const openLocalPlacementId = w.next()
+      w.add(openLocalPlacementId, 'IFCLOCALPLACEMENT', `#${storeyLocalPlacementId},#${openAxis3dId}`)
+
+      // Void solid: centered at entity origin, full partition thickness + tolerance
+      const voidDepth = (part.thickness ?? 0.1) + 0.1
+      const profileOriginId = w.next()
+      w.add(profileOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)})`)
+      const profilePlacementId = w.next()
+      w.add(profilePlacementId, 'IFCAXIS2PLACEMENT2D', `#${profileOriginId},$`)
+      const voidProfileId = w.next()
+      w.add(voidProfileId, 'IFCRECTANGLEPROFILEDEF',
+        `.AREA.,$,#${profilePlacementId},${fmt(opening.width)},${fmt(voidDepth)}`)
+
+      // Solid placement: identity in entity local space
+      const solidOriginId2 = w.next()
+      w.add(solidOriginId2, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+      const solidPlacementId2 = w.next()
+      w.add(solidPlacementId2, 'IFCAXIS2PLACEMENT3D', `#${solidOriginId2},$,$`)
+
+      const openExtDirId = w.next()
+      w.add(openExtDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+      const openSolidId = w.next()
+      w.add(openSolidId, 'IFCEXTRUDEDAREASOLID',
+        `#${voidProfileId},#${solidPlacementId2},#${openExtDirId},${fmt(opening.height)}`)
+
+      const openShapeRepId = w.next()
+      w.add(openShapeRepId, 'IFCSHAPEREPRESENTATION',
+        `#${geomCtx3dId},'Body','SweptSolid',(#${openSolidId})`)
+      const openProdDefId = w.next()
+      w.add(openProdDefId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${openShapeRepId})`)
+
+      const openingElementId = w.next()
+      w.add(openingElementId, 'IFCOPENINGELEMENT',
+        `'${opening.id}',#${ownerHistId},'Opening',$,$,#${openLocalPlacementId},#${openProdDefId},$`)
+
+      const relVoidId = w.next()
+      w.add(relVoidId, 'IFCRELVOIDSELEMENT',
+        `'rel-void-${opening.id}',#${ownerHistId},$,$,#${wallId},#${openingElementId}`)
+
+      if (opening.type === 'door') {
+        const panelDepth = 0.045
+        const dProfOriginId = w.next()
+        w.add(dProfOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)})`)
+        const dProfPlacId = w.next()
+        w.add(dProfPlacId, 'IFCAXIS2PLACEMENT2D', `#${dProfOriginId},$`)
+        const dProfId = w.next()
+        w.add(dProfId, 'IFCRECTANGLEPROFILEDEF',
+          `.AREA.,$,#${dProfPlacId},${fmt(opening.width)},${fmt(panelDepth)}`)
+        const dSolidOriginId = w.next()
+        w.add(dSolidOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+        const dSolidPlacId = w.next()
+        w.add(dSolidPlacId, 'IFCAXIS2PLACEMENT3D', `#${dSolidOriginId},$,$`)
+        const dExtDirId = w.next()
+        w.add(dExtDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+        const dSolidId = w.next()
+        w.add(dSolidId, 'IFCEXTRUDEDAREASOLID',
+          `#${dProfId},#${dSolidPlacId},#${dExtDirId},${fmt(opening.height)}`)
+        styleItem(dSolidId, 0.55, 0.35, 0.15, 0.)   // wood brown, opaque
+
+        const dShapeRepId = w.next()
+        w.add(dShapeRepId, 'IFCSHAPEREPRESENTATION',
+          `#${geomCtx3dId},'Body','SweptSolid',(#${dSolidId})`)
+        const dProdDefId = w.next()
+        w.add(dProdDefId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${dShapeRepId})`)
+
+        const doorId = w.next()
+        w.add(doorId, 'IFCDOOR',
+          `'${opening.id}-door',#${ownerHistId},'Door',$,$,#${openLocalPlacementId},#${dProdDefId},${fmt(opening.height)},${fmt(opening.width)}`)
+        fillerIds.push(doorId)
+        const relFillId = w.next()
+        w.add(relFillId, 'IFCRELFILLSELEMENT',
+          `'rel-fill-${opening.id}',#${ownerHistId},$,$,#${openingElementId},#${doorId}`)
+      } else {
+        const paneDepth = 0.02
+        const wProfOriginId = w.next()
+        w.add(wProfOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)})`)
+        const wProfPlacId = w.next()
+        w.add(wProfPlacId, 'IFCAXIS2PLACEMENT2D', `#${wProfOriginId},$`)
+        const wProfId = w.next()
+        w.add(wProfId, 'IFCRECTANGLEPROFILEDEF',
+          `.AREA.,$,#${wProfPlacId},${fmt(opening.width)},${fmt(paneDepth)}`)
+        const wSolidOriginId = w.next()
+        w.add(wSolidOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+        const wSolidPlacId = w.next()
+        w.add(wSolidPlacId, 'IFCAXIS2PLACEMENT3D', `#${wSolidOriginId},$,$`)
+        const wExtDirId = w.next()
+        w.add(wExtDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+        const wSolidId = w.next()
+        w.add(wSolidId, 'IFCEXTRUDEDAREASOLID',
+          `#${wProfId},#${wSolidPlacId},#${wExtDirId},${fmt(opening.height)}`)
+        styleItem(wSolidId, 0.6, 0.85, 1.0, 0.55)   // glass blue, 45% opaque
+
+        const wShapeRepId = w.next()
+        w.add(wShapeRepId, 'IFCSHAPEREPRESENTATION',
+          `#${geomCtx3dId},'Body','SweptSolid',(#${wSolidId})`)
+        const wProdDefId = w.next()
+        w.add(wProdDefId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${wShapeRepId})`)
+
+        const windowId = w.next()
+        w.add(windowId, 'IFCWINDOW',
+          `'${opening.id}-window',#${ownerHistId},'Window',$,$,#${openLocalPlacementId},#${wProdDefId},${fmt(opening.height)},${fmt(opening.width)}`)
+        fillerIds.push(windowId)
+        const relFillId = w.next()
+        w.add(relFillId, 'IFCRELFILLSELEMENT',
+          `'rel-fill-${opening.id}',#${ownerHistId},$,$,#${openingElementId},#${windowId}`)
+      }
+    }
   }
 
   // ── Rooms (IFCSPACE) ─────────────────────────────────────────────────────
