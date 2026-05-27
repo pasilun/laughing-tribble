@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { BuildingModelV2, Opening, Vector2 } from '@/types/building-v2'
 import { generateIFC } from '@/lib/ifc-generator'
 
-const IFCViewer = dynamic(() => import('@/components/IFCViewer'), {
+const GLTFViewer = dynamic(() => import('@/components/GLTFViewer'), {
   ssr: false,
   loading: () => (
     <div className="w-full h-[500px] rounded-lg bg-zinc-900 flex items-center justify-center text-zinc-400 text-sm">
@@ -371,6 +371,8 @@ function StatsPanel({ model }: { model: BuildingModelV2 }) {
 export default function ViewPage() {
   const [model, setModel] = useState<BuildingModelV2 | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [glbUrl, setGlbUrl] = useState<string | null>(null)
+  const [convertError, setConvertError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -422,7 +424,34 @@ export default function ViewPage() {
   }, [])
 
   const ifcContent = useMemo(() => (model ? generateIFC(model) : ''), [model])
-  const ifcBytes = useMemo(() => new TextEncoder().encode(ifcContent), [ifcContent])
+
+  useEffect(() => {
+    if (!ifcContent) return
+    let objectUrl: string | null = null
+
+    fetch('/api/convert', {
+      method: 'POST',
+      body: ifcContent,
+      headers: { 'Content-Type': 'text/plain' },
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const msg = await res.text().catch(() => res.statusText)
+          throw new Error(`Convert failed (${res.status}): ${msg}`)
+        }
+        const blob = await res.blob()
+        objectUrl = URL.createObjectURL(blob)
+        setConvertError(null)
+        setGlbUrl(objectUrl)
+      })
+      .catch((e) => {
+        setConvertError(String(e))
+      })
+
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [ifcContent])
 
   const handleDownload = useCallback(() => {
     if (!model) return
@@ -482,9 +511,14 @@ export default function ViewPage() {
           <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
             3D-modell
           </h2>
-          <IFCViewer ifcData={ifcBytes} />
+          <GLTFViewer glbUrl={glbUrl ?? ''} />
+          {convertError && (
+            <p className="text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded px-2 py-1">
+              {convertError}
+            </p>
+          )}
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Renderas via web-ifc (WASM) + three.js — parsar den genererade IFC-filen direkt i webbläsaren.
+            Renderas via IfcConvert + three.js GLTFLoader — konverteras server-side.
           </p>
         </section>
 
