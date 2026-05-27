@@ -2,7 +2,54 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
-## [2026-05-26] feat | Product pivot to MCP tools — assess_permit_requirement shipped, file-based viewer
+## [2026-05-27] idea | MCP4IFC — visual feedback loop via screenshot (parked)
+
+**Source:** arXiv 2511.05533 — *MCP4IFC: IFC-Based Building Design using Large Language Models* (Nov 2025, 0 citations as of May 2026).
+
+**One-line summary:** Research group independently arrived at the same MCP + IFC + LLM architecture, adding visual feedback (Blender screenshots) as the correction signal.
+
+### What they built
+
+An MCP server with 50+ BIM tools backed by IfcOpenShell (Python) and a Blender+Bonsai add-on for rendering. Three interaction modes:
+1. **Predefined tools** — wall, slab, door, window primitives (same idea as `generate_building_link`)
+2. **Dynamic code generation** — RAG over IfcOpenShell API docs so the LLM can synthesise novel Python for operations beyond predefined tools
+3. **Visual feedback** — after each tool call, a screenshot of the Blender viewport is returned to the LLM, which then self-corrects
+
+Reported results: 83% accuracy on IFC scene queries, 8/8 semantic edits succeeded.
+
+### What's different from our stack
+
+| Their approach | Our approach |
+|---|---|
+| Blender + Bonsai (local, Python) | Next.js + web-ifc (browser, TypeScript) |
+| IfcOpenShell — read/write/query existing IFC | Custom IFC STEP generator (write-only) |
+| Screenshot from Blender viewport | ASCII floor plan + coordinate summary in tool response |
+| Python sidecar required | Serverless (Vercel) |
+
+### The idea to pick up: rendered floor plan image in tool response
+
+Their key insight: **the correction loop closes fastest with a visual**. A Blender screenshot is overkill — but we already generate an SVG floor plan in `app/view/page.tsx`. We could render it server-side (using a lightweight SVG-to-PNG library, or by returning the SVG markup itself as a data URI) and include it in the MCP tool response as a base64 image. Claude is multimodal and can read images in tool results.
+
+Concretely:
+1. Extract the SVG floor plan rendering logic from `FloorPlanV2` into a pure function in `lib/`
+2. In `app/api/mcp/route.ts`, call that function after `buildingFromParams()` and embed the SVG (or a rasterised PNG) in the tool result as a `{ type: 'image', data: '<base64>', mimeType: 'image/svg+xml' }` content block
+3. Claude reads the image, sees exact window/door/partition placement, and self-corrects immediately without the user having to open the URL
+
+This is a stronger signal than ASCII art and requires no external Python service — the SVG is already being generated.
+
+### Why parked
+
+The ASCII floor plan + model summary feedback loop shipped on 2026-05-27 and hasn't been validated yet. Try it for a few weeks first. If Claude still misfires on placements, the SVG-in-tool-response is the next step.
+
+### Why not adopt their full stack
+
+- Blender+Bonsai is not browser-deployable — breaks the phone-first MCP use case
+- IfcOpenShell would require a Python sidecar on Vercel (tight size/timeout constraints)
+- Their dynamic code generation (RAG + arbitrary Python) is powerful but adds attack surface and unpredictability for a permit-advisory tool
+
+---
+
+
 
 **Summary:** The product pivoted from a web chat app to a Claude MCP tool server. The web UI at `/view` is now only a 3D/2D model viewer; all user interaction happens in Claude conversations via MCP tools. Two tools are live: `generate_building_link` (existed) and `assess_permit_requirement` (new). A planned third, `generate_permit_packet`, will produce PDFs.
 
