@@ -1,11 +1,15 @@
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const ifcConvert = require('ifc-converter') as (src: string, dest: string) => Promise<void>
+import { writeFile, readFile, unlink, chmod } from 'fs/promises'
+import { join, resolve } from 'path'
+import { execFile as execFileCb } from 'child_process'
+import { promisify } from 'util'
 
-import { writeFile, readFile, unlink } from 'fs/promises'
-import { join } from 'path'
+const execFile = promisify(execFileCb)
+
+// Resolve binary path relative to node_modules (not the bundle)
+const BINARY = resolve(process.cwd(), 'node_modules/ifc-converter/bin/IfcConvert')
 
 export async function POST(req: Request) {
   const ifcText = await req.text()
@@ -15,11 +19,17 @@ export async function POST(req: Request) {
 
   try {
     await writeFile(inputPath, ifcText, 'utf8')
-    await ifcConvert(inputPath, outputPath)
+    // Ensure binary is executable (survives npm install without chmod)
+    await chmod(BINARY, 0o755).catch(() => {})
+    await execFile(BINARY, [inputPath, outputPath], { maxBuffer: 10 * 1024 * 1024 })
     const glb = await readFile(outputPath)
     return new Response(glb, {
       headers: { 'Content-Type': 'model/gltf-binary' },
     })
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException & { stdout?: string; stderr?: string }
+    const detail = `code=${e.code} signal=${e.signal} msg=${e.message}\nstdout=${e.stdout}\nstderr=${e.stderr}`
+    return new Response(detail, { status: 500, headers: { 'Content-Type': 'text/plain' } })
   } finally {
     await unlink(inputPath).catch(() => {})
     await unlink(outputPath).catch(() => {})
