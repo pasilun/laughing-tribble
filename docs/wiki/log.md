@@ -2,6 +2,54 @@
 
 Chronological record of wiki ingests, updates, and changes.
 
+## [2026-05-27] idea | IfcOpenShell sidecar — deployment options researched (parked)
+
+**Question:** How to deploy a Python service running IfcOpenShell + IfcConvert alongside the existing Vercel Next.js app?
+
+### Options ranked
+
+| Option | Free tier | Cold start | Effort | Verdict |
+|---|---|---|---|---|
+| **Google Cloud Run** | 2M req/month free (never expires) | ~2–5s (cached layers) | GCP account + Dockerfile | Best cost/perf |
+| **Modal.com** | $30/month compute credits, no fee | 15–30s first, fast after | Python file only, no infra | Best DX |
+| **Railway** | $5/month plan + $5 credit (≈ free at low traffic) | None (persistent) | Dockerfile | Good all-rounder |
+| **Fly.io** | $5/month minimum | None (persistent VM) | Dockerfile | Similar to Railway |
+| **Render** | Free tier sleeps after 15 min → 60s wake | 60s on free | Easy | Avoid free tier |
+| **Vercel Python** | Included but 500 MB limit, 10–60s timeout | Serverless | Same repo | Too tight, risky |
+| **WASM wheels** | Browser, no sidecar needed | N/A | None | Not prod-ready yet |
+
+### The no-sidecar path (most interesting)
+
+The `ifc-converter` npm package bundles pre-compiled IfcConvert Linux x64 binaries (~23–50 MB compressed), well within Vercel's 250 MB JS function limit. This means:
+
+1. Keep `lib/ifc-generator.ts` (TypeScript IFC text generation — already works)
+2. Add a Vercel API route that pipes the IFC text through the bundled IfcConvert binary → produces `.glb`
+3. Store `.glb` in Vercel Blob; viewer uses `GLTFLoader` instead of web-ifc
+
+**No Python. No sidecar. No new infrastructure.** The viewer simplification alone (260 lines → ~40 lines, no WASM) makes this worth doing.
+
+The trade-off: we keep the hand-rolled IFC generator rather than switching to ifcopenshell-python. That means no automatic quantity extraction or IFC property sets. Acceptable for now.
+
+### If we later need proper IFC generation (quantities, property sets)
+
+Add a Python sidecar using **Modal.com** (simplest) or **Google Cloud Run** (free at scale). The IfcConvert-in-Vercel step stays the same; only the IFC *generation* moves to Python.
+
+### Recommended next step
+
+Try the `ifc-converter` npm package in a Vercel API route:
+```typescript
+// app/api/convert/route.ts
+import { convert } from 'ifc-converter'  // bundles IfcConvert binary
+// POST body: IFC text → returns .glb bytes
+```
+If it works (binary executes in Vercel's Node runtime, output is valid glTF), replace web-ifc immediately.
+
+### Why parked
+
+Still validating the ASCII floor plan feedback loop. The web-ifc viewer works; not broken enough to fix yet. But when the next viewer bug surfaces, this is the path.
+
+---
+
 ## [2026-05-27] idea | IfcOpenShell — what it could replace and improve (parked)
 
 **Source:** https://github.com/IfcOpenShell/IfcOpenShell — open-source C++/Python IFC toolkit, the de-facto standard for programmatic IFC work.
