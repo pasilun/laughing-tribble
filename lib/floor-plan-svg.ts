@@ -133,10 +133,21 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
     const ey1 = ty(endPt.y)
 
     if (opening.type === 'door') {
+      const hinge = opening.hinge ?? 'start'
+      const swingDir = opening.swing ?? 'ccw'
+
+      const hingePoint = hinge === 'start' ? startPt : endPt
+      const latchPoint = hinge === 'start' ? endPt : startPt
+
       const { dx, dy } = perpDir(angle)
+      const sign = swingDir === 'ccw' ? 1 : -1
       const swingR = opening.width * scale
-      const openEndX = tx(startPt.x + dx * opening.width)
-      const openEndY = ty(startPt.y + dy * opening.width)
+
+      const openEndX = tx(hingePoint.x + dx * sign * opening.width)
+      const openEndY = ty(hingePoint.y + dy * sign * opening.width)
+
+      const hx = tx(hingePoint.x), hy = ty(hingePoint.y)
+      const lx = tx(latchPoint.x), ly = ty(latchPoint.y)
 
       // White gap to erase wall
       parts.push(
@@ -144,11 +155,11 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
       )
       // Door panel
       parts.push(
-        `<line x1="${sx1}" y1="${sy1}" x2="${openEndX}" y2="${openEndY}" stroke="#3b82f6" stroke-width="1.5"/>`
+        `<line x1="${hx}" y1="${hy}" x2="${openEndX}" y2="${openEndY}" stroke="#3b82f6" stroke-width="1.5"/>`
       )
       // Swing arc
       parts.push(
-        `<path d="M ${ex1} ${ey1} A ${swingR} ${swingR} 0 0 0 ${openEndX} ${openEndY}" fill="none" stroke="#3b82f6" stroke-width="1" stroke-dasharray="4 2"/>`
+        `<path d="M ${lx} ${ly} A ${swingR} ${swingR} 0 0 ${swingDir === 'cw' ? 1 : 0} ${openEndX} ${openEndY}" fill="none" stroke="#3b82f6" stroke-width="1" stroke-dasharray="4 2"/>`
       )
     } else {
       // Window
@@ -202,19 +213,30 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
     const partStrokeW = Math.max(2, (part.thickness ?? 0.1) * scale)
 
     if (opening.type === 'door') {
+      const hinge = opening.hinge ?? 'start'
+      const swingDir = opening.swing ?? 'ccw'
+
+      const hingePoint = hinge === 'start' ? startPt : endPt
+      const latchPoint = hinge === 'start' ? endPt : startPt
+
       const { dx, dy } = perpDir(angle)
+      const sign = swingDir === 'ccw' ? 1 : -1
       const swingR = opening.width * scale
-      const openEndX = tx(startPt.x + dx * opening.width)
-      const openEndY = ty(startPt.y + dy * opening.width)
+
+      const openEndX = tx(hingePoint.x + dx * sign * opening.width)
+      const openEndY = ty(hingePoint.y + dy * sign * opening.width)
+
+      const hx = tx(hingePoint.x), hy = ty(hingePoint.y)
+      const lx = tx(latchPoint.x), ly = ty(latchPoint.y)
 
       parts.push(
         `<line x1="${sx1}" y1="${sy1}" x2="${ex1}" y2="${ey1}" stroke="white" stroke-width="${partStrokeW + 2}"/>`
       )
       parts.push(
-        `<line x1="${sx1}" y1="${sy1}" x2="${openEndX}" y2="${openEndY}" stroke="#3b82f6" stroke-width="1.5"/>`
+        `<line x1="${hx}" y1="${hy}" x2="${openEndX}" y2="${openEndY}" stroke="#3b82f6" stroke-width="1.5"/>`
       )
       parts.push(
-        `<path d="M ${ex1} ${ey1} A ${swingR} ${swingR} 0 0 0 ${openEndX} ${openEndY}" fill="none" stroke="#3b82f6" stroke-width="1" stroke-dasharray="4 2"/>`
+        `<path d="M ${lx} ${ly} A ${swingR} ${swingR} 0 0 ${swingDir === 'cw' ? 1 : 0} ${openEndX} ${openEndY}" fill="none" stroke="#3b82f6" stroke-width="1" stroke-dasharray="4 2"/>`
       )
     } else {
       const { dx, dy } = perpDir(angle)

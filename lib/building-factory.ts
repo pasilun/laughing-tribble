@@ -20,6 +20,8 @@ export interface BuildingParams {
     height?: number           // door default 2.1, window default 1.2
     offsetFromStart?: number  // For south/north: metres from WEST end. For east/west: metres from SOUTH end. Default: centered.
     sillHeight?: number       // default 0 for door, 0.9 for window
+    hinge?: 'start' | 'end'       // default 'start'
+    openDirection?: 'in' | 'out'  // 'in'=ccw (default), 'out'=cw
   }>
   slabThickness?: number  // default 0.2
   partitions?: Array<{
@@ -33,6 +35,8 @@ export interface BuildingParams {
       width?: number           // default 0.9 for door, 0.8 for window
       height?: number          // default 2.1 for door, 1.2 for window
       sillHeight?: number      // default 0 for door, 0.9 for window
+      hinge?: 'start' | 'end' // default 'start'
+      swing?: 'ccw' | 'cw'    // default 'ccw'
     }>
   }>
 }
@@ -164,6 +168,8 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
       height: o.height ?? defaultHeight,
       offsetFromStart,
       sillHeight: o.sillHeight ?? defaultSillHeight,
+      hinge: o.hinge,
+      swing: o.openDirection === 'out' ? 'cw' : o.openDirection === 'in' ? 'ccw' : undefined,
     }
   })
 
@@ -244,6 +250,8 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
         height: o.height ?? defaultHeight,
         offsetFromStart: o.offsetFromStart,
         sillHeight: o.sillHeight ?? defaultSillHeight,
+        hinge: o.hinge,
+        swing: o.swing,
       })
     }
   }

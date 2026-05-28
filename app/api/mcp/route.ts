@@ -248,6 +248,16 @@ const TOOL_DEF = {
               type: 'number',
               description: 'Metres from floor; default 0 for door, 0.9 for window',
             },
+            hinge: {
+              type: 'string',
+              enum: ['start', 'end'],
+              description: "Which end of the opening has the hinge. 'start' = closer to west (EW walls) or south (NS walls). Default: 'start'",
+            },
+            openDirection: {
+              type: 'string',
+              enum: ['in', 'out'],
+              description: 'Whether the door opens inward (into the building, default) or outward',
+            },
           },
           required: ['wall', 'type'],
         },
@@ -280,6 +290,16 @@ const TOOL_DEF = {
                   width: { type: 'number', description: 'Opening width in metres, default 0.9 for door, 0.8 for window' },
                   height: { type: 'number', description: 'Opening height in metres, default 2.1 for door, 1.2 for window' },
                   sillHeight: { type: 'number', description: 'Metres from floor, default 0 for door, 0.9 for window' },
+                  hinge: {
+                    type: 'string',
+                    enum: ['start', 'end'],
+                    description: "Which end of the opening has the hinge. Default: 'start'",
+                  },
+                  swing: {
+                    type: 'string',
+                    enum: ['ccw', 'cw'],
+                    description: 'Swing direction viewed from above. Default: \'ccw\'',
+                  },
                 },
                 required: ['type', 'offsetFromStart'],
               },

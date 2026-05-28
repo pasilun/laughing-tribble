@@ -167,11 +167,23 @@ function FloorPlanV2({ model }: FloorPlanProps) {
 
         if (opening.type === 'door') {
           // Door: gap in wall + door swing arc
-          // Hinge at startPt; door swings CCW (inward) by opening.width
+          const hinge = opening.hinge ?? 'start'
+          const swingDir = opening.swing ?? 'ccw'
+
+          // hingePoint is where the hinge is; latchPoint is the other end
+          const hingePoint = hinge === 'start' ? startPt : endPt
+          const latchPoint = hinge === 'start' ? endPt : startPt
+
           const { dx, dy } = perpDir(angle)
+          const sign = swingDir === 'ccw' ? 1 : -1
           const swingR = opening.width * scale
-          const openEndX = tx(startPt.x + dx * opening.width)
-          const openEndY = ty(startPt.y + dy * opening.width)
+
+          // open position of the latch end (door panel swings from hingePoint)
+          const openEndX = tx(hingePoint.x + dx * sign * opening.width)
+          const openEndY = ty(hingePoint.y + dy * sign * opening.width)
+
+          const hx = tx(hingePoint.x), hy = ty(hingePoint.y)
+          const lx = tx(latchPoint.x), ly = ty(latchPoint.y)
 
           return (
             <g key={opening.id}>
@@ -187,8 +199,8 @@ function FloorPlanV2({ model }: FloorPlanProps) {
               />
               {/* Door panel: hinge → open position */}
               <line
-                x1={sx1}
-                y1={sy1}
+                x1={hx}
+                y1={hy}
                 x2={openEndX}
                 y2={openEndY}
                 stroke="#3b82f6"
@@ -196,7 +208,7 @@ function FloorPlanV2({ model }: FloorPlanProps) {
               />
               {/* Swing arc: latch end sweeps to door-open position */}
               <path
-                d={`M ${ex1} ${ey1} A ${swingR} ${swingR} 0 0 0 ${openEndX} ${openEndY}`}
+                d={`M ${lx} ${ly} A ${swingR} ${swingR} 0 0 ${swingDir === 'cw' ? 1 : 0} ${openEndX} ${openEndY}`}
                 fill="none"
                 stroke="#3b82f6"
                 strokeWidth={1}
@@ -282,10 +294,21 @@ function FloorPlanV2({ model }: FloorPlanProps) {
         const partStrokeW = Math.max(2, (part.thickness ?? 0.1) * scale)
 
         if (opening.type === 'door') {
+          const hinge = opening.hinge ?? 'start'
+          const swingDir = opening.swing ?? 'ccw'
+
+          const hingePoint = hinge === 'start' ? startPt : endPt
+          const latchPoint = hinge === 'start' ? endPt : startPt
+
           const { dx, dy } = perpDir(angle)
+          const sign = swingDir === 'ccw' ? 1 : -1
           const swingR = opening.width * scale
-          const openEndX = tx(startPt.x + dx * opening.width)
-          const openEndY = ty(startPt.y + dy * opening.width)
+
+          const openEndX = tx(hingePoint.x + dx * sign * opening.width)
+          const openEndY = ty(hingePoint.y + dy * sign * opening.width)
+
+          const hx = tx(hingePoint.x), hy = ty(hingePoint.y)
+          const lx = tx(latchPoint.x), ly = ty(latchPoint.y)
 
           return (
             <g key={opening.id}>
@@ -301,8 +324,8 @@ function FloorPlanV2({ model }: FloorPlanProps) {
               />
               {/* Door panel: hinge → open position */}
               <line
-                x1={sx1}
-                y1={sy1}
+                x1={hx}
+                y1={hy}
                 x2={openEndX}
                 y2={openEndY}
                 stroke="#3b82f6"
@@ -310,7 +333,7 @@ function FloorPlanV2({ model }: FloorPlanProps) {
               />
               {/* Swing arc */}
               <path
-                d={`M ${ex1} ${ey1} A ${swingR} ${swingR} 0 0 0 ${openEndX} ${openEndY}`}
+                d={`M ${lx} ${ly} A ${swingR} ${swingR} 0 0 ${swingDir === 'cw' ? 1 : 0} ${openEndX} ${openEndY}`}
                 fill="none"
                 stroke="#3b82f6"
                 strokeWidth={1}

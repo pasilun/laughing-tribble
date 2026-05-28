@@ -21,6 +21,8 @@ export type Opening = {
   height: number
   offsetFromStart: number  // metres along wall from start point
   sillHeight?: number      // metres from floor, default 0 for doors, 0.9 for windows
+  hinge?: 'start' | 'end' // which end of the opening has the hinge, default 'start'
+  swing?: 'ccw' | 'cw'    // swing direction viewed from above, default 'ccw'
 }
 
 export type Room = {
