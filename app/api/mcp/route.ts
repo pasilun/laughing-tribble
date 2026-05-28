@@ -531,6 +531,7 @@ export async function POST(request: Request) {
           access: 'public',
           contentType: 'application/json',
           addRandomSuffix: false,
+          allowOverwrite: true,
           token: blobToken,
         })
 
@@ -578,6 +579,7 @@ export async function POST(request: Request) {
           access: 'public',
           contentType: 'application/json',
           addRandomSuffix: false,
+          allowOverwrite: true,
           token: blobToken,
         })
         url = `${host}/view?id=${id}`
