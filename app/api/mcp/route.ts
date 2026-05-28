@@ -1,9 +1,10 @@
 import { deflateRawSync } from 'zlib'
-import { put } from '@vercel/blob'
+import { list, put } from '@vercel/blob'
 import { buildingFromParams } from '@/lib/building-factory'
 import { assessPermitRequirement } from '@/lib/triage-engine'
 import type { TriageInput } from '@/lib/triage-engine'
 import type { BuildingModelV2 } from '@/types/building-v2'
+import { generateFloorPlanSVG } from '@/lib/floor-plan-svg'
 
 function summariseModel(model: BuildingModelV2): string {
   const length = (model.walls[0]?.vertices[1]?.x ?? 0) - (model.walls[0]?.vertices[0]?.x ?? 0)
@@ -291,6 +292,19 @@ const TOOL_DEF = {
   },
 }
 
+const PREVIEW_TOOL_DEF = {
+  name: 'preview_building',
+  description:
+    'Returns a 2D floor plan SVG image of a saved building model so it can be reviewed visually.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      model_id: { type: 'string', description: 'The building model ID (from create_building)' },
+    },
+    required: ['model_id'],
+  },
+}
+
 const TRIAGE_TOOL_DEF = {
   name: 'assess_permit_requirement',
   description:
@@ -361,7 +375,7 @@ export async function POST(request: Request) {
   }
 
   if (method === 'tools/list') {
-    return mcpResp({ jsonrpc: '2.0', id, result: { tools: [TOOL_DEF, TRIAGE_TOOL_DEF] } })
+    return mcpResp({ jsonrpc: '2.0', id, result: { tools: [TOOL_DEF, TRIAGE_TOOL_DEF, PREVIEW_TOOL_DEF] } })
   }
 
   if (method === 'tools/call') {
@@ -377,6 +391,43 @@ export async function POST(request: Request) {
         return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }] } })
       } catch (err) {
         return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' } })
+      }
+    }
+
+    if (name === 'preview_building') {
+      try {
+        const modelId = (args as { model_id?: string }).model_id
+        if (!modelId) {
+          return mcpResp({ jsonrpc: '2.0', id, error: { code: -32602, message: 'model_id is required' } })
+        }
+
+        const blobToken = process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
+        const { blobs } = await list({ prefix: `buildings/${modelId}`, token: blobToken })
+        const blob = blobs.find((b) => b.pathname === `buildings/${modelId}.json`)
+
+        if (!blob) {
+          return mcpResp({ jsonrpc: '2.0', id, error: { code: -32602, message: `Model not found: ${modelId}` } })
+        }
+
+        const res = await fetch(blob.url)
+        const model = (await res.json()) as BuildingModelV2
+
+        const svgString = generateFloorPlanSVG(model)
+        const base64 = Buffer.from(svgString).toString('base64')
+
+        return mcpResp({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            content: [{ type: 'image', data: base64, mimeType: 'image/svg+xml' }],
+          },
+        })
+      } catch (err) {
+        return mcpResp({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' },
+        })
       }
     }
 
