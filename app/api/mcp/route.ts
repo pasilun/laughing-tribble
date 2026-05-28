@@ -5,6 +5,7 @@ import { assessPermitRequirement } from '@/lib/triage-engine'
 import type { TriageInput } from '@/lib/triage-engine'
 import type { BuildingModelV2 } from '@/types/building-v2'
 import { generateFloorPlanSVG } from '@/lib/floor-plan-svg'
+import { Resvg } from '@resvg/resvg-js'
 
 function summariseModel(model: BuildingModelV2): string {
   const length = (model.walls[0]?.vertices[1]?.x ?? 0) - (model.walls[0]?.vertices[0]?.x ?? 0)
@@ -413,13 +414,14 @@ export async function POST(request: Request) {
         const model = (await res.json()) as BuildingModelV2
 
         const svgString = generateFloorPlanSVG(model)
-        const base64 = Buffer.from(svgString).toString('base64')
+        const png = new Resvg(svgString, { fitTo: { mode: 'width', value: 1200 } }).render().asPng()
+        const base64 = png.toString('base64')
 
         return mcpResp({
           jsonrpc: '2.0',
           id,
           result: {
-            content: [{ type: 'image', data: base64, mimeType: 'image/svg+xml' }],
+            content: [{ type: 'image', data: base64, mimeType: 'image/png' }],
           },
         })
       } catch (err) {
@@ -483,11 +485,12 @@ Parametrar som användes:
 ${argsJson}`
 
       const svgPreview = generateFloorPlanSVG(model)
-      const svgBase64 = Buffer.from(svgPreview).toString('base64')
+      const pngPreview = new Resvg(svgPreview, { fitTo: { mode: 'width', value: 1200 } }).render().asPng()
+      const pngBase64 = pngPreview.toString('base64')
 
       return mcpResp({ jsonrpc: '2.0', id, result: { content: [
         { type: 'text', text },
-        { type: 'image', data: svgBase64, mimeType: 'image/svg+xml' },
+        { type: 'image', data: pngBase64, mimeType: 'image/png' },
       ] } })
     } catch (err) {
       return mcpResp({

@@ -1,6 +1,7 @@
 import { list } from '@vercel/blob'
 import { NextRequest } from 'next/server'
 import { generateFloorPlanSVG } from '@/lib/floor-plan-svg'
+import { Resvg } from '@resvg/resvg-js'
 import type { BuildingModelV2 } from '@/types/building-v2'
 
 export const runtime = 'nodejs'
@@ -26,9 +27,11 @@ export async function GET(
   const model = (await res.json()) as BuildingModelV2
 
   const svg = generateFloorPlanSVG(model)
+  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1200 } })
+  const png = resvg.render().asPng()
 
-  return new Response(svg, {
+  return new Response(png.buffer as ArrayBuffer, {
     status: 200,
-    headers: { 'Content-Type': 'image/svg+xml' },
+    headers: { 'Content-Type': 'image/png' },
   })
 }
