@@ -510,77 +510,6 @@ export async function POST(request: Request) {
       }
     }
 
-    if (name !== 'generate_building_link') {
-      return mcpResp({ jsonrpc: '2.0', id, error: { code: -32602, message: 'Unknown tool' } })
-    }
-
-    try {
-      const model = buildingFromParams(args as unknown as Parameters<typeof buildingFromParams>[0])
-      const json = JSON.stringify(model)
-
-      // VERCEL_PROJECT_PRODUCTION_URL is the stable alias; VERCEL_URL is deployment-specific
-      const host = process.env.VERCEL_PROJECT_PRODUCTION_URL
-        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-        : process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000'
-
-      let url: string
-      const blobToken = process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
-      if (blobToken) {
-        // Store model in Vercel Blob and return a clean /view?id=<id> URL
-        const id = model.id
-        await put(`buildings/${id}.json`, json, {
-          access: 'public',
-          contentType: 'application/json',
-          addRandomSuffix: false,
-          token: blobToken,
-        })
-        url = `${host}/view?id=${id}`
-      } else {
-        // Fallback: encode model as deflate-raw+base64url hash in URL (local dev)
-        const compressed = deflateRawSync(Buffer.from(json, 'utf-8'))
-        const encoded = compressed
-          .toString('base64')
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_')
-          .replace(/=/g, '')
-        url = `${host}/view#${encoded}`
-      }
-
-      const argsJson = JSON.stringify(args, null, 2)
-      const summary = summariseModel(model)
-      const plan = asciiFloorPlan(model)
-      const buildWarnings = validateBuilding(model)
-      const warningBlock = buildWarnings.length > 0
-        ? `\n⚠️ Valideringsvarningar:\n${buildWarnings.map(w => `- ${w}`).join('\n')}\n`
-        : ''
-      const text = `${url}${warningBlock}
-
-⚠️ VIKTIGT: Återanvänd eller modifiera aldrig denna URL. Kalla alltid generate_building_link igen med uppdaterade parametrar om du behöver göra ändringar.
-
-Modellsammanfattning (faktiska mått i den genererade modellen):
-${summary}
-
-Parametrar som användes:
-${argsJson}`
-
-      const svgPreview = generateFloorPlanSVG(model)
-      const pngPreview = new Resvg(svgPreview, { fitTo: { mode: 'width', value: 1200 } }).render().asPng()
-      const pngBase64 = pngPreview.toString('base64')
-
-      return mcpResp({ jsonrpc: '2.0', id, result: { content: [
-        { type: 'text', text },
-        { type: 'image', data: pngBase64, mimeType: 'image/png' },
-      ] } })
-    } catch (err) {
-      return mcpResp({
-        jsonrpc: '2.0',
-        id,
-        error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' },
-      })
-    }
-
     if (name === 'update_building') {
       try {
         const { model_id, ...buildingArgs } = args as { model_id: string } & Record<string, unknown>
@@ -623,6 +552,76 @@ ${argsJson}`
       } catch (err) {
         return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: `${err}` } })
       }
+    }
+
+    if (name !== 'generate_building_link') {
+      return mcpResp({ jsonrpc: '2.0', id, error: { code: -32602, message: 'Unknown tool' } })
+    }
+
+    try {
+      const model = buildingFromParams(args as unknown as Parameters<typeof buildingFromParams>[0])
+      const json = JSON.stringify(model)
+
+      // VERCEL_PROJECT_PRODUCTION_URL is the stable alias; VERCEL_URL is deployment-specific
+      const host = process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:3000'
+
+      let url: string
+      const blobToken = process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
+      if (blobToken) {
+        // Store model in Vercel Blob and return a clean /view?id=<id> URL
+        const id = model.id
+        await put(`buildings/${id}.json`, json, {
+          access: 'public',
+          contentType: 'application/json',
+          addRandomSuffix: false,
+          token: blobToken,
+        })
+        url = `${host}/view?id=${id}`
+      } else {
+        // Fallback: encode model as deflate-raw+base64url hash in URL (local dev)
+        const compressed = deflateRawSync(Buffer.from(json, 'utf-8'))
+        const encoded = compressed
+          .toString('base64')
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=/g, '')
+        url = `${host}/view#${encoded}`
+      }
+
+      const argsJson = JSON.stringify(args, null, 2)
+      const summary = summariseModel(model)
+      const buildWarnings = validateBuilding(model)
+      const warningBlock = buildWarnings.length > 0
+        ? `\n⚠️ Valideringsvarningar:\n${buildWarnings.map(w => `- ${w}`).join('\n')}\n`
+        : ''
+      const text = `${url}${warningBlock}
+
+⚠️ VIKTIGT: Återanvänd eller modifiera aldrig denna URL. Kalla alltid generate_building_link igen med uppdaterade parametrar om du behöver göra ändringar.
+
+Modellsammanfattning (faktiska mått i den genererade modellen):
+${summary}
+
+Parametrar som användes:
+${argsJson}`
+
+      const svgPreview = generateFloorPlanSVG(model)
+      const pngPreview = new Resvg(svgPreview, { fitTo: { mode: 'width', value: 1200 } }).render().asPng()
+      const pngBase64 = pngPreview.toString('base64')
+
+      return mcpResp({ jsonrpc: '2.0', id, result: { content: [
+        { type: 'text', text },
+        { type: 'image', data: pngBase64, mimeType: 'image/png' },
+      ] } })
+    } catch (err) {
+      return mcpResp({
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' },
+      })
     }
   }
 
