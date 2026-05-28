@@ -1,4 +1,4 @@
-import { BuildingModelV2, WallLoop, Opening, Room, Partition } from '@/types/building-v2'
+import { BuildingModelV2, WallLoop, Opening, Room, Partition, Fixture } from '@/types/building-v2'
 
 export interface BuildingParams {
   name?: string
@@ -24,6 +24,18 @@ export interface BuildingParams {
     openDirection?: 'in' | 'out'  // 'in'=ccw (default), 'out'=cw
   }>
   slabThickness?: number  // default 0.2
+  rooms?: Array<{ name: string }>  // names in room-generation order: column-major (west→east), row-major within each column (south→north)
+  annotations?: Array<{ text: string; x: number; y: number }>
+  fixtures?: Array<{
+    type: Fixture['type']
+    x: number
+    y: number
+    width: number
+    depth: number
+    height?: number
+    rotation?: number
+    label?: string
+  }>
   partitions?: Array<{
     direction: 'ew' | 'ns'  // east-west (runs along X axis) or north-south (runs along Y axis)
     offset: number           // metres from south wall (ew) or west wall (ns)
@@ -197,9 +209,12 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
       const x1 = xBreaks[i + 1]
       const y0 = yBreaks[j]
       const y1 = yBreaks[j + 1]
+      const roomName = p.rooms
+        ? (p.rooms[roomIndex - 1]?.name ?? (totalRooms === 1 ? 'Rum' : `Rum ${roomIndex}`))
+        : (totalRooms === 1 ? 'Rum' : `Rum ${roomIndex}`)
       rooms.push({
         id: `room-${roomIndex}`,
-        name: totalRooms === 1 ? 'Rum' : `Rum ${roomIndex}`,
+        name: roomName,
         polygon: [
           { x: x0, y: y0 },
           { x: x1, y: y0 },
@@ -256,6 +271,18 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
     }
   }
 
+  const fixtures: Fixture[] = (p.fixtures ?? []).map((f, idx) => ({
+    id: `fixture-${idx}`,
+    type: f.type,
+    x: f.x,
+    y: f.y,
+    width: f.width,
+    depth: f.depth,
+    height: f.height,
+    rotation: f.rotation,
+    label: f.label,
+  }))
+
   return {
     id: `building-${Date.now()}`,
     name: p.name ?? 'Byggnad',
@@ -271,5 +298,7 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
     },
     slabThickness,
     partitions,
+    fixtures: fixtures.length > 0 ? fixtures : undefined,
+    annotations: p.annotations,
   }
 }

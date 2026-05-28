@@ -6,6 +6,7 @@ import type { TriageInput } from '@/lib/triage-engine'
 import type { BuildingModelV2 } from '@/types/building-v2'
 import { generateFloorPlanSVG } from '@/lib/floor-plan-svg'
 import { Resvg } from '@resvg/resvg-js'
+import { validateBuilding } from '@/lib/validate-building'
 
 function summariseModel(model: BuildingModelV2): string {
   const length = (model.walls[0]?.vertices[1]?.x ?? 0) - (model.walls[0]?.vertices[0]?.x ?? 0)
@@ -308,6 +309,42 @@ const TOOL_DEF = {
           required: ['direction', 'offset'],
         },
       },
+      fixtures: {
+        type: 'array',
+        description: 'Furniture and equipment placed inside rooms, positioned from SW corner in metres',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['sauna_heater', 'bench', 'stove', 'toilet', 'sink', 'custom'] },
+            x: { type: 'number', description: 'Metres from west wall inner face' },
+            y: { type: 'number', description: 'Metres from south wall inner face' },
+            width: { type: 'number', description: 'East-west size in metres' },
+            depth: { type: 'number', description: 'North-south size in metres' },
+            height: { type: 'number' },
+            rotation: { type: 'number', description: 'Degrees CW from north' },
+            label: { type: 'string' },
+          },
+          required: ['type', 'x', 'y', 'width', 'depth'],
+        },
+      },
+      rooms: {
+        type: 'array',
+        description: 'Room names in column-major order (west→east columns, south→north within each column). Match count to number of rooms created by partitions.',
+        items: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+      },
+      annotations: {
+        type: 'array',
+        description: 'Free-text notes placed at specific positions in the floor plan',
+        items: {
+          type: 'object',
+          properties: {
+            text: { type: 'string' },
+            x: { type: 'number', description: 'Metres from west wall' },
+            y: { type: 'number', description: 'Metres from south wall' },
+          },
+          required: ['text', 'x', 'y'],
+        },
+      },
     },
     required: ['length', 'width', 'roof'],
   },
@@ -514,7 +551,11 @@ export async function POST(request: Request) {
       const argsJson = JSON.stringify(args, null, 2)
       const summary = summariseModel(model)
       const plan = asciiFloorPlan(model)
-      const text = `${url}
+      const buildWarnings = validateBuilding(model)
+      const warningBlock = buildWarnings.length > 0
+        ? `\n⚠️ Valideringsvarningar:\n${buildWarnings.map(w => `- ${w}`).join('\n')}\n`
+        : ''
+      const text = `${url}${warningBlock}
 
 ⚠️ VIKTIGT: Återanvänd eller modifiera aldrig denna URL. Kalla alltid generate_building_link igen med uppdaterade parametrar om du behöver göra ändringar.
 
@@ -566,7 +607,11 @@ ${argsJson}`
 
         const url = `${host}/view?id=${model_id}`
         const summary = summariseModel(model)
-        const text = `Uppdaterat: ${url}\n\nModellsammanfattning:\n${summary}`
+        const updateWarnings = validateBuilding(model)
+        const updateWarningBlock = updateWarnings.length > 0
+          ? `\n⚠️ Valideringsvarningar:\n${updateWarnings.map(w => `- ${w}`).join('\n')}\n`
+          : ''
+        const text = `Uppdaterat: ${url}${updateWarningBlock}\n\nModellsammanfattning:\n${summary}`
 
         const svgPreview = generateFloorPlanSVG(model)
         const pngPreview = new Resvg(svgPreview, { fitTo: { mode: 'width', value: 1200 } }).render().asPng()

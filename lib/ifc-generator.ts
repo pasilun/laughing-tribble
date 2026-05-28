@@ -593,6 +593,54 @@ export function generateIFC(model: BuildingModelV2): string {
     }
   }
 
+  // ── Fixtures (IFCBUILDINGELEMENTPROXY) ──────────────────────────────────
+  const fixtureIds: number[] = []
+
+  for (const fixture of (model.fixtures ?? [])) {
+    const defaultHeight = fixture.type === 'sauna_heater' ? 0.6 : fixture.type === 'bench' ? 0.45 : 0.9
+    const h = fixture.height ?? defaultHeight
+    const cx = fixture.x + fixture.width / 2
+    const cy = fixture.y + fixture.depth / 2
+
+    const fixOriginId = w.next()
+    w.add(fixOriginId, 'IFCCARTESIANPOINT', `(${fmt(fixture.x)},${fmt(fixture.y)},${fmt(0.)})`)
+    const fixZUpId = w.next()
+    w.add(fixZUpId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+    const fixXDirId = w.next()
+    w.add(fixXDirId, 'IFCDIRECTION', `(${fmt(1.)},${fmt(0.)},${fmt(0.)})`)
+    const fixAxis3dId = w.next()
+    w.add(fixAxis3dId, 'IFCAXIS2PLACEMENT3D', `#${fixOriginId},#${fixZUpId},#${fixXDirId}`)
+    const fixLocalPlacementId = w.next()
+    w.add(fixLocalPlacementId, 'IFCLOCALPLACEMENT', `#${storeyLocalPlacementId},#${fixAxis3dId}`)
+
+    // Rectangle profile centred at (width/2, depth/2) in local XY
+    const fixProfOriginId = w.next()
+    w.add(fixProfOriginId, 'IFCCARTESIANPOINT', `(${fmt(cx - fixture.x)},${fmt(cy - fixture.y)})`)
+    const fixProfPlacId = w.next()
+    w.add(fixProfPlacId, 'IFCAXIS2PLACEMENT2D', `#${fixProfOriginId},$`)
+    const fixProfId = w.next()
+    w.add(fixProfId, 'IFCRECTANGLEPROFILEDEF', `.AREA.,$,#${fixProfPlacId},${fmt(fixture.width)},${fmt(fixture.depth)}`)
+
+    const fixSolidOriginId = w.next()
+    w.add(fixSolidOriginId, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)},${fmt(0.)})`)
+    const fixSolidPlacId = w.next()
+    w.add(fixSolidPlacId, 'IFCAXIS2PLACEMENT3D', `#${fixSolidOriginId},$,$`)
+    const fixExtDirId = w.next()
+    w.add(fixExtDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+    const fixSolidId = w.next()
+    w.add(fixSolidId, 'IFCEXTRUDEDAREASOLID', `#${fixProfId},#${fixSolidPlacId},#${fixExtDirId},${fmt(h)}`)
+
+    const fixShapeRepId = w.next()
+    w.add(fixShapeRepId, 'IFCSHAPEREPRESENTATION', `#${geomCtx3dId},'Body','SweptSolid',(#${fixSolidId})`)
+    const fixProdDefId = w.next()
+    w.add(fixProdDefId, 'IFCPRODUCTDEFINITIONSHAPE', `$,$,(#${fixShapeRepId})`)
+
+    const fixEntityId = w.next()
+    w.add(fixEntityId, 'IFCBUILDINGELEMENTPROXY',
+      `'${fixture.id}',#${ownerHistId},'${fixture.label ?? fixture.type}',$,$,#${fixLocalPlacementId},#${fixProdDefId},$,$`)
+    fixtureIds.push(fixEntityId)
+  }
+
   // ── Rooms (IFCSPACE) ─────────────────────────────────────────────────────
   const spaceIds: number[] = []
 
@@ -833,7 +881,7 @@ export function generateIFC(model: BuildingModelV2): string {
   }
 
   // ── Containment relationships ────────────────────────────────────────────
-  const allElements = [...wallEntityIds, ...partitionEntityIds, ...fillerIds, ...spaceIds]
+  const allElements = [...wallEntityIds, ...partitionEntityIds, ...fillerIds, ...fixtureIds, ...spaceIds]
   if (roofId !== null) allElements.push(roofId)
   if (allElements.length > 0) {
     const relContainsId = w.next()

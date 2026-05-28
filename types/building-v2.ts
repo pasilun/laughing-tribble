@@ -54,6 +54,19 @@ export type Site = {
   northAngle?: number
 }
 
+export type Fixture = {
+  id: string
+  type: 'sauna_heater' | 'bench' | 'stove' | 'toilet' | 'sink' | 'custom'
+  x: number        // metres from SW corner (west wall inner face)
+  y: number        // metres from SW corner (south wall inner face)
+  width: number    // east-west extent in metres
+  depth: number    // north-south extent in metres
+  height?: number  // default: sauna_heater=0.6, bench=0.45, others=0.9
+  rotation?: number // degrees CW from north, default 0
+  label?: string   // override displayed text; default = type
+  roomId?: string  // informational only
+}
+
 export type BuildingModelV2 = {
   id: string
   name: string
@@ -65,4 +78,6 @@ export type BuildingModelV2 = {
   slabThickness: number   // floor slab, default 0.2
   site?: Site
   partitions?: Partition[]
+  fixtures?: Fixture[]
+  annotations?: Array<{ text: string; x: number; y: number }>
 }

@@ -1,4 +1,4 @@
-import type { BuildingModelV2, Opening, Vector2 } from '@/types/building-v2'
+import type { BuildingModelV2, Opening, Vector2, Fixture } from '@/types/building-v2'
 
 // ── Geometry helpers ────────────────────────────────────────────────────────
 
@@ -251,6 +251,49 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
         `<line x1="${sx1 + dx * offset}" y1="${sy1 - dy * offset}" x2="${ex1 + dx * offset}" y2="${ey1 - dy * offset}" stroke="#f59e0b" stroke-width="1.5"/>`
       )
     }
+  }
+
+  // ── Fixtures ──────────────────────────────────────────────────────────────
+  for (const fixture of (model.fixtures ?? []) as Fixture[]) {
+    const svgX = tx(fixture.x)
+    const svgY = ty(fixture.y + fixture.depth)  // SW corner: ty(y+depth) is top in SVG
+    const svgW = fixture.width * scale
+    const svgH = fixture.depth * scale
+    const cxSvg = tx(fixture.x + fixture.width / 2)
+    const cySvg = ty(fixture.y + fixture.depth / 2)
+    const rot = fixture.rotation ?? 0
+    const label = fixture.label ?? fixture.type.replace('_', ' ')
+
+    const transformAttr = rot !== 0 ? ` transform="rotate(${rot}, ${cxSvg}, ${cySvg})"` : ''
+
+    parts.push(
+      `<g${transformAttr}>`
+    )
+    parts.push(
+      `<rect x="${svgX}" y="${svgY}" width="${svgW}" height="${svgH}" fill="none" stroke="#a78bfa" stroke-width="1.5" rx="2"/>`
+    )
+
+    if (fixture.type === 'bench') {
+      // Diagonal hatch: NW→SE and SW→NE
+      parts.push(`<line x1="${svgX}" y1="${svgY}" x2="${svgX + svgW}" y2="${svgY + svgH}" stroke="#a78bfa" stroke-width="0.75"/>`)
+      parts.push(`<line x1="${svgX}" y1="${svgY + svgH}" x2="${svgX + svgW}" y2="${svgY}" stroke="#a78bfa" stroke-width="0.75"/>`)
+    } else if (fixture.type === 'sauna_heater') {
+      // X through the centre
+      parts.push(`<line x1="${svgX}" y1="${svgY}" x2="${svgX + svgW}" y2="${svgY + svgH}" stroke="#a78bfa" stroke-width="0.75"/>`)
+      parts.push(`<line x1="${svgX}" y1="${svgY + svgH}" x2="${svgX + svgW}" y2="${svgY}" stroke="#a78bfa" stroke-width="0.75"/>`)
+    }
+
+    parts.push(
+      `<text x="${cxSvg}" y="${cySvg}" text-anchor="middle" dominant-baseline="middle" font-size="8" fill="#7c3aed" font-family="sans-serif">${label}</text>`
+    )
+    parts.push(`</g>`)
+  }
+
+  // ── Annotations ───────────────────────────────────────────────────────────
+  for (const ann of (model.annotations ?? [])) {
+    parts.push(
+      `<text x="${tx(ann.x)}" y="${ty(ann.y)}" font-size="8" fill="#f59e0b" font-family="sans-serif" font-style="italic">${ann.text}</text>`
+    )
   }
 
   // ── Dimension annotations ─────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { BuildingModelV2, Opening, Vector2 } from '@/types/building-v2'
+import { BuildingModelV2, Opening, Vector2, Fixture } from '@/types/building-v2'
 import { generateIFC } from '@/lib/ifc-generator'
 
 const GLTFViewer = dynamic(() => import('@/components/GLTFViewer'), {
@@ -377,6 +377,48 @@ function FloorPlanV2({ model }: FloorPlanProps) {
           )
         }
       })}
+
+      {/* ── Fixtures ─────────────────────────────────────────────────────── */}
+      {(model.fixtures ?? []).map((fixture: Fixture) => {
+        const svgX = tx(fixture.x)
+        const svgY = ty(fixture.y + fixture.depth)
+        const svgW = fixture.width * scale
+        const svgH = fixture.depth * scale
+        const cxSvg = tx(fixture.x + fixture.width / 2)
+        const cySvg = ty(fixture.y + fixture.depth / 2)
+        const rot = fixture.rotation ?? 0
+        const label = fixture.label ?? fixture.type.replace('_', ' ')
+
+        return (
+          <g key={fixture.id} transform={rot !== 0 ? `rotate(${rot}, ${cxSvg}, ${cySvg})` : undefined}>
+            <rect x={svgX} y={svgY} width={svgW} height={svgH} fill="none" stroke="#a78bfa" strokeWidth={1.5} rx={2} />
+            {(fixture.type === 'bench' || fixture.type === 'sauna_heater') && (
+              <>
+                <line x1={svgX} y1={svgY} x2={svgX + svgW} y2={svgY + svgH} stroke="#a78bfa" strokeWidth={0.75} />
+                <line x1={svgX} y1={svgY + svgH} x2={svgX + svgW} y2={svgY} stroke="#a78bfa" strokeWidth={0.75} />
+              </>
+            )}
+            <text x={cxSvg} y={cySvg} textAnchor="middle" dominantBaseline="middle" fontSize={8} fill="#7c3aed" fontFamily="sans-serif">
+              {label}
+            </text>
+          </g>
+        )
+      })}
+
+      {/* ── Annotations ──────────────────────────────────────────────────── */}
+      {(model.annotations ?? []).map((ann, i) => (
+        <text
+          key={`ann-${i}`}
+          x={tx(ann.x)}
+          y={ty(ann.y)}
+          fontSize={8}
+          fill="#f59e0b"
+          fontFamily="sans-serif"
+          fontStyle="italic"
+        >
+          {ann.text}
+        </text>
+      ))}
 
       {/* ── Dimension annotations ── */}
       {(() => {
