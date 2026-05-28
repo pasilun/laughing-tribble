@@ -630,6 +630,14 @@ export function generateIFC(model: BuildingModelV2): string {
     const fixSolidId = w.next()
     w.add(fixSolidId, 'IFCEXTRUDEDAREASOLID', `#${fixProfId},#${fixSolidPlacId},#${fixExtDirId},${fmt(h)}`)
 
+    // Distinct material per type — forces IfcConvert to keep adjacent fixtures as separate meshes
+    if (fixture.type === 'bench')             styleItem(fixSolidId, 0.72, 0.53, 0.30, 0.)
+    else if (fixture.type === 'sauna_heater') styleItem(fixSolidId, 0.25, 0.25, 0.28, 0.)
+    else if (fixture.type === 'stove')        styleItem(fixSolidId, 0.30, 0.30, 0.30, 0.)
+    else if (fixture.type === 'toilet')       styleItem(fixSolidId, 0.92, 0.92, 0.92, 0.)
+    else if (fixture.type === 'sink')         styleItem(fixSolidId, 0.85, 0.88, 0.92, 0.)
+    else                                      styleItem(fixSolidId, 0.60, 0.70, 0.60, 0.)
+
     const fixShapeRepId = w.next()
     w.add(fixShapeRepId, 'IFCSHAPEREPRESENTATION', `#${geomCtx3dId},'Body','SweptSolid',(#${fixSolidId})`)
     const fixProdDefId = w.next()
