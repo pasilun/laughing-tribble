@@ -476,16 +476,19 @@ export async function POST(request: Request) {
 
 ⚠️ VIKTIGT: Återanvänd eller modifiera aldrig denna URL. Kalla alltid generate_building_link igen med uppdaterade parametrar om du behöver göra ändringar.
 
-Planritning (D=dörr, W=fönster, N=norr):
-${plan}
-
 Modellsammanfattning (faktiska mått i den genererade modellen):
 ${summary}
 
 Parametrar som användes:
 ${argsJson}`
 
-      return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }] } })
+      const svgPreview = generateFloorPlanSVG(model)
+      const svgBase64 = Buffer.from(svgPreview).toString('base64')
+
+      return mcpResp({ jsonrpc: '2.0', id, result: { content: [
+        { type: 'text', text },
+        { type: 'image', data: svgBase64, mimeType: 'image/svg+xml' },
+      ] } })
     } catch (err) {
       return mcpResp({
         jsonrpc: '2.0',
