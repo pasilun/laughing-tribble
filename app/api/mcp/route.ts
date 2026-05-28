@@ -313,6 +313,26 @@ const TOOL_DEF = {
   },
 }
 
+const UPDATE_TOOL_DEF = {
+  name: 'update_building',
+  description:
+    'Update an existing saved building model in-place. Takes the same parameters as generate_building_link plus the model_id to overwrite. The viewer URL stays the same — no new link is needed.',
+  inputSchema: {
+    ...(() => {
+      // Reuse TOOL_DEF's inputSchema but add model_id as required
+      const base = TOOL_DEF.inputSchema as { type: string; properties: Record<string, unknown>; required: string[] }
+      return {
+        type: 'object',
+        properties: {
+          model_id: { type: 'string', description: 'The ID of the building model to update (from a previous generate_building_link call)' },
+          ...base.properties,
+        },
+        required: ['model_id', ...base.required],
+      }
+    })(),
+  },
+}
+
 const PREVIEW_TOOL_DEF = {
   name: 'preview_building',
   description:
@@ -396,7 +416,7 @@ export async function POST(request: Request) {
   }
 
   if (method === 'tools/list') {
-    return mcpResp({ jsonrpc: '2.0', id, result: { tools: [TOOL_DEF, TRIAGE_TOOL_DEF, PREVIEW_TOOL_DEF] } })
+    return mcpResp({ jsonrpc: '2.0', id, result: { tools: [TOOL_DEF, UPDATE_TOOL_DEF, TRIAGE_TOOL_DEF, PREVIEW_TOOL_DEF] } })
   }
 
   if (method === 'tools/call') {
@@ -518,6 +538,46 @@ ${argsJson}`
         id,
         error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' },
       })
+    }
+
+    if (name === 'update_building') {
+      try {
+        const { model_id, ...buildingArgs } = args as { model_id: string } & Record<string, unknown>
+        if (!model_id) throw new Error('model_id is required')
+
+        const model = buildingFromParams(buildingArgs as unknown as Parameters<typeof buildingFromParams>[0])
+        model.id = model_id
+
+        const blobToken = process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
+        if (!blobToken) throw new Error('No blob token — update_building requires Vercel Blob storage')
+
+        const host = process.env.VERCEL_PROJECT_PRODUCTION_URL
+          ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+          : process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : 'http://localhost:3000'
+
+        await put(`buildings/${model_id}.json`, JSON.stringify(model), {
+          access: 'public',
+          contentType: 'application/json',
+          addRandomSuffix: false,
+          token: blobToken,
+        })
+
+        const url = `${host}/view?id=${model_id}`
+        const summary = summariseModel(model)
+        const text = `Uppdaterat: ${url}\n\nModellsammanfattning:\n${summary}`
+
+        const svgPreview = generateFloorPlanSVG(model)
+        const pngPreview = new Resvg(svgPreview, { fitTo: { mode: 'width', value: 1200 } }).render().asPng()
+
+        return mcpResp({ jsonrpc: '2.0', id, result: { content: [
+          { type: 'text', text },
+          { type: 'image', data: pngPreview.toString('base64'), mimeType: 'image/png' },
+        ] } })
+      } catch (err) {
+        return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: `${err}` } })
+      }
     }
   }
 
