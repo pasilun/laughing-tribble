@@ -49,12 +49,26 @@ function polygonArea(pts: Vector2[]): number {
   return Math.abs(area / 2)
 }
 
+// ── Text background rect helper ───────────────────────────────────────────────
+
+function textBgRect(textX: number, textY: number, text: string, fontSize: number): string {
+  const approxWidth = text.length * fontSize * 0.6
+  const rx = textX - approxWidth / 2 - 2
+  const ry = textY - fontSize - 1
+  const rw = approxWidth + 4
+  const rh = fontSize + 4
+  return `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="rgba(0,0,0,0.55)" stroke="none" rx="2"/>`
+}
+
 // ── SVG generator ────────────────────────────────────────────────────────────
 
 export function generateFloorPlanSVG(model: BuildingModelV2): string {
   const viewBoxW = 600
-  const viewBoxH = 400
   const padding = 60
+
+  const annotations = model.annotations ?? []
+  const annCount = annotations.length
+  const viewBoxH = 400 + Math.ceil(annCount / 2) * 22 + (annCount > 0 ? 28 : 0)
 
   const edges = allEdges(model)
   const allX = edges.flatMap((e) => [e.start.x, e.end.x])
@@ -67,7 +81,7 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
   const rangeY = maxY - minY || 1
 
   const drawW = viewBoxW - padding * 2
-  const drawH = viewBoxH - padding * 2
+  const drawH = 400 - padding * 2
   const scale = Math.min(drawW / rangeX, drawH / rangeY)
 
   const offsetX = padding + (drawW - rangeX * scale) / 2
@@ -104,7 +118,7 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
 
   // ── SVG root ──────────────────────────────────────────────────────────────
   parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxW} ${viewBoxH}" width="600" height="400" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Floor plan">`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxW} ${viewBoxH}" width="600" height="${viewBoxH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Floor plan">`
   )
 
   // White background
@@ -254,7 +268,13 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
   }
 
   // ── Fixtures ──────────────────────────────────────────────────────────────
-  for (const fixture of (model.fixtures ?? []) as Fixture[]) {
+  // Sort fixtures by y for collision avoidance
+  const sortedFixtures = [...((model.fixtures ?? []) as Fixture[])].sort(
+    (a, b) => a.y - b.y
+  )
+  let prevLabelBottom = -Infinity
+
+  for (const fixture of sortedFixtures) {
     const svgX = tx(fixture.x)
     const svgY = ty(fixture.y + fixture.depth)  // SW corner: ty(y+depth) is top in SVG
     const svgW = fixture.width * scale
@@ -262,9 +282,19 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
     const cxSvg = tx(fixture.x + fixture.width / 2)
     const cySvg = ty(fixture.y + fixture.depth / 2)
     const rot = fixture.rotation ?? 0
-    const label = fixture.label ?? fixture.type.replace('_', ' ')
+    const rawLabel = fixture.label ?? fixture.type.replace('_', ' ')
+    const label = rawLabel.length > 14 ? rawLabel.slice(0, 13) + '…' : rawLabel
 
     const transformAttr = rot !== 0 ? ` transform="rotate(${rot}, ${cxSvg}, ${cySvg})"` : ''
+
+    // Collision avoidance: offset label y if it overlaps previous
+    const fontSize = 8
+    const approxLabelH = fontSize + 4
+    let labelY = cySvg
+    if (labelY - approxLabelH / 2 < prevLabelBottom + 12) {
+      labelY = prevLabelBottom + 12 + approxLabelH / 2
+    }
+    prevLabelBottom = labelY + approxLabelH / 2
 
     parts.push(
       `<g${transformAttr}>`
@@ -283,16 +313,24 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
       parts.push(`<line x1="${svgX}" y1="${svgY + svgH}" x2="${svgX + svgW}" y2="${svgY}" stroke="#a78bfa" stroke-width="0.75"/>`)
     }
 
+    parts.push(textBgRect(cxSvg, labelY, label, fontSize))
     parts.push(
-      `<text x="${cxSvg}" y="${cySvg}" text-anchor="middle" dominant-baseline="middle" font-size="8" fill="#7c3aed" font-family="sans-serif">${label}</text>`
+      `<text x="${cxSvg}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" fill="#7c3aed" font-family="sans-serif">${label}</text>`
     )
     parts.push(`</g>`)
   }
 
-  // ── Annotations ───────────────────────────────────────────────────────────
-  for (const ann of (model.annotations ?? [])) {
+  // ── Annotations → numbered markers in plan ────────────────────────────────
+  for (let i = 0; i < annotations.length; i++) {
+    const ann = annotations[i]
+    const cx = tx(ann.x)
+    const cy = ty(ann.y)
+    const num = String(i + 1)
     parts.push(
-      `<text x="${tx(ann.x)}" y="${ty(ann.y)}" font-size="8" fill="#f59e0b" font-family="sans-serif" font-style="italic">${ann.text}</text>`
+      `<circle cx="${cx}" cy="${cy}" r="7" fill="#f59e0b" opacity="0.9"/>`
+    )
+    parts.push(
+      `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="8" font-weight="bold" fill="white" font-family="sans-serif">${num}</text>`
     )
   }
 
@@ -427,14 +465,28 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
     const roomW = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x))
     const roomD = Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y))
 
+    const nameX = tx(cx)
+    const nameY = ty(cy) - 12
+    const dimX = tx(cx)
+    const dimY = ty(cy)
+    const areaX = tx(cx)
+    const areaY = ty(cy) + 12
+
+    const nameText = room.name
+    const dimText = `${roomW.toFixed(1)} × ${roomD.toFixed(1)} m`
+    const areaText = `${area.toFixed(1)} m²`
+
+    parts.push(textBgRect(nameX, nameY, nameText, 11))
     parts.push(
-      `<text x="${tx(cx)}" y="${ty(cy) - 12}" text-anchor="middle" font-size="11" fill="#52525b" font-family="sans-serif">${room.name}</text>`
+      `<text x="${nameX}" y="${nameY}" text-anchor="middle" font-size="11" fill="#52525b" font-family="sans-serif">${room.name}</text>`
     )
+    parts.push(textBgRect(dimX, dimY, dimText, 10))
     parts.push(
-      `<text x="${tx(cx)}" y="${ty(cy)}" text-anchor="middle" font-size="10" fill="#71717a" font-family="sans-serif">${roomW.toFixed(1)} × ${roomD.toFixed(1)} m</text>`
+      `<text x="${dimX}" y="${dimY}" text-anchor="middle" font-size="10" fill="#71717a" font-family="sans-serif">${dimText}</text>`
     )
+    parts.push(textBgRect(areaX, areaY, areaText, 10))
     parts.push(
-      `<text x="${tx(cx)}" y="${ty(cy) + 12}" text-anchor="middle" font-size="10" fill="#71717a" font-family="sans-serif">${area.toFixed(1)} m²</text>`
+      `<text x="${areaX}" y="${areaY}" text-anchor="middle" font-size="10" fill="#71717a" font-family="sans-serif">${areaText}</text>`
     )
   }
 
@@ -455,14 +507,67 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
   parts.push(`</g>`)
 
   // ── Scale bar ─────────────────────────────────────────────────────────────
-  parts.push(`<g transform="translate(${padding}, ${viewBoxH - 24})">`)
+  const scaleBarY = 400 - 24
+  const scaleBarTextY = scaleBarY - 8
+  const scaleBarText = `${barMetres} m`
+  parts.push(`<g transform="translate(${padding}, ${scaleBarY})">`)
   parts.push(`<line x1="0" y1="0" x2="${barPx}" y2="0" stroke="#52525b" stroke-width="2"/>`)
   parts.push(`<line x1="0" y1="-4" x2="0" y2="4" stroke="#52525b" stroke-width="2"/>`)
   parts.push(`<line x1="${barPx}" y1="-4" x2="${barPx}" y2="4" stroke="#52525b" stroke-width="2"/>`)
+  // text bg: relative to group, so textX=barPx/2, textY=-8
+  const sbApproxW = scaleBarText.length * 10 * 0.6
+  parts.push(`<rect x="${barPx / 2 - sbApproxW / 2 - 2}" y="${-8 - 10 - 1}" width="${sbApproxW + 4}" height="14" fill="rgba(0,0,0,0.55)" stroke="none" rx="2"/>`)
   parts.push(
-    `<text x="${barPx / 2}" y="-8" text-anchor="middle" font-size="10" fill="#52525b" font-family="sans-serif">${barMetres} m</text>`
+    `<text x="${barPx / 2}" y="-8" text-anchor="middle" font-size="10" fill="#52525b" font-family="sans-serif">${scaleBarText}</text>`
   )
   parts.push(`</g>`)
+
+  // ── Annotation footer ─────────────────────────────────────────────────────
+  if (annCount > 0) {
+    // Horizontal rule
+    parts.push(
+      `<line x1="${padding}" y1="404" x2="${viewBoxW - padding}" y2="404" stroke="#52525b" stroke-width="0.5" stroke-dasharray="4 2"/>`
+    )
+
+    const leftColX = padding + 4
+    const rightColX = viewBoxW / 2 + 4
+    let rowY = 416
+
+    for (let i = 0; i < annotations.length; i++) {
+      const ann = annotations[i]
+      const isRight = i % 2 === 1
+      const colX = isRight ? rightColX : leftColX
+      if (!isRight && i > 0) rowY += 22
+
+      const text = ann.text
+      const needsWrap = text.length > 55
+      const line1 = needsWrap ? text.slice(0, text.lastIndexOf(' ', 55) || 55) : text
+      const line2 = needsWrap ? text.slice(line1.length + 1) : null
+
+      // Marker circle
+      parts.push(
+        `<circle cx="${colX + 6}" cy="${rowY - 2}" r="6" fill="#f59e0b" opacity="0.9"/>`
+      )
+      // Marker number
+      parts.push(
+        `<text x="${colX + 6}" y="${rowY - 2}" text-anchor="middle" dominant-baseline="middle" font-size="7" font-weight="bold" fill="white" font-family="sans-serif">${i + 1}</text>`
+      )
+      // Annotation text
+      parts.push(
+        `<text x="${colX + 16}" y="${rowY}" font-size="8" fill="#d97706" font-family="sans-serif">${line1}</text>`
+      )
+      if (line2) {
+        parts.push(
+          `<text x="${colX + 16}" y="${rowY + 12}" font-size="8" fill="#d97706" font-family="sans-serif">${line2}</text>`
+        )
+      }
+
+      // Advance row for left column items (right column shares row with left)
+      if (isRight) rowY += 22
+    }
+    // If odd number of annotations, advance row for the last lone left-column item
+    if (annCount % 2 === 1) rowY += 0 // already handled above
+  }
 
   parts.push(`</svg>`)
 
