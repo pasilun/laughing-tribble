@@ -22,6 +22,7 @@ export interface BuildingParams {
     sillHeight?: number       // default 0 for door, 0.9 for window
     hinge?: 'start' | 'end'       // default 'start'
     openDirection?: 'in' | 'out'  // 'in'=ccw (default), 'out'=cw
+    annotation?: string       // if set, adds a numbered marker at this opening in the floor plan
   }>
   slabThickness?: number  // default 0.2
   rooms?: Array<{ name: string }>  // names in room-generation order: column-major (west→east), row-major within each column (south→north)
@@ -35,6 +36,7 @@ export interface BuildingParams {
     height?: number
     rotation?: number
     label?: string
+    annotation?: string  // if set, adds a numbered marker at this fixture in the floor plan
   }>
   partitions?: Array<{
     direction: 'ew' | 'ns'  // east-west (runs along X axis) or north-south (runs along Y axis)
@@ -49,6 +51,7 @@ export interface BuildingParams {
       sillHeight?: number      // default 0 for door, 0.9 for window
       hinge?: 'start' | 'end' // default 'start'
       swing?: 'ccw' | 'cw'    // default 'ccw'
+      annotation?: string      // if set, adds a numbered marker at this opening in the floor plan
     }>
   }>
 }
@@ -283,6 +286,61 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
     label: f.label,
   }))
 
+  // ── Resolve annotation positions ────────────────────────────────────────────
+  // Compute center of an opening in model (world) coordinates
+  function openingCenterXY(op: Opening): { x: number; y: number } {
+    if (op.wallId) {
+      const edgeIdx = wallLoop.edges.findIndex((e) => e.id === op.wallId)
+      if (edgeIdx < 0) return { x: 0, y: 0 }
+      const vs = wallLoop.vertices
+      const s = vs[edgeIdx]
+      const e = vs[(edgeIdx + 1) % vs.length]
+      const len = Math.sqrt((e.x - s.x) ** 2 + (e.y - s.y) ** 2)
+      const t = (op.offsetFromStart + op.width / 2) / len
+      return { x: s.x + t * (e.x - s.x), y: s.y + t * (e.y - s.y) }
+    }
+    if (op.partitionId) {
+      const part = partitions.find((p) => p.id === op.partitionId)
+      if (!part) return { x: 0, y: 0 }
+      const dx = part.end.x - part.start.x
+      const dy = part.end.y - part.start.y
+      const len = Math.sqrt(dx * dx + dy * dy)
+      const t = (op.offsetFromStart + op.width / 2) / len
+      return { x: part.start.x + t * dx, y: part.start.y + t * dy }
+    }
+    return { x: 0, y: 0 }
+  }
+
+  // Collect auto-annotations from opening.annotation and fixture.annotation fields
+  const autoAnnotations: Array<{ text: string; x: number; y: number }> = []
+
+  ;(p.openings ?? []).forEach((o, idx) => {
+    if (!o.annotation) return
+    const openingId = `${o.type}-${o.wall}-${idx}`
+    const op = openings.find((op) => op.id === openingId)
+    if (op) autoAnnotations.push({ text: o.annotation, ...openingCenterXY(op) })
+  })
+
+  for (let pi = 0; pi < (p.partitions ?? []).length; pi++) {
+    const part = (p.partitions ?? [])[pi]
+    ;(part.openings ?? []).forEach((o, opIdx) => {
+      if (!o.annotation) return
+      const openingId = `partition-${pi}-op-${opIdx}`
+      const op = openings.find((op) => op.id === openingId)
+      if (op) autoAnnotations.push({ text: o.annotation, ...openingCenterXY(op) })
+    })
+  }
+
+  ;(p.fixtures ?? []).forEach((f, idx) => {
+    if (!f.annotation) return
+    autoAnnotations.push({ text: f.annotation, x: f.x + f.width / 2, y: f.y + f.depth / 2 })
+  })
+
+  const allAnnotations = [
+    ...(p.annotations ?? []),
+    ...autoAnnotations,
+  ]
+
   return {
     id: `building-${Date.now()}`,
     name: p.name ?? 'Byggnad',
@@ -299,6 +357,6 @@ export function buildingFromParams(p: BuildingParams): BuildingModelV2 {
     slabThickness,
     partitions,
     fixtures: fixtures.length > 0 ? fixtures : undefined,
-    annotations: p.annotations,
+    annotations: allAnnotations.length > 0 ? allAnnotations : undefined,
   }
 }

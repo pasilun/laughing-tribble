@@ -259,6 +259,10 @@ const TOOL_DEF = {
               enum: ['in', 'out'],
               description: 'Whether the door opens inward (into the building, default) or outward',
             },
+            annotation: {
+              type: 'string',
+              description: 'Optional note for this opening. If set, a numbered marker is placed at the opening in the floor plan and the text appears in the annotation legend below.',
+            },
           },
           required: ['wall', 'type'],
         },
@@ -301,6 +305,10 @@ const TOOL_DEF = {
                     enum: ['ccw', 'cw'],
                     description: 'Swing direction viewed from above. Default: \'ccw\'',
                   },
+                  annotation: {
+                    type: 'string',
+                    description: 'Optional note for this opening. If set, a numbered marker is placed at the opening in the floor plan.',
+                  },
                 },
                 required: ['type', 'offsetFromStart'],
               },
@@ -323,6 +331,10 @@ const TOOL_DEF = {
             height: { type: 'number' },
             rotation: { type: 'number', description: 'Degrees CW from north' },
             label: { type: 'string' },
+            annotation: {
+              type: 'string',
+              description: 'Optional note for this fixture. If set, a numbered marker is placed at the fixture center in the floor plan.',
+            },
           },
           required: ['type', 'x', 'y', 'width', 'depth'],
         },
@@ -334,7 +346,7 @@ const TOOL_DEF = {
       },
       annotations: {
         type: 'array',
-        description: 'Free-text notes placed at specific positions in the floor plan',
+        description: 'Free-text notes at explicit positions (e.g. for rooms or general notes). PREFER using the "annotation" field on individual openings/fixtures instead — that auto-positions the marker at the feature.',
         items: {
           type: 'object',
           properties: {
