@@ -57,7 +57,7 @@ function textBgRect(textX: number, textY: number, text: string, fontSize: number
   const ry = textY - fontSize - 1
   const rw = approxWidth + 4
   const rh = fontSize + 4
-  return `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="rgba(0,0,0,0.55)" stroke="none" rx="2"/>`
+  return `<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="rgba(255,255,255,0.9)" stroke="none" rx="2"/>`
 }
 
 // ── SVG generator ────────────────────────────────────────────────────────────
@@ -268,13 +268,7 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
   }
 
   // ── Fixtures ──────────────────────────────────────────────────────────────
-  // Sort fixtures by y for collision avoidance
-  const sortedFixtures = [...((model.fixtures ?? []) as Fixture[])].sort(
-    (a, b) => a.y - b.y
-  )
-  let prevLabelBottom = -Infinity
-
-  for (const fixture of sortedFixtures) {
+  for (const fixture of (model.fixtures ?? []) as Fixture[]) {
     const svgX = tx(fixture.x)
     const svgY = ty(fixture.y + fixture.depth)  // SW corner: ty(y+depth) is top in SVG
     const svgW = fixture.width * scale
@@ -284,39 +278,29 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
     const rot = fixture.rotation ?? 0
     const rawLabel = fixture.label ?? fixture.type.replace('_', ' ')
     const label = rawLabel.length > 14 ? rawLabel.slice(0, 13) + '…' : rawLabel
+    const fontSize = 8
 
     const transformAttr = rot !== 0 ? ` transform="rotate(${rot}, ${cxSvg}, ${cySvg})"` : ''
 
-    // Collision avoidance: offset label y if it overlaps previous
-    const fontSize = 8
-    const approxLabelH = fontSize + 4
-    let labelY = cySvg
-    if (labelY - approxLabelH / 2 < prevLabelBottom + 12) {
-      labelY = prevLabelBottom + 12 + approxLabelH / 2
-    }
-    prevLabelBottom = labelY + approxLabelH / 2
-
+    parts.push(`<g${transformAttr}>`)
     parts.push(
-      `<g${transformAttr}>`
-    )
-    parts.push(
-      `<rect x="${svgX}" y="${svgY}" width="${svgW}" height="${svgH}" fill="none" stroke="#a78bfa" stroke-width="1.5" rx="2"/>`
+      `<rect x="${svgX}" y="${svgY}" width="${svgW}" height="${svgH}" fill="#f3f0ff" fill-opacity="0.7" stroke="#a78bfa" stroke-width="1.5" rx="2"/>`
     )
 
     if (fixture.type === 'bench') {
-      // Diagonal hatch: NW→SE and SW→NE
       parts.push(`<line x1="${svgX}" y1="${svgY}" x2="${svgX + svgW}" y2="${svgY + svgH}" stroke="#a78bfa" stroke-width="0.75"/>`)
       parts.push(`<line x1="${svgX}" y1="${svgY + svgH}" x2="${svgX + svgW}" y2="${svgY}" stroke="#a78bfa" stroke-width="0.75"/>`)
     } else if (fixture.type === 'sauna_heater') {
-      // X through the centre
       parts.push(`<line x1="${svgX}" y1="${svgY}" x2="${svgX + svgW}" y2="${svgY + svgH}" stroke="#a78bfa" stroke-width="0.75"/>`)
       parts.push(`<line x1="${svgX}" y1="${svgY + svgH}" x2="${svgX + svgW}" y2="${svgY}" stroke="#a78bfa" stroke-width="0.75"/>`)
     }
 
-    parts.push(textBgRect(cxSvg, labelY, label, fontSize))
-    parts.push(
-      `<text x="${cxSvg}" y="${labelY}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" fill="#7c3aed" font-family="sans-serif">${label}</text>`
-    )
+    // Label centered in fixture box; only show if box is wide enough
+    if (svgW >= label.length * fontSize * 0.5) {
+      parts.push(
+        `<text x="${cxSvg}" y="${cySvg}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" fill="#6d28d9" font-family="sans-serif">${label}</text>`
+      )
+    }
     parts.push(`</g>`)
   }
 
@@ -478,15 +462,15 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
 
     parts.push(textBgRect(nameX, nameY, nameText, 11))
     parts.push(
-      `<text x="${nameX}" y="${nameY}" text-anchor="middle" font-size="11" fill="#52525b" font-family="sans-serif">${room.name}</text>`
+      `<text x="${nameX}" y="${nameY}" text-anchor="middle" font-size="11" fill="#18181b" font-family="sans-serif">${room.name}</text>`
     )
     parts.push(textBgRect(dimX, dimY, dimText, 10))
     parts.push(
-      `<text x="${dimX}" y="${dimY}" text-anchor="middle" font-size="10" fill="#71717a" font-family="sans-serif">${dimText}</text>`
+      `<text x="${dimX}" y="${dimY}" text-anchor="middle" font-size="10" fill="#3f3f46" font-family="sans-serif">${dimText}</text>`
     )
     parts.push(textBgRect(areaX, areaY, areaText, 10))
     parts.push(
-      `<text x="${areaX}" y="${areaY}" text-anchor="middle" font-size="10" fill="#71717a" font-family="sans-serif">${areaText}</text>`
+      `<text x="${areaX}" y="${areaY}" text-anchor="middle" font-size="10" fill="#3f3f46" font-family="sans-serif">${areaText}</text>`
     )
   }
 
@@ -516,9 +500,9 @@ export function generateFloorPlanSVG(model: BuildingModelV2): string {
   parts.push(`<line x1="${barPx}" y1="-4" x2="${barPx}" y2="4" stroke="#52525b" stroke-width="2"/>`)
   // text bg: relative to group, so textX=barPx/2, textY=-8
   const sbApproxW = scaleBarText.length * 10 * 0.6
-  parts.push(`<rect x="${barPx / 2 - sbApproxW / 2 - 2}" y="${-8 - 10 - 1}" width="${sbApproxW + 4}" height="14" fill="rgba(0,0,0,0.55)" stroke="none" rx="2"/>`)
+  parts.push(`<rect x="${barPx / 2 - sbApproxW / 2 - 2}" y="${-8 - 10 - 1}" width="${sbApproxW + 4}" height="14" fill="rgba(255,255,255,0.9)" stroke="none" rx="2"/>`)
   parts.push(
-    `<text x="${barPx / 2}" y="-8" text-anchor="middle" font-size="10" fill="#52525b" font-family="sans-serif">${scaleBarText}</text>`
+    `<text x="${barPx / 2}" y="-8" text-anchor="middle" font-size="10" fill="#27272a" font-family="sans-serif">${scaleBarText}</text>`
   )
   parts.push(`</g>`)
 

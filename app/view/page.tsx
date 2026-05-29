@@ -383,56 +383,36 @@ function FloorPlanV2({ model }: FloorPlanProps) {
       })}
 
       {/* ── Fixtures ─────────────────────────────────────────────────────── */}
-      {(() => {
-        const sortedFixtures = [...((model.fixtures ?? []) as Fixture[])].sort(
-          (a, b) => a.y - b.y
-        )
-        let prevLabelBottom = -Infinity
-        const fixtureElems: React.ReactNode[] = []
+      {((model.fixtures ?? []) as Fixture[]).map((fixture) => {
+        const svgX = tx(fixture.x)
+        const svgY = ty(fixture.y + fixture.depth)
+        const svgW = fixture.width * scale
+        const svgH = fixture.depth * scale
+        const cxSvg = tx(fixture.x + fixture.width / 2)
+        const cySvg = ty(fixture.y + fixture.depth / 2)
+        const rot = fixture.rotation ?? 0
+        const rawLabel = fixture.label ?? fixture.type.replace('_', ' ')
+        const label = rawLabel.length > 14 ? rawLabel.slice(0, 13) + '…' : rawLabel
+        const fontSize = 8
+        const showLabel = svgW >= label.length * fontSize * 0.5
 
-        for (const fixture of sortedFixtures) {
-          const svgX = tx(fixture.x)
-          const svgY = ty(fixture.y + fixture.depth)
-          const svgW = fixture.width * scale
-          const svgH = fixture.depth * scale
-          const cxSvg = tx(fixture.x + fixture.width / 2)
-          const cySvg = ty(fixture.y + fixture.depth / 2)
-          const rot = fixture.rotation ?? 0
-          const rawLabel = fixture.label ?? fixture.type.replace('_', ' ')
-          const label = rawLabel.length > 14 ? rawLabel.slice(0, 13) + '…' : rawLabel
-
-          const fontSize = 8
-          const approxLabelH = fontSize + 4
-          let labelY = cySvg
-          if (labelY - approxLabelH / 2 < prevLabelBottom + 12) {
-            labelY = prevLabelBottom + 12 + approxLabelH / 2
-          }
-          prevLabelBottom = labelY + approxLabelH / 2
-
-          const approxLabelW = label.length * fontSize * 0.6
-          const bgX = cxSvg - approxLabelW / 2 - 2
-          const bgY = labelY - fontSize - 1
-          const bgW = approxLabelW + 4
-          const bgH = fontSize + 4
-
-          fixtureElems.push(
-            <g key={fixture.id} transform={rot !== 0 ? `rotate(${rot}, ${cxSvg}, ${cySvg})` : undefined}>
-              <rect x={svgX} y={svgY} width={svgW} height={svgH} fill="none" stroke="#a78bfa" strokeWidth={1.5} rx={2} />
-              {(fixture.type === 'bench' || fixture.type === 'sauna_heater') && (
-                <>
-                  <line x1={svgX} y1={svgY} x2={svgX + svgW} y2={svgY + svgH} stroke="#a78bfa" strokeWidth={0.75} />
-                  <line x1={svgX} y1={svgY + svgH} x2={svgX + svgW} y2={svgY} stroke="#a78bfa" strokeWidth={0.75} />
-                </>
-              )}
-              <rect x={bgX} y={bgY} width={bgW} height={bgH} fill="rgba(0,0,0,0.55)" stroke="none" rx={2} />
-              <text x={cxSvg} y={labelY} textAnchor="middle" dominantBaseline="middle" fontSize={fontSize} fill="#7c3aed" fontFamily="sans-serif">
+        return (
+          <g key={fixture.id} transform={rot !== 0 ? `rotate(${rot}, ${cxSvg}, ${cySvg})` : undefined}>
+            <rect x={svgX} y={svgY} width={svgW} height={svgH} fill="#f3f0ff" fillOpacity={0.7} stroke="#a78bfa" strokeWidth={1.5} rx={2} />
+            {(fixture.type === 'bench' || fixture.type === 'sauna_heater') && (
+              <>
+                <line x1={svgX} y1={svgY} x2={svgX + svgW} y2={svgY + svgH} stroke="#a78bfa" strokeWidth={0.75} />
+                <line x1={svgX} y1={svgY + svgH} x2={svgX + svgW} y2={svgY} stroke="#a78bfa" strokeWidth={0.75} />
+              </>
+            )}
+            {showLabel && (
+              <text x={cxSvg} y={cySvg} textAnchor="middle" dominantBaseline="middle" fontSize={fontSize} fill="#6d28d9" fontFamily="sans-serif">
                 {label}
               </text>
-            </g>
-          )
-        }
-        return <>{fixtureElems}</>
-      })()}
+            )}
+          </g>
+        )
+      })}
 
       {/* ── Annotations → numbered markers in plan ───────────────────────── */}
       {annotations.map((ann, i) => {
@@ -633,11 +613,11 @@ function FloorPlanV2({ model }: FloorPlanProps) {
               y={nameY - nameFontSize - 1}
               width={nameApproxW + 4}
               height={nameFontSize + 4}
-              fill="rgba(0,0,0,0.55)"
+              fill="rgba(255,255,255,0.9)"
               stroke="none"
               rx={2}
             />
-            <text x={nameX} y={nameY} textAnchor="middle" fontSize={nameFontSize} fill="#52525b" fontFamily="sans-serif">
+            <text x={nameX} y={nameY} textAnchor="middle" fontSize={nameFontSize} fill="#18181b" fontFamily="sans-serif">
               {nameText}
             </text>
             <rect
@@ -645,11 +625,11 @@ function FloorPlanV2({ model }: FloorPlanProps) {
               y={dimY - dimFontSize - 1}
               width={dimApproxW + 4}
               height={dimFontSize + 4}
-              fill="rgba(0,0,0,0.55)"
+              fill="rgba(255,255,255,0.9)"
               stroke="none"
               rx={2}
             />
-            <text x={dimX} y={dimY} textAnchor="middle" fontSize={dimFontSize} fill="#71717a" fontFamily="sans-serif">
+            <text x={dimX} y={dimY} textAnchor="middle" fontSize={dimFontSize} fill="#3f3f46" fontFamily="sans-serif">
               {dimText}
             </text>
             <rect
@@ -657,11 +637,11 @@ function FloorPlanV2({ model }: FloorPlanProps) {
               y={areaY - areaFontSize - 1}
               width={areaApproxW + 4}
               height={areaFontSize + 4}
-              fill="rgba(0,0,0,0.55)"
+              fill="rgba(255,255,255,0.9)"
               stroke="none"
               rx={2}
             />
-            <text x={areaX} y={areaY} textAnchor="middle" fontSize={areaFontSize} fill="#71717a" fontFamily="sans-serif">
+            <text x={areaX} y={areaY} textAnchor="middle" fontSize={areaFontSize} fill="#3f3f46" fontFamily="sans-serif">
               {areaText}
             </text>
           </g>
@@ -698,11 +678,11 @@ function FloorPlanV2({ model }: FloorPlanProps) {
                 y={-8 - sbFontSize - 1}
                 width={sbApproxW + 4}
                 height={sbFontSize + 4}
-                fill="rgba(0,0,0,0.55)"
+                fill="rgba(255,255,255,0.9)"
                 stroke="none"
                 rx={2}
               />
-              <text x={barPx / 2} y={-8} textAnchor="middle" fontSize={sbFontSize} fill="#52525b" fontFamily="sans-serif">
+              <text x={barPx / 2} y={-8} textAnchor="middle" fontSize={sbFontSize} fill="#27272a" fontFamily="sans-serif">
                 {scaleBarText}
               </text>
             </>
