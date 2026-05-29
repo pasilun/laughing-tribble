@@ -73,8 +73,11 @@ interface FloorPlanProps {
 
 function FloorPlanV2({ model }: FloorPlanProps) {
   const viewBoxW = 600
-  const viewBoxH = 400
   const padding = 60
+
+  const annotations = model.annotations ?? []
+  const annCount = annotations.length
+  const viewBoxH = 400 + Math.ceil(annCount / 2) * 22 + (annCount > 0 ? 28 : 0)
 
   const edges = allEdges(model)
   // Compute bounding box of all wall endpoints
@@ -88,7 +91,7 @@ function FloorPlanV2({ model }: FloorPlanProps) {
   const rangeY = maxY - minY || 1
 
   const drawW = viewBoxW - padding * 2
-  const drawH = viewBoxH - padding * 2
+  const drawH = 400 - padding * 2
   const scale = Math.min(drawW / rangeX, drawH / rangeY)
 
   // Offset to centre the building in the drawing area
@@ -131,6 +134,7 @@ function FloorPlanV2({ model }: FloorPlanProps) {
     <svg
       viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
       width="100%"
+      height={viewBoxH}
       className="w-full max-w-full h-auto border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900"
       preserveAspectRatio="xMidYMid meet"
       role="img"
@@ -379,46 +383,70 @@ function FloorPlanV2({ model }: FloorPlanProps) {
       })}
 
       {/* ── Fixtures ─────────────────────────────────────────────────────── */}
-      {(model.fixtures ?? []).map((fixture: Fixture) => {
-        const svgX = tx(fixture.x)
-        const svgY = ty(fixture.y + fixture.depth)
-        const svgW = fixture.width * scale
-        const svgH = fixture.depth * scale
-        const cxSvg = tx(fixture.x + fixture.width / 2)
-        const cySvg = ty(fixture.y + fixture.depth / 2)
-        const rot = fixture.rotation ?? 0
-        const label = fixture.label ?? fixture.type.replace('_', ' ')
+      {(() => {
+        const sortedFixtures = [...((model.fixtures ?? []) as Fixture[])].sort(
+          (a, b) => a.y - b.y
+        )
+        let prevLabelBottom = -Infinity
+        const fixtureElems: React.ReactNode[] = []
 
+        for (const fixture of sortedFixtures) {
+          const svgX = tx(fixture.x)
+          const svgY = ty(fixture.y + fixture.depth)
+          const svgW = fixture.width * scale
+          const svgH = fixture.depth * scale
+          const cxSvg = tx(fixture.x + fixture.width / 2)
+          const cySvg = ty(fixture.y + fixture.depth / 2)
+          const rot = fixture.rotation ?? 0
+          const rawLabel = fixture.label ?? fixture.type.replace('_', ' ')
+          const label = rawLabel.length > 14 ? rawLabel.slice(0, 13) + '…' : rawLabel
+
+          const fontSize = 8
+          const approxLabelH = fontSize + 4
+          let labelY = cySvg
+          if (labelY - approxLabelH / 2 < prevLabelBottom + 12) {
+            labelY = prevLabelBottom + 12 + approxLabelH / 2
+          }
+          prevLabelBottom = labelY + approxLabelH / 2
+
+          const approxLabelW = label.length * fontSize * 0.6
+          const bgX = cxSvg - approxLabelW / 2 - 2
+          const bgY = labelY - fontSize - 1
+          const bgW = approxLabelW + 4
+          const bgH = fontSize + 4
+
+          fixtureElems.push(
+            <g key={fixture.id} transform={rot !== 0 ? `rotate(${rot}, ${cxSvg}, ${cySvg})` : undefined}>
+              <rect x={svgX} y={svgY} width={svgW} height={svgH} fill="none" stroke="#a78bfa" strokeWidth={1.5} rx={2} />
+              {(fixture.type === 'bench' || fixture.type === 'sauna_heater') && (
+                <>
+                  <line x1={svgX} y1={svgY} x2={svgX + svgW} y2={svgY + svgH} stroke="#a78bfa" strokeWidth={0.75} />
+                  <line x1={svgX} y1={svgY + svgH} x2={svgX + svgW} y2={svgY} stroke="#a78bfa" strokeWidth={0.75} />
+                </>
+              )}
+              <rect x={bgX} y={bgY} width={bgW} height={bgH} fill="rgba(0,0,0,0.55)" stroke="none" rx={2} />
+              <text x={cxSvg} y={labelY} textAnchor="middle" dominantBaseline="middle" fontSize={fontSize} fill="#7c3aed" fontFamily="sans-serif">
+                {label}
+              </text>
+            </g>
+          )
+        }
+        return <>{fixtureElems}</>
+      })()}
+
+      {/* ── Annotations → numbered markers in plan ───────────────────────── */}
+      {annotations.map((ann, i) => {
+        const cx = tx(ann.x)
+        const cy = ty(ann.y)
         return (
-          <g key={fixture.id} transform={rot !== 0 ? `rotate(${rot}, ${cxSvg}, ${cySvg})` : undefined}>
-            <rect x={svgX} y={svgY} width={svgW} height={svgH} fill="none" stroke="#a78bfa" strokeWidth={1.5} rx={2} />
-            {(fixture.type === 'bench' || fixture.type === 'sauna_heater') && (
-              <>
-                <line x1={svgX} y1={svgY} x2={svgX + svgW} y2={svgY + svgH} stroke="#a78bfa" strokeWidth={0.75} />
-                <line x1={svgX} y1={svgY + svgH} x2={svgX + svgW} y2={svgY} stroke="#a78bfa" strokeWidth={0.75} />
-              </>
-            )}
-            <text x={cxSvg} y={cySvg} textAnchor="middle" dominantBaseline="middle" fontSize={8} fill="#7c3aed" fontFamily="sans-serif">
-              {label}
+          <g key={`ann-${i}`}>
+            <circle cx={cx} cy={cy} r={7} fill="#f59e0b" opacity={0.9} />
+            <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize={8} fontWeight="bold" fill="white" fontFamily="sans-serif">
+              {i + 1}
             </text>
           </g>
         )
       })}
-
-      {/* ── Annotations ──────────────────────────────────────────────────── */}
-      {(model.annotations ?? []).map((ann, i) => (
-        <text
-          key={`ann-${i}`}
-          x={tx(ann.x)}
-          y={ty(ann.y)}
-          fontSize={8}
-          fill="#f59e0b"
-          fontFamily="sans-serif"
-          fontStyle="italic"
-        >
-          {ann.text}
-        </text>
-      ))}
 
       {/* ── Dimension annotations ── */}
       {(() => {
@@ -579,37 +607,62 @@ function FloorPlanV2({ model }: FloorPlanProps) {
         const roomW = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x))
         const roomD = Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y))
 
+        const nameX = tx(cx)
+        const nameY = ty(cy) - 12
+        const dimX = tx(cx)
+        const dimY = ty(cy)
+        const areaX = tx(cx)
+        const areaY = ty(cy) + 12
+
+        const nameText = room.name
+        const dimText = `${roomW.toFixed(1)} × ${roomD.toFixed(1)} m`
+        const areaText = `${area.toFixed(1)} m²`
+
+        const nameFontSize = 11
+        const dimFontSize = 10
+        const areaFontSize = 10
+
+        const nameApproxW = nameText.length * nameFontSize * 0.6
+        const dimApproxW = dimText.length * dimFontSize * 0.6
+        const areaApproxW = areaText.length * areaFontSize * 0.6
+
         return (
           <g key={room.id}>
-            <text
-              x={tx(cx)}
-              y={ty(cy) - 12}
-              textAnchor="middle"
-              fontSize={11}
-              fill="#52525b"
-              fontFamily="sans-serif"
-            >
-              {room.name}
+            <rect
+              x={nameX - nameApproxW / 2 - 2}
+              y={nameY - nameFontSize - 1}
+              width={nameApproxW + 4}
+              height={nameFontSize + 4}
+              fill="rgba(0,0,0,0.55)"
+              stroke="none"
+              rx={2}
+            />
+            <text x={nameX} y={nameY} textAnchor="middle" fontSize={nameFontSize} fill="#52525b" fontFamily="sans-serif">
+              {nameText}
             </text>
-            <text
-              x={tx(cx)}
-              y={ty(cy)}
-              textAnchor="middle"
-              fontSize={10}
-              fill="#71717a"
-              fontFamily="sans-serif"
-            >
-              {roomW.toFixed(1)} × {roomD.toFixed(1)} m
+            <rect
+              x={dimX - dimApproxW / 2 - 2}
+              y={dimY - dimFontSize - 1}
+              width={dimApproxW + 4}
+              height={dimFontSize + 4}
+              fill="rgba(0,0,0,0.55)"
+              stroke="none"
+              rx={2}
+            />
+            <text x={dimX} y={dimY} textAnchor="middle" fontSize={dimFontSize} fill="#71717a" fontFamily="sans-serif">
+              {dimText}
             </text>
-            <text
-              x={tx(cx)}
-              y={ty(cy) + 12}
-              textAnchor="middle"
-              fontSize={10}
-              fill="#71717a"
-              fontFamily="sans-serif"
-            >
-              {area.toFixed(1)} m²
+            <rect
+              x={areaX - areaApproxW / 2 - 2}
+              y={areaY - areaFontSize - 1}
+              width={areaApproxW + 4}
+              height={areaFontSize + 4}
+              fill="rgba(0,0,0,0.55)"
+              stroke="none"
+              rx={2}
+            />
+            <text x={areaX} y={areaY} textAnchor="middle" fontSize={areaFontSize} fill="#71717a" fontFamily="sans-serif">
+              {areaText}
             </text>
           </g>
         )
@@ -630,21 +683,88 @@ function FloorPlanV2({ model }: FloorPlanProps) {
       </g>
 
       {/* ── Scale bar ────────────────────────────────────────────────────── */}
-      <g transform={`translate(${padding}, ${viewBoxH - 24})`}>
+      <g transform={`translate(${padding}, ${400 - 24})`}>
         <line x1={0} y1={0} x2={barPx} y2={0} stroke="#52525b" strokeWidth={2} />
         <line x1={0} y1={-4} x2={0} y2={4} stroke="#52525b" strokeWidth={2} />
         <line x1={barPx} y1={-4} x2={barPx} y2={4} stroke="#52525b" strokeWidth={2} />
-        <text
-          x={barPx / 2}
-          y={-8}
-          textAnchor="middle"
-          fontSize={10}
-          fill="#52525b"
-          fontFamily="sans-serif"
-        >
-          {barMetres} m
-        </text>
+        {(() => {
+          const scaleBarText = `${barMetres} m`
+          const sbFontSize = 10
+          const sbApproxW = scaleBarText.length * sbFontSize * 0.6
+          return (
+            <>
+              <rect
+                x={barPx / 2 - sbApproxW / 2 - 2}
+                y={-8 - sbFontSize - 1}
+                width={sbApproxW + 4}
+                height={sbFontSize + 4}
+                fill="rgba(0,0,0,0.55)"
+                stroke="none"
+                rx={2}
+              />
+              <text x={barPx / 2} y={-8} textAnchor="middle" fontSize={sbFontSize} fill="#52525b" fontFamily="sans-serif">
+                {scaleBarText}
+              </text>
+            </>
+          )
+        })()}
       </g>
+
+      {/* ── Annotation footer ─────────────────────────────────────────────── */}
+      {annCount > 0 && (() => {
+        const footerElems: React.ReactNode[] = []
+        footerElems.push(
+          <line
+            key="footer-rule"
+            x1={padding}
+            y1={404}
+            x2={viewBoxW - padding}
+            y2={404}
+            stroke="#52525b"
+            strokeWidth={0.5}
+            strokeDasharray="4 2"
+          />
+        )
+
+        const leftColX = padding + 4
+        const rightColX = viewBoxW / 2 + 4
+        let rowY = 416
+
+        for (let i = 0; i < annotations.length; i++) {
+          const ann = annotations[i]
+          const isRight = i % 2 === 1
+          const colX = isRight ? rightColX : leftColX
+          if (!isRight && i > 0) rowY += 22
+
+          const text = ann.text
+          const lastSpaceBefore55 = text.lastIndexOf(' ', 55)
+          const breakAt = lastSpaceBefore55 > 0 ? lastSpaceBefore55 : 55
+          const needsWrap = text.length > 55
+          const line1 = needsWrap ? text.slice(0, breakAt) : text
+          const line2 = needsWrap ? text.slice(breakAt + 1) : null
+
+          footerElems.push(
+            <g key={`footer-ann-${i}`}>
+              <circle cx={colX + 6} cy={rowY - 2} r={6} fill="#f59e0b" opacity={0.9} />
+              <text x={colX + 6} y={rowY - 2} textAnchor="middle" dominantBaseline="middle" fontSize={7} fontWeight="bold" fill="white" fontFamily="sans-serif">
+                {i + 1}
+              </text>
+              <text x={colX + 16} y={rowY} fontSize={8} fill="#d97706" fontFamily="sans-serif">
+                {line1}
+              </text>
+              {line2 && (
+                <text x={colX + 16} y={rowY + 12} fontSize={8} fill="#d97706" fontFamily="sans-serif">
+                  {line2}
+                </text>
+              )}
+            </g>
+          )
+
+          if (isRight) rowY += 22
+        }
+
+        return <>{footerElems}</>
+      })()}
     </svg>
   )
 }
