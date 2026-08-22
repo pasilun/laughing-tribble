@@ -43,5 +43,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# dev scripts / generated test artifacts
-/scripts/
+# generated test artifacts
+/.visual/

@@ -5,14 +5,35 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
+export type ViewerPose = 'se' | 'n' | 'top'
+
 interface GLTFViewerProps {
   glbUrl: string
+  deterministic?: boolean
+  pose?: ViewerPose
+  hideAboveZ?: number
+  onReady?: () => void
+  onError?: (err: Error) => void
 }
 
-export default function GLTFViewer({ glbUrl }: GLTFViewerProps) {
+export default function GLTFViewer({
+  glbUrl,
+  deterministic = false,
+  pose = 'se',
+  hideAboveZ,
+  onReady,
+  onError,
+}: GLTFViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const statusRef = useRef<HTMLDivElement>(null)
   const compassRef = useRef<HTMLDivElement>(null)
+  const onReadyRef = useRef(onReady)
+  const onErrorRef = useRef(onError)
+
+  useEffect(() => {
+    onReadyRef.current = onReady
+    onErrorRef.current = onError
+  })
 
   useEffect(() => {
     if (!containerRef.current || !glbUrl) return
@@ -46,7 +67,7 @@ export default function GLTFViewer({ glbUrl }: GLTFViewerProps) {
     scene.add(grid)
 
     const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true
+    controls.enableDamping = !deterministic
 
     const updateCompass = () => {
       if (!compassRef.current) return
@@ -85,6 +106,13 @@ export default function GLTFViewer({ glbUrl }: GLTFViewerProps) {
     loader.load(
       glbUrl,
       (gltf) => {
+        if (hideAboveZ !== undefined) {
+          gltf.scene.traverse((obj) => {
+            if (!(obj as THREE.Mesh).isMesh) return
+            const bb = new THREE.Box3().setFromObject(obj)
+            if (bb.min.y >= hideAboveZ - 1e-6) obj.visible = false
+          })
+        }
         scene.add(gltf.scene)
         const bbox = new THREE.Box3().setFromObject(gltf.scene)
         if (!bbox.isEmpty()) {
@@ -93,17 +121,20 @@ export default function GLTFViewer({ glbUrl }: GLTFViewerProps) {
           const size = bbox.getSize(new THREE.Vector3())
           const maxDim = Math.max(size.x, size.y, size.z)
           // Start due south so the 3D compass initially matches the 2D plan (N at top).
-          camera.position.set(
-            center.x,
-            center.y + maxDim * 1.5,
-            center.z + maxDim * 2
-          )
+          const posePos: Record<ViewerPose, [number, number, number]> = {
+            se: [center.x, center.y + maxDim * 1.5, center.z + maxDim * 2],
+            n: [center.x, center.y + maxDim * 1.2, center.z - maxDim * 2],
+            top: [center.x, center.y + maxDim * 2.5, center.z + maxDim * 0.05],
+          }
+          camera.position.set(...posePos[pose])
           camera.lookAt(center)
           controls.target.copy(center)
           controls.update()
           updateCompass()
+          renderer.render(scene, camera)
         }
         setStatus('✓ Modell laddad')
+        onReadyRef.current?.()
         setTimeout(() => {
           if (statusRef.current) statusRef.current.style.display = 'none'
         }, 2000)
@@ -111,6 +142,7 @@ export default function GLTFViewer({ glbUrl }: GLTFViewerProps) {
       undefined,
       (err) => {
         setStatus('✗ ' + String(err).substring(0, 200))
+        onErrorRef.current?.(new Error(String(err)))
       }
     )
 
@@ -124,7 +156,7 @@ export default function GLTFViewer({ glbUrl }: GLTFViewerProps) {
         container.removeChild(renderer.domElement)
       }
     }
-  }, [glbUrl])
+  }, [glbUrl, deterministic, pose, hideAboveZ])
 
   return (
     <div className="relative w-full rounded-lg overflow-hidden" style={{ height: '500px' }}>

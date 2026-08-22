@@ -1,0 +1,63 @@
+{
+  "id": "sample-house",
+  "description": "Exempelhus: rektangulär 10 × 6 m fot, sadeltak med nock i öst–väst, 22° vinkel och 0,3 m överhäng. Ytterdörr centrerad på sydfasaden (cirka mitt för huset) och ett fönster på sydfasaden väster om dörren. Ett enda rum, rumshöjd 2,4 m.",
+  "model": {
+    "id": "sample-house",
+    "name": "Exempelhus",
+    "walls": [
+      {
+        "vertices": [
+          {"x": 0, "y": 0},
+          {"x": 10, "y": 0},
+          {"x": 10, "y": 6},
+          {"x": 0, "y": 6}
+        ],
+        "edges": [
+          {"id": "wall-south", "thickness": 0.12, "height": 2.4},
+          {"id": "wall-east", "thickness": 0.12, "height": 2.4},
+          {"id": "wall-north", "thickness": 0.12, "height": 2.4},
+          {"id": "wall-west", "thickness": 0.12, "height": 2.4}
+        ]
+      }
+    ],
+    "openings": [
+      {
+        "id": "door-1",
+        "wallId": "wall-south",
+        "type": "door",
+        "width": 0.9,
+        "height": 2.1,
+        "offsetFromStart": 4.55,
+        "sillHeight": 0
+      },
+      {
+        "id": "window-1",
+        "wallId": "wall-south",
+        "type": "window",
+        "width": 1.2,
+        "height": 1.2,
+        "offsetFromStart": 2.0,
+        "sillHeight": 0.9
+      }
+    ],
+    "rooms": [
+      {
+        "id": "room-1",
+        "name": "Rum",
+        "polygon": [
+          {"x": 0.12, "y": 0.12},
+          {"x": 9.88, "y": 0.12},
+          {"x": 9.88, "y": 5.88},
+          {"x": 0.12, "y": 5.88}
+        ]
+      }
+    ],
+    "roof": {
+      "type": "sadel",
+      "pitch": 22,
+      "overhang": 0.3
+    },
+    "slabThickness": 0.2,
+    "partitions": []
+  }
+}

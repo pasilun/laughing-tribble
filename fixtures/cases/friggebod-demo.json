@@ -1,0 +1,195 @@
+{
+  "id": "friggebod-demo",
+  "description": "Friggebod 5×3 m med pulpettak högt i söder och lågt i norr (15°). Ingång och fönster på sydfasaden, fönster i väster och norr. Innervägg vid y=2 skiljer bastun (söder, med aggregat och bänk) från vrummet; dörr mellan rummen nära östra väggen.",
+  "model": {
+    "id": "building-1787385943356",
+    "name": "Friggebod med bastuhörna",
+    "flowType": "friggebod",
+    "walls": [
+      {
+        "vertices": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 5,
+            "y": 0
+          },
+          {
+            "x": 5,
+            "y": 3
+          },
+          {
+            "x": 0,
+            "y": 3
+          }
+        ],
+        "edges": [
+          {
+            "id": "wall-south",
+            "thickness": 0.12,
+            "height": 2.5
+          },
+          {
+            "id": "wall-east",
+            "thickness": 0.12,
+            "height": 2.5
+          },
+          {
+            "id": "wall-north",
+            "thickness": 0.12,
+            "height": 2.5
+          },
+          {
+            "id": "wall-west",
+            "thickness": 0.12,
+            "height": 2.5
+          }
+        ]
+      }
+    ],
+    "openings": [
+      {
+        "id": "door-south-0",
+        "wallId": "wall-south",
+        "type": "door",
+        "width": 0.9,
+        "height": 2.1,
+        "offsetFromStart": 1,
+        "sillHeight": 0
+      },
+      {
+        "id": "window-south-1",
+        "wallId": "wall-south",
+        "type": "window",
+        "width": 1.4,
+        "height": 1.2,
+        "offsetFromStart": 3,
+        "sillHeight": 0.9
+      },
+      {
+        "id": "window-west-2",
+        "wallId": "wall-west",
+        "type": "window",
+        "width": 1,
+        "height": 1.2,
+        "offsetFromStart": 1.6,
+        "sillHeight": 0.9
+      },
+      {
+        "id": "window-north-3",
+        "wallId": "wall-north",
+        "type": "window",
+        "width": 1.2,
+        "height": 1.2,
+        "offsetFromStart": 2.3,
+        "sillHeight": 0.9
+      },
+      {
+        "id": "partition-0-op-0",
+        "partitionId": "partition-0",
+        "type": "door",
+        "width": 0.9,
+        "height": 2.1,
+        "offsetFromStart": 2.6,
+        "sillHeight": 0
+      }
+    ],
+    "rooms": [
+      {
+        "id": "room-1",
+        "name": "Bastu",
+        "polygon": [
+          {
+            "x": 0.12,
+            "y": 0.12
+          },
+          {
+            "x": 4.88,
+            "y": 0.12
+          },
+          {
+            "x": 4.88,
+            "y": 2
+          },
+          {
+            "x": 0.12,
+            "y": 2
+          },
+          {
+            "x": 0.12,
+            "y": 0.12
+          }
+        ]
+      },
+      {
+        "id": "room-2",
+        "name": "Vrum",
+        "polygon": [
+          {
+            "x": 0.12,
+            "y": 2
+          },
+          {
+            "x": 4.88,
+            "y": 2
+          },
+          {
+            "x": 4.88,
+            "y": 2.88
+          },
+          {
+            "x": 0.12,
+            "y": 2.88
+          },
+          {
+            "x": 0.12,
+            "y": 2
+          }
+        ]
+      }
+    ],
+    "roof": {
+      "type": "pulpet",
+      "pitch": 15,
+      "overhang": 0.25,
+      "ridgeDirection": "ew"
+    },
+    "slabThickness": 0.2,
+    "partitions": [
+      {
+        "id": "partition-0",
+        "start": {
+          "x": 0,
+          "y": 2
+        },
+        "end": {
+          "x": 5,
+          "y": 2
+        },
+        "thickness": 0.1
+      }
+    ],
+    "fixtures": [
+      {
+        "id": "fixture-0",
+        "type": "sauna_heater",
+        "x": 0.4,
+        "y": 0.4,
+        "width": 0.5,
+        "depth": 0.5,
+        "label": "Bastuaggregat"
+      },
+      {
+        "id": "fixture-1",
+        "type": "bench",
+        "x": 0.3,
+        "y": 1.2,
+        "width": 2,
+        "depth": 0.6,
+        "label": "Bänk"
+      }
+    ]
+  }
+}

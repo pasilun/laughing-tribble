@@ -1,0 +1,31 @@
+{
+  "name": "Friggebod med bastuhörna",
+  "flowType": "friggebod",
+  "length": 5.0,
+  "width": 3.0,
+  "wallHeight": 2.5,
+  "wallThickness": 0.12,
+  "roof": {
+    "type": "pulpet",
+    "pitch": 15,
+    "overhang": 0.25,
+    "ridgeDirection": "ew"
+  },
+  "openings": [
+    { "wall": "south", "type": "door", "width": 0.9, "offsetFromStart": 1.0 },
+    { "wall": "south", "type": "window", "width": 1.4, "offsetFromStart": 3.0 },
+    { "wall": "west", "type": "window", "width": 1.0, "offsetFromStart": 0.4 },
+    { "wall": "north", "type": "window", "width": 1.2, "offsetFromStart": 1.5 }
+  ],
+  "partitions": [
+    { "direction": "ew", "offset": 2.0, "thickness": 0.1, "openings": [ { "type": "door", "offsetFromStart": 2.6 } ] }
+  ],
+  "rooms": [
+    { "name": "Bastu" },
+    { "name": "Vrum" }
+  ],
+  "fixtures": [
+    { "type": "sauna_heater", "x": 0.4, "y": 0.4, "width": 0.5, "depth": 0.5, "label": "Bastuaggregat" },
+    { "type": "bench", "x": 0.3, "y": 1.2, "width": 2.0, "depth": 0.6, "label": "Bänk" }
+  ]
+}

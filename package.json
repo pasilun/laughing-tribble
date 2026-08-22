@@ -9,7 +9,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
-    "test:golden-cases": "playwright test --grep @golden-case"
+    "test:golden-cases": "playwright test --grep @golden-case",
+    "visual": "node scripts/visual.mjs",
+    "new-case": "tsx scripts/new-case.ts"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
@@ -30,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.5",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }

@@ -1,0 +1,110 @@
+{
+  "id": "bastu-yogastudio",
+  "description": "Bastu och yogastudio: 4 m bred (öst–väst) och 10 m djup (syd–nord), sadeltak med nock i nord–syd, 22° takvinkel, 0,4 m överhäng. Tre fönster på västra långväggen (två stora mot gården, ett litet i söder), ingångsdörr på östra gaveln mitt på fasaden. En innervägg tvärs över huset vid y=7 m skiljer bastun (norra delen) från yogastudion (södra delen); dörr i innerväggen närmast västra väggen.",
+  "model": {
+    "id": "building-1779904634985",
+    "name": "Bastu & yogastudio",
+    "walls": [
+      {
+        "vertices": [
+          {"x": 0, "y": 0},
+          {"x": 4, "y": 0},
+          {"x": 4, "y": 10},
+          {"x": 0, "y": 10}
+        ],
+        "edges": [
+          {"id": "wall-south", "thickness": 0.12, "height": 2.5},
+          {"id": "wall-east", "thickness": 0.12, "height": 2.5},
+          {"id": "wall-north", "thickness": 0.12, "height": 2.5},
+          {"id": "wall-west", "thickness": 0.12, "height": 2.5}
+        ]
+      }
+    ],
+    "openings": [
+      {
+        "id": "window-west-0",
+        "wallId": "wall-west",
+        "type": "window",
+        "width": 3,
+        "height": 2.1,
+        "offsetFromStart": 6.4,
+        "sillHeight": 0.2
+      },
+      {
+        "id": "window-west-1",
+        "wallId": "wall-west",
+        "type": "window",
+        "width": 2.7,
+        "height": 2.1,
+        "offsetFromStart": 3.5,
+        "sillHeight": 0.2
+      },
+      {
+        "id": "window-west-2",
+        "wallId": "wall-west",
+        "type": "window",
+        "width": 1.8,
+        "height": 1.2,
+        "offsetFromStart": 0.5,
+        "sillHeight": 0.7
+      },
+      {
+        "id": "door-east-3",
+        "wallId": "wall-east",
+        "type": "door",
+        "width": 0.9,
+        "height": 2.1,
+        "offsetFromStart": 3,
+        "sillHeight": 0
+      },
+      {
+        "id": "partition-0-op-0",
+        "partitionId": "partition-0",
+        "type": "door",
+        "width": 0.8,
+        "height": 1.9,
+        "offsetFromStart": 1.6,
+        "sillHeight": 0
+      }
+    ],
+    "rooms": [
+      {
+        "id": "room-1",
+        "name": "Yogastudio",
+        "polygon": [
+          {"x": 0.12, "y": 0.12},
+          {"x": 3.88, "y": 0.12},
+          {"x": 3.88, "y": 7},
+          {"x": 0.12, "y": 7},
+          {"x": 0.12, "y": 0.12}
+        ]
+      },
+      {
+        "id": "room-2",
+        "name": "Bastu",
+        "polygon": [
+          {"x": 0.12, "y": 7},
+          {"x": 3.88, "y": 7},
+          {"x": 3.88, "y": 9.88},
+          {"x": 0.12, "y": 9.88},
+          {"x": 0.12, "y": 7}
+        ]
+      }
+    ],
+    "roof": {
+      "type": "sadel",
+      "pitch": 22,
+      "overhang": 0.4,
+      "ridgeDirection": "ns"
+    },
+    "slabThickness": 0.2,
+    "partitions": [
+      {
+        "id": "partition-0",
+        "start": {"x": 0, "y": 7},
+        "end": {"x": 4, "y": 7},
+        "thickness": 0.12
+      }
+    ]
+  }
+}

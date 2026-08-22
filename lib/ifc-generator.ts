@@ -33,6 +33,13 @@ function fmt(v: number): string {
   return Number.isInteger(v) ? `${v}.` : `${v}`
 }
 
+function asciiSafe(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, '?')
+}
+
 export function generateIFC(model: BuildingModelV2): string {
   const w = new StepWriter()
 
@@ -140,7 +147,7 @@ export function generateIFC(model: BuildingModelV2): string {
   w.add(
     projectId,
     'IFCPROJECT',
-    `'${model.id}',#${ownerHistId},'${model.name}',$,$,$,$,(#${geomCtx3dId},#${geomCtx2dId}),#${unitAssignId}`
+    `'${model.id}',#${ownerHistId},'${asciiSafe(model.name)}',$,$,$,$,(#${geomCtx3dId},#${geomCtx2dId}),#${unitAssignId}`
   )
 
   // Site placement
@@ -176,7 +183,7 @@ export function generateIFC(model: BuildingModelV2): string {
   w.add(
     buildingId,
     'IFCBUILDING',
-    `'building-01',#${ownerHistId},'${model.name}',$,$,#${bldgLocalPlacementId},$,$,.ELEMENT.,$,$,$`
+    `'building-01',#${ownerHistId},'${asciiSafe(model.name)}',$,$,#${bldgLocalPlacementId},$,$,.ELEMENT.,$,$,$`
   )
 
   // Building storey
@@ -645,7 +652,7 @@ export function generateIFC(model: BuildingModelV2): string {
 
     const fixEntityId = w.next()
     w.add(fixEntityId, 'IFCBUILDINGELEMENTPROXY',
-      `'${fixture.id}',#${ownerHistId},'${fixture.label ?? fixture.type}',$,$,#${fixLocalPlacementId},#${fixProdDefId},$,$`)
+      `'${fixture.id}',#${ownerHistId},'${asciiSafe(fixture.label ?? fixture.type)}',$,$,#${fixLocalPlacementId},#${fixProdDefId},$,$`)
     fixtureIds.push(fixEntityId)
   }
 
@@ -691,16 +698,16 @@ export function generateIFC(model: BuildingModelV2): string {
     w.add(
       spaceId,
       'IFCSPACE',
-      `'${room.id}',#${ownerHistId},'${room.name}',$,$,#${roomLocalPlacementId},#${roomProdDefId},$,.ELEMENT.,.INTERNAL.`
+      `'${room.id}',#${ownerHistId},'${asciiSafe(room.name)}',$,$,#${roomLocalPlacementId},#${roomProdDefId},$,.ELEMENT.,.INTERNAL.`
     )
 
     spaceIds.push(spaceId)
   }
 
-  // ── Sadel (gable) roof ───────────────────────────────────────────────────
+  // ── Roof solids (sadel / pulpet / flat) ──────────────────────────────────
   let roofId: number | null = null
 
-  if (model.roof.type === 'sadel') {
+  if (model.roof.type === 'sadel' || model.roof.type === 'pulpet' || model.roof.type === 'flat') {
     const pitch = model.roof.pitch
     const overhang = model.roof.overhang
     const ridgeDir = model.roof.ridgeDirection ?? 'ew'
@@ -717,9 +724,158 @@ export function generateIFC(model: BuildingModelV2): string {
     const roofThickness = 0.15
     const eaveH = wallH + roofThickness
 
+    const roofMeta =
+      model.roof.type === 'flat'
+        ? { name: 'roof-flat', label: 'Platt tak', ptype: '.FLAT_ROOF.' }
+        : model.roof.type === 'pulpet'
+          ? { name: 'roof-pulpet', label: 'Pulpet tak', ptype: '.SHED_ROOF.' }
+          : { name: 'roof-sadel', label: 'Sadel tak', ptype: '.GABLE_ROOF.' }
+
     let roofSolidId: number
 
-    if (ridgeDir === 'ns') {
+    if (model.roof.type === 'flat') {
+      const slabL = buildingLength + 2 * overhang
+      const slabW = buildingWidth + 2 * overhang
+
+      const roofOriginId = w.next()
+      w.add(roofOriginId, 'IFCCARTESIANPOINT', `(${fmt(minX - overhang)},${fmt(minY - overhang)},${fmt(eaveH - roofThickness)})`)
+
+      const roofAxisDirId = w.next()
+      w.add(roofAxisDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+
+      const roofRefDirId = w.next()
+      w.add(roofRefDirId, 'IFCDIRECTION', `(${fmt(1.)},${fmt(0.)},${fmt(0.)})`)
+
+      const roofPlacement3dId = w.next()
+      w.add(
+        roofPlacement3dId,
+        'IFCAXIS2PLACEMENT3D',
+        `#${roofOriginId},#${roofAxisDirId},#${roofRefDirId}`
+      )
+
+      const r1 = w.next()
+      w.add(r1, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)})`)
+      const r2 = w.next()
+      w.add(r2, 'IFCCARTESIANPOINT', `(${fmt(slabL)},${fmt(0.)})`)
+      const r3 = w.next()
+      w.add(r3, 'IFCCARTESIANPOINT', `(${fmt(slabL)},${fmt(slabW)})`)
+      const r4 = w.next()
+      w.add(r4, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(slabW)})`)
+      const r1c = w.next()
+      w.add(r1c, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(0.)})`)
+
+      const roofPolylineId = w.next()
+      w.add(roofPolylineId, 'IFCPOLYLINE', `(#${r1},#${r2},#${r3},#${r4},#${r1c})`)
+
+      const roofProfileId = w.next()
+      w.add(roofProfileId, 'IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,$,#${roofPolylineId}`)
+
+      roofSolidId = w.next()
+      w.add(
+        roofSolidId,
+        'IFCEXTRUDEDAREASOLID',
+        `#${roofProfileId},#${roofPlacement3dId},#${roofAxisDirId},${fmt(roofThickness)}`
+      )
+    } else if (model.roof.type === 'pulpet') {
+      // Mono-pitch: high edge south (ridgeDirection ew) or west (ns), sloping down across the full span.
+      if (ridgeDir === 'ns') {
+        // High edge west, falls east. Profile in XZ plane, extruded north.
+        const run = buildingLength + 2 * overhang
+        const lowTop = eaveH
+        const highTop = eaveH + run * Math.tan(pitchRad)
+
+        const roofOriginId = w.next()
+        w.add(roofOriginId, 'IFCCARTESIANPOINT', `(${fmt(maxX + overhang)},${fmt(minY - overhang)},${fmt(0.)})`)
+
+        const roofAxisDirId = w.next()
+        w.add(roofAxisDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(1.)},${fmt(0.)})`)
+
+        const roofRefDirId = w.next()
+        w.add(roofRefDirId, 'IFCDIRECTION', `(${fmt(-1.)},${fmt(0.)},${fmt(0.)})`)
+
+        const roofPlacement3dId = w.next()
+        w.add(
+          roofPlacement3dId,
+          'IFCAXIS2PLACEMENT3D',
+          `#${roofOriginId},#${roofAxisDirId},#${roofRefDirId}`
+        )
+
+        const p1 = w.next()
+        w.add(p1, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(lowTop)})`)
+        const p2 = w.next()
+        w.add(p2, 'IFCCARTESIANPOINT', `(${fmt(run)},${fmt(highTop)})`)
+        const p3 = w.next()
+        w.add(p3, 'IFCCARTESIANPOINT', `(${fmt(run)},${fmt(wallH)})`)
+        const p4 = w.next()
+        w.add(p4, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(wallH)})`)
+        const p1c = w.next()
+        w.add(p1c, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(lowTop)})`)
+
+        const roofPolylineId = w.next()
+        w.add(roofPolylineId, 'IFCPOLYLINE', `(#${p1},#${p2},#${p3},#${p4},#${p1c})`)
+
+        const roofProfileId = w.next()
+        w.add(roofProfileId, 'IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,$,#${roofPolylineId}`)
+
+        const roofExtrudeDirId = w.next()
+        w.add(roofExtrudeDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+
+        roofSolidId = w.next()
+        w.add(
+          roofSolidId,
+          'IFCEXTRUDEDAREASOLID',
+          `#${roofProfileId},#${roofPlacement3dId},#${roofExtrudeDirId},${fmt(buildingWidth + 2 * overhang)}`
+        )
+      } else {
+        // High edge south, falls north. Profile in YZ plane, extruded east.
+        const run = buildingWidth + 2 * overhang
+        const lowTop = eaveH
+        const highTop = eaveH + run * Math.tan(pitchRad)
+
+        const roofOriginId = w.next()
+        w.add(roofOriginId, 'IFCCARTESIANPOINT', `(${fmt(-overhang)},${fmt(minY - overhang)},${fmt(0.)})`)
+
+        const roofAxisDirId = w.next()
+        w.add(roofAxisDirId, 'IFCDIRECTION', `(${fmt(1.)},${fmt(0.)},${fmt(0.)})`)
+
+        const roofRefDirId = w.next()
+        w.add(roofRefDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(1.)},${fmt(0.)})`)
+
+        const roofPlacement3dId = w.next()
+        w.add(
+          roofPlacement3dId,
+          'IFCAXIS2PLACEMENT3D',
+          `#${roofOriginId},#${roofAxisDirId},#${roofRefDirId}`
+        )
+
+        const p1 = w.next()
+        w.add(p1, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(highTop)})`)
+        const p2 = w.next()
+        w.add(p2, 'IFCCARTESIANPOINT', `(${fmt(run)},${fmt(lowTop)})`)
+        const p3 = w.next()
+        w.add(p3, 'IFCCARTESIANPOINT', `(${fmt(run)},${fmt(wallH)})`)
+        const p4 = w.next()
+        w.add(p4, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(wallH)})`)
+        const p1c = w.next()
+        w.add(p1c, 'IFCCARTESIANPOINT', `(${fmt(0.)},${fmt(highTop)})`)
+
+        const roofPolylineId = w.next()
+        w.add(roofPolylineId, 'IFCPOLYLINE', `(#${p1},#${p2},#${p3},#${p4},#${p1c})`)
+
+        const roofProfileId = w.next()
+        w.add(roofProfileId, 'IFCARBITRARYCLOSEDPROFILEDEF', `.AREA.,$,#${roofPolylineId}`)
+
+        const roofExtrudeDirId = w.next()
+        w.add(roofExtrudeDirId, 'IFCDIRECTION', `(${fmt(0.)},${fmt(0.)},${fmt(1.)})`)
+
+        roofSolidId = w.next()
+        w.add(
+          roofSolidId,
+          'IFCEXTRUDEDAREASOLID',
+          `#${roofProfileId},#${roofPlacement3dId},#${roofExtrudeDirId},${fmt(buildingLength + 2 * overhang)}`
+        )
+      }
+    } else if (ridgeDir === 'ns') {
       // NS ridge: ridge runs north-south, pitches east-west
       const halfSpan = buildingLength / 2
       const extrudeLen = buildingWidth + 2 * overhang
@@ -884,7 +1040,7 @@ export function generateIFC(model: BuildingModelV2): string {
     w.add(
       roofId,
       'IFCROOF',
-      `'roof-sadel',#${ownerHistId},'Sadel tak',$,$,#${roofLocalPlacementId},#${roofProdDefShapeId},$,.GABLE_ROOF.`
+      `'${roofMeta.name}',#${ownerHistId},'${roofMeta.label}',$,$,#${roofLocalPlacementId},#${roofProdDefShapeId},$,${roofMeta.ptype}`
     )
   }
 
@@ -906,7 +1062,7 @@ export function generateIFC(model: BuildingModelV2): string {
     'ISO-10303-21;',
     'HEADER;',
     `FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');`,
-    `FILE_NAME('${model.name}.ifc','${now}',(''),(''),'custom-ifc-generator','','');`,
+    `FILE_NAME('${asciiSafe(model.name)}.ifc','${now}',(''),(''),'custom-ifc-generator','','');`,
     `FILE_SCHEMA(('IFC4'));`,
     'ENDSEC;',
     'DATA;',
