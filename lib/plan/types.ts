@@ -104,6 +104,8 @@ export type Sheet = {
 
 export type Underlay = {
   src: string                // URL or data URL of the scanned drawing
+  widthPx: number
+  heightPx: number
   mmPerPx: number            // calibration
   x: number                  // plan position of the image's top-left corner
   y: number

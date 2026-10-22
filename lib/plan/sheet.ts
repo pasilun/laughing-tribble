@@ -517,7 +517,7 @@ export function renderSheet(plan: Plan, view: View, opts: RenderOptions = {}): s
     const u = plan.underlay
     const p = L.toPaper({ x: u.x, y: u.y })
     body.push(
-      `<image href="${esc(u.src)}" x="${f(p.x)}" y="${f(p.y)}" transform="rotate(${f(u.rotation)} ${f(p.x)} ${f(p.y)}) scale(${f(u.mmPerPx * L.k)})" opacity="${u.opacity}" style="transform-box:view-box"/>`,
+      `<image href="${esc(u.src)}" x="${f(p.x)}" y="${f(p.y)}" width="${f(u.widthPx * u.mmPerPx * L.k)}" height="${f(u.heightPx * u.mmPerPx * L.k)}" transform="rotate(${f(u.rotation)} ${f(p.x)} ${f(p.y)})" opacity="${u.opacity}" preserveAspectRatio="none"/>`,
     )
   }
   body.push(`<g data-testid="plan-walls">${renderWalls(plan, view, L)}</g>`)
