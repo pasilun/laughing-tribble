@@ -452,8 +452,9 @@ function legend(view: View, L: SheetLayout, plan: Plan): string {
   if (plan.walls.some((w) => w.loadBearing))
     rows.push([(px, py) => sw(EXISTING_FILL)(px, py) + hatchConvex([{ x: px, y: py - 2 }, { x: px + 8, y: py - 2 }, { x: px + 8, y: py + 0.4 }, { x: px, y: py + 0.4 }], 0.8), 'Bärande vägg'])
   if (view === 'efter') {
-    rows.push([sw(INK), 'Ny vägg / igensättning'])
-    rows.push([sw('none', DASH), 'Rivs'])
+    const has = (ph: Phase) => plan.walls.some((w) => w.phase === ph) || plan.openings.some((o) => o.phase === ph) || plan.fixtures.some((fx) => fx.phase === ph)
+    if (plan.walls.some((w) => w.phase === 'new') || plan.openings.some((o) => o.phase === 'demolish')) rows.push([sw(INK), 'Ny vägg / igensättning'])
+    if (has('demolish')) rows.push([sw('none', DASH), 'Rivs'])
   }
   if (plan.walls.some((w) => fireRatingIn(w, view))) rows.push([(px, py) => line({ x: px, y: py - 0.8 }, { x: px + 8, y: py - 0.8 }, 0.35, DASHDOT), 'Brandcellsgräns'])
   if (fixtures.some((fx) => fx.kind === 'exhaust')) rows.push([(px, py) => `<circle cx="${f(px + 4)}" cy="${f(py - 0.8)}" r="1.4" fill="none" stroke="${INK}" stroke-width="0.25"/>`, 'F = frånluftsdon'])

@@ -35,8 +35,8 @@ export async function sheetPdf(plan: Plan, views: View[]): Promise<Buffer> {
   return Buffer.concat(chunks)
 }
 
-export function sheetPng(plan: Plan, view: View, width = 2000): Buffer {
-  const svg = renderSheet(plan, view)
+export function sheetPng(plan: Plan, view: View, width = 2000, underlay = false): Buffer {
+  const svg = renderSheet(plan, view, { underlay })
   return new Resvg(svg, {
     fitTo: { mode: 'width', value: width },
     font: {
