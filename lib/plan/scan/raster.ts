@@ -12,7 +12,8 @@ export type Converted = { png: Buffer; widthPx: number; heightPx: number; dpi?: 
 
 export async function convertToPng(data: Buffer, filename: string): Promise<Converted> {
   if (/\.pdf$/i.test(filename) || data.subarray(0, 5).toString() === '%PDF-') return pdfToPng(data)
-  const img = sharp(data, { limitInputPixels: 200_000_000 })
+  // Archive TIFs often have sloppy headers (unterminated tags); read them anyway.
+  const img = sharp(data, { limitInputPixels: 200_000_000, failOn: 'none' })
   const meta = await img.metadata()
   if (!meta.width || !meta.height) throw new Error('kunde inte läsa bilden')
   // White background for transparent images; grayscale keeps files small.
