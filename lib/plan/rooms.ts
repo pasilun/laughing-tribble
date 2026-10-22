@@ -23,7 +23,7 @@ function insideConvex(p: Pt, q: Pt[]): boolean {
 
 export function roomAreas(plan: Plan, view: View): Map<string, number> {
   const out = new Map<string, number>()
-  const rooms = plan.rooms.filter((r) => !r.polygon)
+  const rooms = plan.rooms.filter((r) => !r.polygon && !(view === 'efter' && r.goneAfter))
   for (const r of plan.rooms) if (r.polygon && r.polygon.length >= 3) out.set(r.id, polygonArea(r.polygon))
   const walls = plan.walls.filter((w) => (view === 'fore' ? w.phase !== 'new' : w.phase !== 'demolish'))
   if (rooms.length === 0 || walls.length === 0) return out

@@ -127,3 +127,19 @@ test.describe('room areas', () => {
     expect(efter.has('r-a-kok')).toBe(false)
   })
 })
+
+test('a door in a demolished wall is not drawn as an infill', () => {
+  const { plan } = applyOps(demoPlan(), [
+    { op: 'update', kind: 'wall', id: 'a-kok-hall', patch: { phase: 'demolish' } },
+    { op: 'update', kind: 'opening', id: 'd-a-kok', patch: { phase: 'demolish' } },
+  ])
+  const svg = renderSheet(plan, 'efter')
+  const group = /<g data-wall="a-kok-hall" data-phase="demolish">(.*?)<\/g>/.exec(svg)![1]
+  expect(group).not.toContain('fill="#000"')
+})
+
+test('a room marked goneAfter has no label in efter', () => {
+  const { plan } = applyOps(demoPlan(), [{ op: 'update', kind: 'room', id: 'r-a-kok', patch: { goneAfter: true } }])
+  expect(renderSheet(plan, 'fore')).toContain('data-room="r-a-kok"')
+  expect(renderSheet(plan, 'efter')).not.toContain('data-room="r-a-kok"')
+})

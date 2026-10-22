@@ -166,8 +166,9 @@ export function wallPieces(plan: Plan, view: View): WallPiece[] {
       const part: Wall = { ...w, a: along(w, s === 0 ? -extA : s), b: along(w, e >= len ? len + extB : e) }
       out.push({ wall: w, quad: wallQuad(part), style })
     }
-    // Closed-up openings appear as new wall in "efter".
-    if (view === 'efter') {
+    // Closed-up openings appear as new wall in "efter" — unless the whole
+    // wall goes, in which case its openings go with it.
+    if (view === 'efter' && w.phase !== 'demolish') {
       for (const o of plan.openings.filter((x) => x.wallId === w.id && x.phase === 'demolish')) {
         out.push({ wall: w, quad: wallQuad({ ...w, a: along(w, o.offset), b: along(w, o.offset + o.width) }), style: 'new' })
       }
@@ -218,7 +219,8 @@ function renderFireLines(plan: Plan, view: View, L: SheetLayout): string {
     const a = L.toPaper(add(along(w, t0), off))
     const b = L.toPaper(add(along(w, t1), off))
     out.push(line(a, b, 0.35, DASHDOT))
-    const mid = scale(add(a, b), 0.5)
+    // Label a quarter along the line, clear of dimensions at the middle.
+    const mid = add(a, scale({ x: b.x - a.x, y: b.y - a.y }, 0.25))
     const d = wallDir(w)
     let angle = (Math.atan2(d.y, d.x) * 180) / Math.PI
     if (angle > 90) angle -= 180
@@ -400,6 +402,7 @@ function renderDimensions(plan: Plan, L: SheetLayout): string {
 function renderRooms(plan: Plan, view: View, L: SheetLayout): string {
   const areas = roomAreas(plan, view)
   return plan.rooms
+    .filter((r) => !(view === 'efter' && r.goneAfter))
     .map((r) => {
       const p = L.toPaper(r.at)
       let s = text(p, view === 'efter' && r.renamed ? r.renamed : r.name, 3, { weight: 'bold' })
@@ -456,7 +459,8 @@ function legend(view: View, L: SheetLayout, plan: Plan): string {
     rows.push([(px, py) => sw(EXISTING_FILL)(px, py) + hatchConvex([{ x: px, y: py - 2 }, { x: px + 8, y: py - 2 }, { x: px + 8, y: py + 0.4 }, { x: px, y: py + 0.4 }], 0.8), 'Bärande vägg'])
   if (view === 'efter') {
     const has = (ph: Phase) => plan.walls.some((w) => w.phase === ph) || plan.openings.some((o) => o.phase === ph) || plan.fixtures.some((fx) => fx.phase === ph)
-    if (plan.walls.some((w) => w.phase === 'new') || plan.openings.some((o) => o.phase === 'demolish')) rows.push([sw(INK), 'Ny vägg / igensättning'])
+    const infill = plan.openings.some((o) => o.phase === 'demolish' && plan.walls.find((w) => w.id === o.wallId)?.phase !== 'demolish')
+    if (plan.walls.some((w) => w.phase === 'new') || infill) rows.push([sw(INK), 'Ny vägg / igensättning'])
     if (has('demolish')) rows.push([sw('none', DASH), 'Rivs'])
   }
   if (plan.walls.some((w) => fireRatingIn(w, view))) rows.push([(px, py) => line({ x: px, y: py - 0.8 }, { x: px + 8, y: py - 0.8 }, 0.35, DASHDOT), 'Brandcellsgräns'])

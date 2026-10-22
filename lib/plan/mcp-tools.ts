@@ -14,7 +14,7 @@ const OPS_DOC = `Operations (all lengths in whole millimetres; x to the right, y
 - {"op":"add","kind":"wall","item":{"id":"v1","a":{"x":0,"y":0},"b":{"x":4000,"y":0},"thickness":100,"phase":"existing"|"demolish"|"new","loadBearing"?:true,"fireRating"?:"EI60","fireRatingAfter"?:""|"EI60","apartmentBoundary"?:true}}
 - {"op":"add","kind":"opening","item":{"id":"o1","wallId":"v1","kind":"door"|"opening"|"window","offset":1200,"width":900,"height"?:2100,"phase":"new","hinge"?:"a"|"b","swing"?:"left"|"right"}}  (offset = distance from the wall's a-end to the opening's near edge)
 - {"op":"add","kind":"fixture","item":{"id":"i1","kind":"kitchen"|"stove"|"sink"|"radiator"|"exhaust"|"shaft"|"wc"|"shower"|"bath"|"plug"|"box","x":..,"y":..,"w":..,"d":..,"rotation"?:0,"phase":"existing","label"?:"..."}}  (x,y = centre)
-- {"op":"add","kind":"room","item":{"id":"r1","name":"Kök","renamed"?:"Rum","at":{"x":..,"y":..},"polygon"?:[{x,y},...]}}
+- {"op":"add","kind":"room","item":{"id":"r1","name":"Kök","renamed"?:"Rum","goneAfter"?:true,"at":{"x":..,"y":..},"polygon"?:[{x,y},...]}}
 - {"op":"add","kind":"dimension","item":{"id":"m1","a":{..},"b":{..},"offset":500}}
 - {"op":"add","kind":"note","item":{"id":"n1","at":{..},"text":"..."}}
 - {"op":"update","kind":"wall|opening|fixture|room|dimension|note","id":"…","patch":{…fields to change…}}

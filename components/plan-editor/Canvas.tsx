@@ -586,7 +586,7 @@ export function Canvas(props: Props) {
             fill={isSel('room', r.id) ? '#2563eb' : '#111827'}
             style={{ cursor: 'move' }}
           >
-            {view === 'efter' && r.renamed ? r.renamed : r.name}
+            {view === 'efter' && r.goneAfter ? `(${r.name})` : view === 'efter' && r.renamed ? r.renamed : r.name}
           </text>
         ))}
         {plan.notes.map((n) =>

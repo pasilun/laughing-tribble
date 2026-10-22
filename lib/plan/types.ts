@@ -63,6 +63,7 @@ export type Room = {
   id: string
   name: string
   renamed?: string           // name in "efter" when the room changes use
+  goneAfter?: boolean        // the room disappears in "efter" (e.g. a closet that is torn out)
   at: Pt                     // label position
   apartment?: string
   polygon?: Pt[]             // optional outline, used for area
