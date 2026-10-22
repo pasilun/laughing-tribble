@@ -112,3 +112,18 @@ test.describe('checks', () => {
     expect(checkPlan(plan).some((f) => f.code === 'fit')).toBe(true)
   })
 })
+
+test.describe('room areas', () => {
+  test('computed from walls per view; doors count as closed', async () => {
+    const { roomAreas } = await import('@/lib/plan/rooms')
+    const plan = demoPlan()
+    const fore = roomAreas(plan, 'fore')
+    const efter = roomAreas(plan, 'efter')
+    // Rum A: 3225 × 3225 mm inside the faces (±10 mm raster).
+    expect(fore.get('r-a-rum')! / 1e6).toBeCloseTo(10.4, 1)
+    expect(fore.get('r-a-kok')! / 1e6).toBeCloseTo(7.5, 1)
+    // Kitchen wall demolished: Rum and Kök become one space, area shown once.
+    expect(efter.get('r-a-rum')! / 1e6).toBeCloseTo(18.2, 1)
+    expect(efter.has('r-a-kok')).toBe(false)
+  })
+})

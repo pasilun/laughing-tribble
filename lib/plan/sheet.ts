@@ -1,4 +1,5 @@
-import { add, along, bounds, dist, leftNormal, polygonArea, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
+import { add, along, bounds, dist, leftNormal, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
+import { roomAreas } from './rooms'
 import type { Fixture, Opening, Phase, Plan, Pt, View, Wall } from './types'
 
 // Renders a plan as a printable drawing sheet. All output coordinates are
@@ -397,11 +398,13 @@ function renderDimensions(plan: Plan, L: SheetLayout): string {
 }
 
 function renderRooms(plan: Plan, view: View, L: SheetLayout): string {
+  const areas = roomAreas(plan, view)
   return plan.rooms
     .map((r) => {
       const p = L.toPaper(r.at)
       let s = text(p, view === 'efter' && r.renamed ? r.renamed : r.name, 3, { weight: 'bold' })
-      if (r.polygon && r.polygon.length >= 3) s += text({ x: p.x, y: p.y + 3.6 }, fmtArea(polygonArea(r.polygon)), TEXT)
+      const area = areas.get(r.id)
+      if (area !== undefined) s += text({ x: p.x, y: p.y + 3.6 }, fmtArea(area), TEXT)
       return `<g data-room="${esc(r.id)}">${s}</g>`
     })
     .join('')
