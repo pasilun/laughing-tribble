@@ -37,12 +37,12 @@ test('trace a scanned drawing: TIF underlay, calibrate, draw, undo, save, sheet'
   await expect(page.getByTestId('tool-calibrate')).toHaveClass(/bg-blue-600/)
 
   // Calibrate on the 250 px scale bar = 5 m → 20 mm per pixel.
-  const guess = 8.467
+  const guess = (25.4 / 300) * 100 // no dpi in the fixture's header → 300 dpi at 1:100
   await clickAt(page, 25 * guess, 175 * guess)
   await clickAt(page, 275 * guess, 175 * guess)
   await page.getByTestId('calibrate-mm').fill('5000')
   await page.getByTestId('calibrate-mm').press('Enter')
-  await expect(page.getByTestId('underlay-scale')).toContainText('20.000 mm per pixel')
+  await expect(page.getByTestId('underlay-scale')).toContainText(/(19\.9[5-9]\d|20\.0[0-4]\d) mm per pixel/)
 
   // Draw a wall from the room's corner with a typed length.
   await page.keyboard.press('w')

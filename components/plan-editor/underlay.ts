@@ -42,5 +42,7 @@ function tiffDpi(page: Record<string, unknown>): number | undefined {
   const res = (page.t282 as number[] | undefined)?.[0]
   const unit = (page.t296 as number[] | undefined)?.[0] ?? 2
   if (!res || !(res > 0)) return undefined
-  return unit === 3 ? res * 2.54 : res
+  const dpi = unit === 3 ? res * 2.54 : res
+  // Headers without a real resolution (often 1 or 72) are ignored.
+  return dpi >= 100 && dpi <= 2400 ? dpi : undefined
 }
