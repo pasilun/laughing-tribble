@@ -174,6 +174,7 @@ export function Editor({ id }: { id: string }) {
 
   // ── underlay ─────────────────────────────────────────────────────────────
   const fileRef = useRef<HTMLInputElement>(null)
+  const [scanScale, setScanScale] = useState(100)
   const uploadUnderlay = async (file: File) => {
     if (!plan) return
     try {
@@ -182,15 +183,17 @@ export function Editor({ id }: { id: string }) {
       const r = await fetch(`/api/plans/${id}/assets?name=${encodeURIComponent(raster.name)}`, { method: 'POST', body: raster.blob })
       const body = await r.json()
       if (!r.ok) throw new Error(body.errors?.[0] ?? 'uppladdningen misslyckades')
-      // First guess: a 300 dpi scan of a 1:100 drawing. Calibrate to fix.
+      // First guess from the scan's dpi and the drawing's stated scale.
+      // Archive copies are often 1–3 % off, so calibration is still needed.
+      const mmPerPx = (25.4 / (raster.dpi ?? 300)) * scanScale
       applyAndCommit(
-        [{ op: 'setUnderlay', underlay: { src: body.url, widthPx: raster.width, heightPx: raster.height, mmPerPx: 8.467, x: 0, y: 0, rotation: 0, opacity: 0.5 } }],
+        [{ op: 'setUnderlay', underlay: { src: body.url, widthPx: raster.width, heightPx: raster.height, mmPerPx, x: 0, y: 0, rotation: 0, opacity: 0.5 } }],
         'underlay',
         'Lade in underlagsritning',
       )
       setFitSignal((s) => s + 1)
       setTool('calibrate')
-      setStatus('Underlaget är inlagt. Kalibrera: klicka två punkter med känt avstånd, t.ex. skalstockens ändar.')
+      setStatus('Underlaget är inlagt. Kalibrera mot ritningens egen skalstock (inte skannerlinjalen i kanten) eller ett mått du har mätt upp.')
     } catch (e) {
       setStatus((e as Error).message)
     }
@@ -431,6 +434,16 @@ export function Editor({ id }: { id: string }) {
             {tab === 'underlay' && (
               <div className="space-y-3 text-sm">
                 <p className="text-zinc-600">Lägg in en skannad ritning (TIF, PNG eller JPG) från Bygg- och plantjänsten och rita av väggarna ovanpå.</p>
+                <label className="block text-xs text-zinc-600">
+                  Ritningens skala enligt ritningshuvudet
+                  <select data-testid="scan-scale" className="w-full rounded border px-2 py-1 text-sm" value={scanScale} onChange={(e) => setScanScale(Number(e.target.value))}>
+                    {[20, 50, 100, 200, 400, 500].map((n) => (
+                      <option key={n} value={n}>
+                        1:{n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <input ref={fileRef} type="file" accept=".tif,.tiff,.png,.jpg,.jpeg,image/tiff,image/png,image/jpeg" data-testid="underlay-file" className="block w-full text-sm" onChange={(e) => e.target.files?.[0] && void uploadUnderlay(e.target.files[0])} />
                 {plan.underlay && (
                   <div className="space-y-2">

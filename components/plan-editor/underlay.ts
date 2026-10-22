@@ -3,7 +3,7 @@ import UTIF from 'utif'
 // Archive drawings from Bygg- och plantjänsten come as TIF (often 1-bit
 // CCITT G4), which browsers can't display. Convert to PNG before upload.
 
-export type Raster = { blob: Blob; width: number; height: number; name: string }
+export type Raster = { blob: Blob; width: number; height: number; name: string; dpi?: number }
 
 export async function toPng(file: File): Promise<Raster> {
   const base = file.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9._-]+/gi, '-').slice(0, 60) || 'ritning'
@@ -17,7 +17,7 @@ export async function toPng(file: File): Promise<Raster> {
     const rgba = UTIF.toRGBA8(page)
     const width = page.width as number
     const height = page.height as number
-    return { blob: await rgbaToPng(rgba, width, height), width, height, name: `${base}.png` }
+    return { blob: await rgbaToPng(rgba, width, height), width, height, name: `${base}.png`, dpi: tiffDpi(page) }
   }
   if (!/^image\/(png|jpeg)$/.test(file.type)) throw new Error('Välj en TIF-, PNG- eller JPG-fil')
   const bmp = await createImageBitmap(file)
@@ -35,4 +35,12 @@ async function rgbaToPng(rgba: Uint8Array, width: number, height: number): Promi
   pixels.set(rgba)
   ctx.putImageData(new ImageData(pixels, width, height), 0, 0)
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG-konvertering misslyckades'))), 'image/png'))
+}
+
+// Scan resolution from the TIF header (XResolution + ResolutionUnit).
+function tiffDpi(page: Record<string, unknown>): number | undefined {
+  const res = (page.t282 as number[] | undefined)?.[0]
+  const unit = (page.t296 as number[] | undefined)?.[0] ?? 2
+  if (!res || !(res > 0)) return undefined
+  return unit === 3 ? res * 2.54 : res
 }
