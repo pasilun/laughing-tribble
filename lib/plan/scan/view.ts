@@ -110,6 +110,25 @@ function overlaySvg(plan: Plan, rect: Rect, k: number, w: number, h: number, opt
       const s = P({ x: wall.a.x + d.x * o.offset, y: wall.a.y + d.y * o.offset })
       const e = P({ x: wall.a.x + d.x * (o.offset + o.width), y: wall.a.y + d.y * (o.offset + o.width) })
       parts.push(`<line x1="${s.x}" y1="${s.y}" x2="${e.x}" y2="${e.y}" stroke="#7c3aed" stroke-width="4" stroke-opacity="0.8"/>`)
+      if (o.kind === 'door') {
+        // Leaf and swing arc as the sheet draws them, to compare with the source.
+        const n = { x: d.y, y: -d.x }
+        const side = (o.swing ?? 'left') === 'left' ? 1 : -1
+        const atA = (o.hinge ?? 'a') === 'a'
+        const t0 = atA ? o.offset : o.offset + o.width
+        const t1 = atA ? o.offset + o.width : o.offset
+        const hw = { x: wall.a.x + d.x * t0, y: wall.a.y + d.y * t0 }
+        const fr = { x: wall.a.x + d.x * t1, y: wall.a.y + d.y * t1 }
+        const leaf = { x: hw.x + n.x * side * o.width, y: hw.y + n.y * side * o.width }
+        const H = P(hw)
+        const Lf = P(leaf)
+        const F = P(fr)
+        const cross = (Lf.x - H.x) * (F.y - H.y) - (Lf.y - H.y) * (F.x - H.x)
+        const r = o.width * k
+        parts.push(`<line x1="${H.x}" y1="${H.y}" x2="${Lf.x}" y2="${Lf.y}" stroke="#7c3aed" stroke-width="2"/>`)
+        parts.push(`<path d="M ${Lf.x} ${Lf.y} A ${r} ${r} 0 0 ${cross > 0 ? 1 : 0} ${F.x} ${F.y}" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="6 4"/>`)
+        parts.push(`<text x="${(H.x + Lf.x) / 2 + 4}" y="${(H.y + Lf.y) / 2}" font-size="11" fill="#7c3aed">${o.id}</text>`)
+      }
     }
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="Liberation Sans">${parts.join('')}</svg>`
