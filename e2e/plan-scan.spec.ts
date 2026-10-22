@@ -7,6 +7,7 @@ import { calibrate } from '@/lib/plan/scan/calibrate'
 import { detectWalls } from '@/lib/plan/scan/detect'
 import { profile } from '@/lib/plan/scan/profile'
 import type { Gray, Raster } from '@/lib/plan/scan/raster'
+import { readDoors } from '@/lib/plan/scan/doors'
 import { register } from '@/lib/plan/scan/register'
 import { snapWalls } from '@/lib/plan/scan/snap'
 
@@ -150,3 +151,72 @@ test('register recovers scale and offset between two sources', async () => {
   expect(Math.abs(fit.x - r.x)).toBeLessThanOrEqual(30)
   expect(Math.abs(fit.y - r.y)).toBeLessThanOrEqual(30)
 })
+
+// Doors drawn the way people draw them: leaf open 60° (SketchUp habit) or
+// 90° (archive habit), thick lines, the drawing a little off the plan.
+async function doorScan(plan: Plan, mmPerPx: number, leafDeg: number, off: { x: number; y: number }) {
+  const { g: _g, r } = await scan(plan, mmPerPx, 'outline')
+  void _g
+  const P = (x: number, y: number) => `${((x + off.x + MARGIN) / mmPerPx).toFixed(2)} ${((y + off.y + MARGIN) / mmPerPx).toFixed(2)}`
+  const lw = 25 / mmPerPx
+  const parts: string[] = []
+  for (const wall of plan.walls) {
+    const d = wallDir(wall)
+    const n = leftNormal(d)
+    const t = wall.thickness / 2
+    for (const [s, e] of wallSegments(wall, plan.openings.filter((o) => o.wallId === wall.id))) {
+      const q = [
+        [wall.a.x + d.x * s + n.x * t, wall.a.y + d.y * s + n.y * t],
+        [wall.a.x + d.x * e + n.x * t, wall.a.y + d.y * e + n.y * t],
+        [wall.a.x + d.x * e - n.x * t, wall.a.y + d.y * e - n.y * t],
+        [wall.a.x + d.x * s - n.x * t, wall.a.y + d.y * s - n.y * t],
+      ]
+      parts.push(`<path d="M ${q.map(([x, y]) => P(x, y)).join(' L ')} Z" fill="none" stroke="#111" stroke-width="${lw}"/>`)
+    }
+  }
+  for (const o of plan.openings.filter((x) => x.kind === 'door')) {
+    const wall = plan.walls.find((w) => w.id === o.wallId)!
+    const d = wallDir(wall)
+    const n = leftNormal(d)
+    const side = o.swing === 'right' ? -1 : 1
+    const atA = (o.hinge ?? 'a') === 'a'
+    const t = wall.thickness / 2
+    const at = (u: number) => ({ x: wall.a.x + d.x * u + n.x * side * t, y: wall.a.y + d.y * u + n.y * side * t })
+    const h = at(atA ? o.offset : o.offset + o.width)
+    const f = at(atA ? o.offset + o.width : o.offset)
+    const cl = atA ? d : { x: -d.x, y: -d.y }
+    const a = (leafDeg * Math.PI) / 180
+    const tip = { x: h.x + (cl.x * Math.cos(a) + n.x * side * Math.sin(a)) * o.width, y: h.y + (cl.y * Math.cos(a) + n.y * side * Math.sin(a)) * o.width }
+    const rpx = o.width / mmPerPx
+    // Arc from the tip back to the free jamb, around the hinge.
+    const cross = (tip.x - h.x) * (f.y - h.y) - (tip.y - h.y) * (f.x - h.x)
+    parts.push(`<path d="M ${P(h.x, h.y)} L ${P(tip.x, tip.y)} A ${rpx} ${rpx} 0 0 ${cross > 0 ? 1 : 0} ${P(f.x, f.y)}" fill="none" stroke="#111" stroke-width="${lw}"/>`)
+  }
+  const w = r.widthPx
+  const hgt = r.heightPx
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hgt}"><rect width="100%" height="100%" fill="#fff"/>${parts.join('')}</svg>`
+  const { data, info } = await sharp(Buffer.from(svg)).grayscale().raw().toBuffer({ resolveWithObject: true })
+  return { g: { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), w: info.width, h: info.height }, r }
+}
+
+for (const leafDeg of [60, 90]) {
+  test(`doors: reads hinge and swing from ${leafDeg}° symbols, drawing 100 mm off`, async () => {
+    const truth = demoPlan()
+    const { g, r } = await doorScan(truth, 5, leafDeg, { x: 70, y: -70 })
+    // Every door in the plan set to the mirror of the truth (other hinge, same side)
+    // and one to the wrong side entirely.
+    const wrong: Plan = {
+      ...truth,
+      openings: truth.openings.map((o, i) =>
+        o.kind !== 'door' ? o : i % 2 ? { ...o, hinge: o.hinge === 'b' ? 'a' : 'b' } : { ...o, swing: o.swing === 'right' ? 'left' : 'right' },
+      ),
+    }
+    const { readings } = readDoors(g, r, wrong)
+    for (const rd of readings) {
+      const t = truth.openings.find((o) => o.id === rd.id)!
+      expect(rd.confident, `${rd.id} ${JSON.stringify(rd.candidates)}`).toBe(true)
+      expect(rd.best && `${rd.best.hinge}/${rd.best.swing}`, rd.id).toBe(`${t.hinge ?? 'a'}/${t.swing ?? 'left'}`)
+      expect(rd.changed, rd.id).toBe(true)
+    }
+  })
+}

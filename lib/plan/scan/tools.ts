@@ -6,6 +6,7 @@ import type { Plan, Pt, Source, Wall } from '../types'
 import { calibrate, rescaleAround, type Measurement } from './calibrate'
 import { detectWalls } from './detect'
 import { scanDiff } from './diff'
+import { describeDoor, readDoors } from './doors'
 import { profile, roundRun } from './profile'
 import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Raster } from './raster'
 import { register } from './register'
@@ -121,6 +122,23 @@ export const SCAN_TOOLS = [
         search_mm: { type: 'number' },
         keep_thickness: { type: 'boolean' },
         join_mm: { type: 'number', description: 'default 250' },
+        threshold: { type: 'number' },
+      },
+      required: ['plan_id'],
+    },
+  },
+  {
+    name: 'plan_scan_doors',
+    description:
+      'Reads which way the plan\'s doors open from a source drawing: for each door all four options (hinge at either jamb × leaf to either side) are scored by how much of their swing arc lies on ink. Reports the best option, its score against the runner-up, and whether it differs from the plan; apply=true saves the confident corrections. Use the drawing that shows the doors (a before drawing for doors being removed). Never set hinge/swing by eye.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        base_revision: { type: 'number' },
+        source_id: SRC,
+        door_ids: { type: 'array', items: { type: 'string' }, description: 'Default: all doors' },
+        apply: { type: 'boolean' },
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
@@ -332,6 +350,32 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
       const summary = res.walls.map((w) => `  ${w.id}: (${w.a.x},${w.a.y})→(${w.b.x},${w.b.y}) längd ${Math.round(wallLength(w))} tj ${w.thickness}`)
       const v = await scanView(planId, after, r, around(res.walls), { overlay: true })
       return { content: [text(`${head}\n${lines.join('\n')}\nResultat:\n${summary.join('\n')}`), image(v.png)] }
+    }
+
+    if (name === 'plan_scan_doors') {
+      const ids = Array.isArray(args.door_ids) ? args.door_ids.map(String) : undefined
+      const { readings, ops } = readDoors(g, r, plan, ids, threshold)
+      const fmt = (c: { hinge: string; swing: string; score: number }) => `${c.hinge}/${c.swing} ${Math.round(c.score * 100)}%`
+      const lines = readings.map((x) => {
+        const o = plan.openings.find((q) => q.id === x.id)!
+        const wall = plan.walls.find((w) => w.id === o.wallId)!
+        const status = !x.best ? 'HITTAS INTE i ritningen' : !x.confident ? 'OSÄKER' : x.changed ? 'FEL i planen →' : 'ok'
+        const shown = x.best && x.confident ? describeDoor(wall, { ...o, hinge: x.best.hinge, swing: x.best.swing }) : describeDoor(wall, o)
+        const off = x.best?.shiftMm ? ` (ritad ${x.best.shiftMm} mm från planens läge)` : ''
+        return `- ${x.id}: ${status} ${shown}${off} [${x.candidates.map(fmt).join(', ')}]`
+      })
+      let head = `${readings.length} dörrar mot ${r.id}; ${ops.length} att rätta.`
+      let after = plan
+      if (args.apply && ops.length) {
+        const saved = await save(planId, args.base_revision, ops, `Dörrar enligt ${r.id} (${ops.length} rättade)`)
+        if (typeof saved === 'string') return err(`${head}\n${lines.join('\n')}\n\n${saved}`)
+        head += ` Sparad som revision ${saved.n}.`
+        after = saved.plan
+      }
+      const doorWalls = after.walls.filter((w) => after.openings.some((o) => o.kind === 'door' && o.wallId === w.id && (!ids || ids.includes(o.id))))
+      const content: Content = [text(`${head}\n${lines.join('\n')}`)]
+      if (doorWalls.length) content.push(image((await scanView(planId, after, r, around(doorWalls, 1200), { overlay: true, view: 'fore' })).png))
+      return { content }
     }
 
     if (name === 'plan_scan_register') {

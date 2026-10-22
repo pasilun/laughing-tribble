@@ -94,6 +94,13 @@ handlers against the local store:
   thickness. Ends are joined at centreline intersections, and openings keep
   their place. The tool reports a confidence per wall. A wall it can't find
   is left where it was and flagged.
+- `plan_scan_doors`: reads door hinges and swings off a source. It scores all
+  four options per door: a straight leaf from the hinge (line-centre fit) plus
+  an arc of constant radius around it. It lets the symbol slide up to about
+  15 cm off the plan. Shape, not just ink presence, matters: at the common 60°
+  leaf angle the symbol is nearly mirror-symmetric, and with thick lines a
+  presence test can't tell the hinge from the free jamb. `plan_get` describes
+  every door in words ("gångjärn vid västra karmen …, öppnar mot norr").
 - `plan_scan_register`: aligns one source to another (scale and offset) by
   matching ink. It searches coarse to fine with a symmetric overlap score and
   refines the best coarse candidates. Use it to bring a ventilation or
