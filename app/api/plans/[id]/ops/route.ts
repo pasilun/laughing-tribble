@@ -1,3 +1,4 @@
+import { denied, hasAccess } from '@/lib/plan/access'
 import type { Op } from '@/lib/plan/ops'
 import { editPlan } from '@/lib/plan/service'
 import { author, fail, readJson, type Ctx } from '../../http'
@@ -5,6 +6,7 @@ import { author, fail, readJson, type Ctx } from '../../http'
 export const runtime = 'nodejs'
 
 export async function POST(req: Request, { params }: Ctx) {
+  if (!hasAccess(req)) return denied()
   const { id } = await params
   const body = await readJson(req)
   if (!body || !Array.isArray(body.ops) || typeof body.baseRevision !== 'number')

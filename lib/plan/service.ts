@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto'
 import { applyOps, validatePlan, type Op } from './ops'
 import { demoPlan } from './demo'
 import { getHead, getRevision, nextLetter, saveRevision, type StoredRevision } from './store'
@@ -27,11 +28,12 @@ export function slugId(name: string): string {
   const base = name
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 40)
-  return `${base || 'plan'}-${Math.random().toString(36).slice(2, 6)}`
+    .slice(0, 30)
+  // Long random suffix: ids end up in links and must not be guessable.
+  return `${base || 'plan'}-${randomBytes(8).toString('hex')}`
 }
 
 export async function createPlan(input: { name: string; template?: 'empty' | 'demo'; plan?: Plan; author: Revision['author'] }) {

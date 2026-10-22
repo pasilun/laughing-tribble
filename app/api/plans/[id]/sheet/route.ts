@@ -1,3 +1,4 @@
+import { denied, hasAccess } from '@/lib/plan/access'
 import { planDxf, sheetPdf, sheetPng, sheetSvg } from '@/lib/plan/export'
 import { loadPlan } from '@/lib/plan/service'
 import type { View } from '@/lib/plan/types'
@@ -7,6 +8,7 @@ export const runtime = 'nodejs'
 
 // GET ?view=fore|efter|both&format=svg|pdf|png|dxf&rev=n
 export async function GET(req: Request, { params }: Ctx) {
+  if (!hasAccess(req)) return denied()
   const { id } = await params
   const q = new URL(req.url).searchParams
   const view = q.get('view') ?? 'efter'

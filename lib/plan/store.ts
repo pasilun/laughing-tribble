@@ -83,7 +83,7 @@ function backend(): Backend {
   return new FsBackend(path.resolve(process.env.PLAN_DATA_DIR ?? '.data'))
 }
 
-const ID = /^[a-z0-9][a-z0-9-]{0,62}$/
+const ID = /^[a-z0-9][a-z0-9-]{0,80}$/
 
 export function assertId(id: string) {
   if (!ID.test(id)) throw new Error(`ogiltigt plan-id "${id}"`)

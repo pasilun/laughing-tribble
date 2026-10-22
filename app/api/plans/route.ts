@@ -1,3 +1,4 @@
+import { denied, hasAccess } from '@/lib/plan/access'
 import { createPlan } from '@/lib/plan/service'
 import { listPlans } from '@/lib/plan/store'
 import type { Plan } from '@/lib/plan/types'
@@ -5,7 +6,8 @@ import { author, fail, readJson } from './http'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
+export async function GET(req: Request) {
+  if (!hasAccess(req)) return denied()
   try {
     return Response.json({ plans: await listPlans() })
   } catch (e) {
@@ -14,6 +16,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (!hasAccess(req)) return denied()
   const body = await readJson(req)
   const name = typeof body?.name === 'string' && body.name.trim() ? body.name.trim() : null
   if (!body || !name) return Response.json({ errors: ['name krävs'] }, { status: 400 })

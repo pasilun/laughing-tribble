@@ -18,6 +18,14 @@ top (*Rita längs väggliv* follows the wall face you see on the scan) →
 mark walls/openings/fixtures as *Befintlig / Rivs / Ny* → fill in the title
 block → check the *Kontroll* tab → *Spara* → *Exportera* PDF.
 
+## Access
+
+Set `PLAN_PASSWORD` in the deployment. Then `/plans` asks for it once
+(httpOnly cookie), the API accepts `Authorization: Bearer <password>`, and
+Claude's MCP connector uses `/api/mcp?key=<password>` for the plan tools.
+Without `PLAN_PASSWORD` (local development) everything is open. Plan ids
+carry a 64-bit random suffix.
+
 ## Model (`lib/plan/types.ts`)
 
 Integer millimetres, x right / y down. Walls are centre lines with a

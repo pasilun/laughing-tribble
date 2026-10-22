@@ -1,3 +1,4 @@
+import { denied, hasAccess } from '@/lib/plan/access'
 import { checkPlan } from '@/lib/plan/checks'
 import { loadPlan } from '@/lib/plan/service'
 import { fail, revParam, type Ctx } from '../../http'
@@ -5,6 +6,7 @@ import { fail, revParam, type Ctx } from '../../http'
 export const runtime = 'nodejs'
 
 export async function GET(req: Request, { params }: Ctx) {
+  if (!hasAccess(req)) return denied()
   const { id } = await params
   try {
     const rev = await loadPlan(id, revParam(req))

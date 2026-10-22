@@ -1,3 +1,4 @@
+import { denied, hasAccess } from '@/lib/plan/access'
 import { validatePlan } from '@/lib/plan/ops'
 import { loadPlan } from '@/lib/plan/service'
 import { saveRevision } from '@/lib/plan/store'
@@ -7,6 +8,7 @@ import { author, fail, readJson, revParam, type Ctx } from '../http'
 export const runtime = 'nodejs'
 
 export async function GET(req: Request, { params }: Ctx) {
+  if (!hasAccess(req)) return denied()
   const { id } = await params
   try {
     const rev = await loadPlan(id, revParam(req))
@@ -19,6 +21,7 @@ export async function GET(req: Request, { params }: Ctx) {
 
 // Saves the whole plan as a new revision (used by the editor).
 export async function PUT(req: Request, { params }: Ctx) {
+  if (!hasAccess(req)) return denied()
   const { id } = await params
   const body = await readJson(req)
   const plan = body?.plan as Plan | undefined

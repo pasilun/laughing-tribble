@@ -1,9 +1,11 @@
+import { denied, hasAccess } from '@/lib/plan/access'
 import { getAsset } from '@/lib/plan/store'
 import { fail } from '../../../http'
 
 export const runtime = 'nodejs'
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string; name: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string; name: string }> }) {
+  if (!hasAccess(req)) return denied()
   const { id, name } = await params
   try {
     const data = await getAsset(id, decodeURIComponent(name))
