@@ -18,14 +18,18 @@
     "@vercel/blob": "^2.4.0",
     "ifc-converter": "0.6.1",
     "next": "16.2.5",
+    "pdfkit": "^0.17.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "three": "^0.184.0"
+    "svg-to-pdfkit": "^0.1.8",
+    "three": "^0.184.0",
+    "utif": "^3.1.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pdfkit": "^0.17.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.184.1",

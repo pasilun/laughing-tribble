@@ -141,7 +141,7 @@ function dimension(a: Pt, b: Pt, offset: number, label: string): string {
 
 // ── plan elements ──────────────────────────────────────────────────────────
 
-function wallOpeningsIn(plan: Plan, w: Wall, view: View): Opening[] {
+export function wallOpeningsIn(plan: Plan, w: Wall, view: View): Opening[] {
   return plan.openings.filter((o) => o.wallId === w.id && (view === 'fore' ? o.phase !== 'new' : o.phase !== 'demolish'))
 }
 
@@ -153,7 +153,7 @@ function joinedAt(plan: Plan, w: Wall, p: Pt): boolean {
 
 // Wall bodies for a view, cut at openings. Ends that meet another wall's end
 // are extended by half the thickness so L-corners close.
-function wallPieces(plan: Plan, view: View): WallPiece[] {
+export function wallPieces(plan: Plan, view: View): WallPiece[] {
   const out: WallPiece[] = []
   for (const w of plan.walls) {
     if (!visibleIn(w.phase, view)) continue

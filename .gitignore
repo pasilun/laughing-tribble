@@ -45,3 +45,6 @@ next-env.d.ts
 
 # generated test artifacts
 /.visual/
+
+# local plan storage (dev)
+/.data/
