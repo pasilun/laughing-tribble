@@ -433,7 +433,7 @@ export function Editor({ id }: { id: string }) {
             {tab === 'revisions' && <Revisions id={id} current={base.n} onRestore={(p, n) => commit(p, `Återställde till revision ${n}`)} />}
             {tab === 'underlay' && (
               <div className="space-y-3 text-sm">
-                <p className="text-zinc-600">Lägg in en skannad ritning (TIF, PNG eller JPG) från Bygg- och plantjänsten och rita av väggarna ovanpå.</p>
+                <p className="text-zinc-600">Lägg in en skannad ritning från Bygg- och plantjänsten (TIF) eller en egen ritning (PDF, PNG, JPG) och rita av väggarna ovanpå. En PDF i känd skala blir rätt skalad direkt.</p>
                 <label className="block text-xs text-zinc-600">
                   Ritningens skala enligt ritningshuvudet
                   <select data-testid="scan-scale" className="w-full rounded border px-2 py-1 text-sm" value={scanScale} onChange={(e) => setScanScale(Number(e.target.value))}>
@@ -444,7 +444,7 @@ export function Editor({ id }: { id: string }) {
                     ))}
                   </select>
                 </label>
-                <input ref={fileRef} type="file" accept=".tif,.tiff,.png,.jpg,.jpeg,image/tiff,image/png,image/jpeg" data-testid="underlay-file" className="block w-full text-sm" onChange={(e) => e.target.files?.[0] && void uploadUnderlay(e.target.files[0])} />
+                <input ref={fileRef} type="file" accept=".pdf,.tif,.tiff,.png,.jpg,.jpeg,application/pdf,image/tiff,image/png,image/jpeg" data-testid="underlay-file" className="block w-full text-sm" onChange={(e) => e.target.files?.[0] && void uploadUnderlay(e.target.files[0])} />
                 {plan.underlay && (
                   <div className="space-y-2">
                     <label className="block text-xs text-zinc-600">
