@@ -18,6 +18,7 @@ const TOOLS: Array<[Tool, string, string]> = [
   ['opening', 'Dörr / öppning / fönster', 'O'],
   ['fixture', 'Inredning', 'I'],
   ['room', 'Rumsnamn', 'R'],
+  ['note', 'Text', 'T'],
   ['dimension', 'Mått', 'M'],
   ['calibrate', 'Kalibrera underlag', 'K'],
   ['underlay', 'Flytta underlag', 'U'],
@@ -30,6 +31,7 @@ const HINT: Record<Tool, string> = {
   opening: 'Klicka på en vägg för att sätta in öppningen.',
   fixture: 'Klicka för att placera.',
   room: 'Klicka där rumsnamnet ska stå.',
+  note: 'Klicka där texten ska stå, skriv den i panelen till höger.',
   dimension: 'Klicka två punkter.',
   calibrate: 'Klicka två punkter med känt avstånd på underlaget (t.ex. skalstocken).',
   underlay: 'Dra för att flytta underlagsritningen.',
@@ -53,7 +55,7 @@ export function Editor({ id }: { id: string }) {
   const [selection, setSelection] = useState<Selection>(null)
   const [fitSignal, setFitSignal] = useState(0)
   const [calib, setCalib] = useState<{ a: Pt; b: Pt } | null>(null)
-  const [options, setOptions] = useState<ToolOptions>({ phase: 'existing', thickness: 100, openingKind: 'door', openingWidth: 900, fixtureKind: 'radiator' })
+  const [options, setOptions] = useState<ToolOptions>({ phase: 'existing', thickness: 100, justify: 'center', openingKind: 'door', openingWidth: 900, fixtureKind: 'radiator' })
 
   // ── load ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -316,6 +318,16 @@ export function Editor({ id }: { id: string }) {
             </label>
             {tool === 'wall' && (
               <label className="block">
+                Rita längs
+                <select data-testid="opt-justify" className="w-full rounded border px-1 py-1 text-sm" value={options.justify} onChange={(e) => setOptions({ ...options, justify: e.target.value as ToolOptions['justify'] })}>
+                  <option value="center">Väggens mitt</option>
+                  <option value="left">Väggliv – väggen till vänster</option>
+                  <option value="right">Väggliv – väggen till höger</option>
+                </select>
+              </label>
+            )}
+            {tool === 'wall' && (
+              <label className="block">
                 Väggtjocklek (mm)
                 <input data-testid="opt-thickness" className="w-full rounded border px-1 py-1 text-sm" inputMode="numeric" value={options.thickness} onChange={(e) => setOptions({ ...options, thickness: Math.max(1, Number(e.target.value) || 1) })} />
               </label>
@@ -473,6 +485,7 @@ function selectRef(plan: Plan, ref: string | undefined, set: (s: Selection) => v
   if (plan.walls.some((w) => w.id === ref)) set({ kind: 'wall', id: ref })
   else if (plan.openings.some((o) => o.id === ref)) set({ kind: 'opening', id: ref })
   else if (plan.fixtures.some((f) => f.id === ref)) set({ kind: 'fixture', id: ref })
+  else if (plan.notes.some((n) => n.id === ref)) set({ kind: 'note', id: ref })
 }
 
 function Checks({ findings, onPick }: { findings: Finding[]; onPick: (ref?: string) => void }) {

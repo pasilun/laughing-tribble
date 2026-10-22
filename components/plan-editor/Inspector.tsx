@@ -203,6 +203,30 @@ export function Inspector({ plan, selection, onOps, onDelete }: Props) {
     )
   }
 
+  if (selection.kind === 'note') {
+    const n = plan.notes.find((x) => x.id === selection.id)
+    if (!n) return null
+    return (
+      <div className="space-y-2" data-testid="inspector-note">
+        <h3 className="font-semibold">Text</h3>
+        <label className="block text-xs text-zinc-600">
+          Text
+          <textarea className={input} rows={3} data-testid="note-text" value={n.text} onChange={(e) => upd('note', n.id, 'text', { text: e.target.value }, 'Ändrade text')} />
+        </label>
+        <Choice
+          label="Visas på"
+          value={n.phase === 'new' ? 'new' : 'existing'}
+          options={[
+            ['existing', 'Före och efter'],
+            ['new', 'Bara efter'],
+          ]}
+          onChange={(v) => upd('note', n.id, 'phase', { phase: v === 'new' ? 'new' : undefined }, 'Ändrade var texten visas')}
+        />
+        {del}
+      </div>
+    )
+  }
+
   const dm = plan.dimensions.find((x) => x.id === selection.id)
   if (!dm) return null
   return (

@@ -112,3 +112,28 @@ export function atLength(from: Pt, toward: Pt, length: number): Pt {
   if (d < 1e-6) return { x: from.x + length, y: from.y }
   return { x: Math.round(from.x + ((toward.x - from.x) / d) * length), y: Math.round(from.y + ((toward.y - from.y) / d) * length) }
 }
+
+export type Justify = 'center' | 'left' | 'right'
+
+// Tracing a scan you usually follow a wall's face, not its centre line.
+// Converts a traced face segment to the wall's centre line; "left"/"right"
+// is the side of the line (seen from a → b) where the wall body lies.
+export function faceToCenter(a: Pt, b: Pt, thickness: number, justify: Justify): { a: Pt; b: Pt } {
+  if (justify === 'center') return { a, b }
+  const len = dist(a, b) || 1
+  // Left normal in y-down coordinates.
+  const n = { x: (b.y - a.y) / len, y: -(b.x - a.x) / len }
+  const k = (justify === 'left' ? 1 : -1) * (thickness / 2)
+  const o = { x: n.x * k, y: n.y * k }
+  return { a: { x: Math.round(a.x + o.x), y: Math.round(a.y + o.y) }, b: { x: Math.round(b.x + o.x), y: Math.round(b.y + o.y) } }
+}
+
+// Where two consecutive centre lines meet, so a traced corner closes.
+export function centerCorner(p1: Pt, p2: Pt, q1: Pt, q2: Pt): Pt | null {
+  const d = { x: p2.x - p1.x, y: p2.y - p1.y }
+  const e = { x: q2.x - q1.x, y: q2.y - q1.y }
+  const den = d.x * e.y - d.y * e.x
+  if (Math.abs(den) < 1e-6) return null
+  const t = ((q1.x - p1.x) * e.y - (q1.y - p1.y) * e.x) / den
+  return { x: Math.round(p1.x + d.x * t), y: Math.round(p1.y + d.y * t) }
+}

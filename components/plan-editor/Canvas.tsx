@@ -5,19 +5,20 @@ import { add, along, bounds, dist, leftNormal, pointSegmentDistance, scale, wall
 import { applyOps, newId, type Op } from '@/lib/plan/ops'
 import { fireRatingIn, wallPieces } from '@/lib/plan/sheet'
 import type { Fixture, FixtureKind, Opening, OpeningKind, Phase, Plan, Pt, View, Wall } from '@/lib/plan/types'
-import { atLength, snapPoint, type Snap } from './snap'
+import { atLength, centerCorner, faceToCenter, snapPoint, type Justify, type Snap } from './snap'
 
-export type Tool = 'select' | 'wall' | 'opening' | 'fixture' | 'room' | 'dimension' | 'calibrate' | 'underlay' | 'pan'
+export type Tool = 'select' | 'wall' | 'opening' | 'fixture' | 'room' | 'note' | 'dimension' | 'calibrate' | 'underlay' | 'pan'
 
 export type ToolOptions = {
   phase: Phase
   thickness: number
+  justify: Justify
   openingKind: OpeningKind
   openingWidth: number
   fixtureKind: FixtureKind
 }
 
-export type Selection = { kind: 'wall' | 'opening' | 'fixture' | 'room' | 'dimension'; id: string } | null
+export type Selection = { kind: 'wall' | 'opening' | 'fixture' | 'room' | 'dimension' | 'note'; id: string } | null
 
 type Props = {
   plan: Plan
@@ -55,6 +56,7 @@ type Drag =
   | { type: 'vertex'; from: Pt; base: Plan; wallId: string }
   | { type: 'fixture'; id: string; start: Pt; base: Plan; at0: Pt }
   | { type: 'room'; id: string; start: Pt; base: Plan; at0: Pt }
+  | { type: 'note'; id: string; start: Pt; base: Plan; at0: Pt }
   | { type: 'opening'; id: string; base: Plan; grab: number }
   | { type: 'underlay'; start: Pt; base: Plan; at0: Pt }
 
@@ -67,6 +69,9 @@ export function Canvas(props: Props) {
   const [chain, setChain] = useState<Pt | null>(null) // start of the wall/dimension being drawn
   const [calA, setCalA] = useState<Pt | null>(null)
   const [typed, setTyped] = useState('') // length in mm typed while drawing
+  // Last traced wall in the current chain, to close corners between face-traced walls.
+  const [lastTraced, setLastTraced] = useState<{ id: string; end: Pt } | null>(null)
+  const [firstTraced, setFirstTraced] = useState<{ id: string; start: Pt } | null>(null)
   const [dragging, setDragging] = useState<Drag['type'] | null>(null)
   const drag = useRef<Drag | null>(null)
 
@@ -77,6 +82,8 @@ export function Canvas(props: Props) {
     setChain(null)
     setCalA(null)
     setTyped('')
+    setLastTraced(null)
+    setFirstTraced(null)
   }
 
   // ── viewport ─────────────────────────────────────────────────────────────
@@ -102,8 +109,14 @@ export function Canvas(props: Props) {
       maxX = u.x + u.widthPx * u.mmPerPx
       maxY = u.y + u.heightPx * u.mmPerPx
     }
-    const w = Math.max(maxX - minX, 2000)
-    const h = Math.max(maxY - minY, 2000)
+    // An empty plan opens on roughly a flat's worth of space.
+    const empty = plan.walls.length === 0 && !plan.underlay
+    const w = empty ? 9000 : Math.max(maxX - minX, 2000)
+    const h = empty ? 6000 : Math.max(maxY - minY, 2000)
+    if (empty) {
+      minX = -500
+      minY = -500
+    }
     const zoom = Math.min((size.w - 80) / w, (size.h - 80) / h)
     setVp({ zoom, tx: (size.w - w * zoom) / 2 - minX * zoom, ty: (size.h - h * zoom) / 2 - minY * zoom })
   }
@@ -149,11 +162,51 @@ export function Canvas(props: Props) {
   const snapAt = (raw: Pt, from?: Pt, exclude?: string) => snapPoint(raw, plan, { from, tolerance: tol, grid, exclude })
 
   // Finishes a wall/dimension segment at `end`.
-  const finishSegment = (end: Pt) => {
+  const finishSegment = (target: Pt) => {
+    let end = target
     if (!chain || dist(chain, end) < 1) return
     if (tool === 'wall') {
-      const wall: Wall = { id: newId('v'), a: chain, b: end, thickness: options.thickness, phase: options.phase }
-      if (commitOps([{ op: 'add', kind: 'wall', item: wall }], 'Ny vägg')) setChain(end)
+      // Clicking near where a face-traced chain started (or on the corner it
+      // produced) closes the loop at the traced point.
+      if (firstTraced && options.justify !== 'center') {
+        const fw = plan.walls.find((w) => w.id === firstTraced.id)
+        if (dist(end, firstTraced.start) <= tol || (fw && dist(end, fw.a) <= 1)) end = firstTraced.start
+      }
+      const c = faceToCenter(chain, end, options.thickness, options.justify)
+      const wall: Wall = { id: newId('v'), a: c.a, b: c.b, thickness: options.thickness, phase: options.phase }
+      const ops: Op[] = []
+      // Continuing a face-traced chain: meet the previous wall at the corner.
+      const prev = lastTraced && dist(lastTraced.end, chain) < 1 ? plan.walls.find((w) => w.id === lastTraced.id) : undefined
+      if (prev && options.justify !== 'center') {
+        const x = centerCorner(prev.a, prev.b, wall.a, wall.b)
+        if (x) {
+          wall.a = x
+          ops.push({ op: 'update', kind: 'wall', id: prev.id, patch: { b: x } })
+        }
+      }
+      // Back at the chain's first point: close the loop at that corner too.
+      const first = firstTraced && dist(firstTraced.start, end) < 1 ? plan.walls.find((w) => w.id === firstTraced.id) : undefined
+      let closed = false
+      if (first && options.justify !== 'center') {
+        const x = centerCorner(wall.a, wall.b, first.a, first.b)
+        if (x) {
+          wall.b = x
+          ops.push({ op: 'update', kind: 'wall', id: first.id, patch: { a: x } })
+          closed = true
+        }
+      }
+      ops.unshift({ op: 'add', kind: 'wall', item: wall })
+      if (commitOps(ops, 'Ny vägg')) {
+        if (closed) {
+          setChain(null)
+          setLastTraced(null)
+          setFirstTraced(null)
+        } else {
+          setChain(end)
+          setLastTraced({ id: wall.id, end })
+          if (!prev) setFirstTraced({ id: wall.id, start: chain })
+        }
+      }
     } else if (tool === 'dimension') {
       commitOps([{ op: 'add', kind: 'dimension', item: { id: newId('m'), a: chain, b: end, offset: 500 } }], 'Nytt mått')
       setChain(null)
@@ -169,6 +222,8 @@ export function Canvas(props: Props) {
       if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) return
       if (e.key === 'Escape' && (chain || calA)) {
         e.preventDefault()
+        setLastTraced(null)
+        setFirstTraced(null)
         setChain(null)
         setCalA(null)
         setTyped('')
@@ -246,6 +301,12 @@ export function Canvas(props: Props) {
           startDrag({ type: 'room', id: hitId, start: p, base: plan, at0: r.at })
           return
         }
+        if (hit === 'note') {
+          props.onSelect({ kind: 'note', id: hitId })
+          const n = plan.notes.find((x) => x.id === hitId)!
+          startDrag({ type: 'note', id: hitId, start: p, base: plan, at0: n.at })
+          return
+        }
         if (hit === 'dimension') {
           props.onSelect({ kind: 'dimension', id: hitId })
           return
@@ -286,6 +347,12 @@ export function Canvas(props: Props) {
         const id = newId('r')
         if (commitOps([{ op: 'add', kind: 'room', item: { id, name: 'Rum', at: { x: Math.round(p.x), y: Math.round(p.y) } } }], 'Nytt rum'))
           props.onSelect({ kind: 'room', id })
+        return
+      }
+      case 'note': {
+        const id = newId('n')
+        if (commitOps([{ op: 'add', kind: 'note', item: { id, text: 'Text', at: { x: Math.round(p.x), y: Math.round(p.y) } } }], 'Ny text'))
+          props.onSelect({ kind: 'note', id })
         return
       }
       case 'calibrate': {
@@ -357,10 +424,11 @@ export function Canvas(props: Props) {
         return
       }
       case 'fixture':
-      case 'room': {
+      case 'room':
+      case 'note': {
         const x = Math.round((d.at0.x + p.x - d.start.x) / grid) * grid
         const y = Math.round((d.at0.y + p.y - d.start.y) / grid) * grid
-        draftOps(d.base, [d.type === 'fixture' ? { op: 'update', kind: 'fixture', id: d.id, patch: { x, y } } : { op: 'update', kind: 'room', id: d.id, patch: { at: { x, y } } }])
+        draftOps(d.base, [d.type === 'fixture' ? { op: 'update', kind: 'fixture', id: d.id, patch: { x, y } } : { op: 'update', kind: d.type, id: d.id, patch: { at: { x, y } } }])
         return
       }
       case 'underlay': {
@@ -377,7 +445,7 @@ export function Canvas(props: Props) {
     setDragging(null)
     if (!d || d.type === 'pan') return
     // The draft is what's on screen; commit it relative to the drag's base.
-    const label: Record<string, string> = { vertex: 'Flyttade väggände', wall: 'Flyttade vägg', opening: 'Flyttade öppning', fixture: 'Flyttade inredning', room: 'Flyttade rumsnamn', underlay: 'Flyttade underlag' }
+    const label: Record<string, string> = { note: 'Flyttade text', vertex: 'Flyttade väggände', wall: 'Flyttade vägg', opening: 'Flyttade öppning', fixture: 'Flyttade inredning', room: 'Flyttade rumsnamn', underlay: 'Flyttade underlag' }
     if (plan !== d.base) props.onCommit(plan, label[d.type])
     props.onDraft(null)
     void e
@@ -521,6 +589,13 @@ export function Canvas(props: Props) {
             {view === 'efter' && r.renamed ? r.renamed : r.name}
           </text>
         ))}
+        {plan.notes.map((n) =>
+          view === 'fore' && n.phase === 'new' ? null : (
+            <text key={n.id} data-hit="note" data-id={n.id} data-testid={`note-${n.id}`} x={n.at.x} y={n.at.y} fontSize={px(12)} fill={isSel('note', n.id) ? '#2563eb' : '#374151'} style={{ cursor: 'move' }}>
+              {n.text}
+            </text>
+          ),
+        )}
         {plan.dimensions.map((dm) => {
           const n = leftNormal(wallDir({ id: '', a: dm.a, b: dm.b, thickness: 0, phase: 'existing' }))
           const a = add(dm.a, scale(n, dm.offset))

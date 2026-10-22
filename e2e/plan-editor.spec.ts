@@ -118,3 +118,23 @@ test.describe('phone', () => {
     expect(await overflow()).toBe(true)
   })
 })
+
+test('trace a room along its inner faces: corners close at the centre lines', async ({ page, request }) => {
+  const created = await (await request.post('/api/plans', { data: { name: 'Vägglivs-test' } })).json()
+  const id = created.plan.id as string
+  await page.goto(`/plans/${id}`)
+  await expect(page.getByTestId('plan-name')).toHaveText('Vägglivs-test')
+  await page.getByTestId('tool-wall').click()
+  await page.getByTestId('opt-justify').selectOption('left')
+  await page.getByTestId('opt-thickness').fill('100')
+  for (const [x, y] of [[0, 0], [1500, 0], [1500, 1000], [0, 1000], [0, 0]]) await clickAt(page, x, y)
+  await page.getByTestId('save').click()
+  await expect(page.getByTestId('save-state')).toContainText('sparad')
+  const saved = await (await request.get(`/api/plans/${id}`)).json()
+  const walls = saved.plan.walls as Array<{ a: { x: number; y: number }; b: { x: number; y: number } }>
+  expect(walls).toHaveLength(4)
+  expect(walls[0].a).toEqual({ x: -50, y: -50 })
+  expect(walls[0].b).toEqual({ x: 1550, y: -50 })
+  expect(walls[1].b).toEqual({ x: 1550, y: 1050 })
+  expect(walls[3].b).toEqual({ x: -50, y: -50 })
+})
