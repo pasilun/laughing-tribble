@@ -114,6 +114,24 @@ export type Underlay = {
   opacity: number
 }
 
+// A drawing the plan is traced from (archive scan, owner's before/after
+// drawing). Placed in plan coordinates like the underlay; the scan tools
+// work on these.
+export type Source = {
+  id: string
+  name: string
+  role: 'archive' | 'before' | 'after' | 'other'
+  src: string                // asset URL of the PNG
+  widthPx: number
+  heightPx: number
+  dpi?: number               // scan/render resolution, when known
+  mmPerPx: number
+  x: number                  // plan position of the image's top-left corner
+  y: number
+  rotation: number           // degrees; scan tools require 0
+  calibration?: string       // how mmPerPx was set, e.g. "pdf 1:50" or "3 mått, ±0,8 %"
+}
+
 export type Plan = {
   id: string
   name: string
@@ -125,6 +143,7 @@ export type Plan = {
   dimensions: Dimension[]
   notes: Note[]
   underlay?: Underlay
+  sources?: Source[]
 }
 
 // före = today's layout, efter = the proposed layout with demolition and new work marked

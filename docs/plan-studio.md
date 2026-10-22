@@ -67,6 +67,43 @@ load-bearing wall, opening in a fire-cell boundary without a stated
 boundary after, removed kitchen without plugged connections, ventilation
 changes. Never a legal judgment.
 
+## Scan tools for Claude (`lib/plan/scan/`)
+
+Claude traces source drawings itself. The editor is the fallback for small
+fixes. Every tool is an MCP tool. `scripts/plan-tool.ts` runs the same
+handlers against the local store:
+`npx tsx scripts/plan-tool.ts <tool> '<json>' [--file path] [--out dir]`.
+
+- `plan_source_add`: adds a source drawing (TIF, including G4; PDF; PNG;
+  JPG). The server converts it to grey PNG (sharp; pdf.js plus
+  @napi-rs/canvas at 200 dpi) and places it in plan mm from its scale and
+  dpi. A plan can hold several sources (`sources[]`), e.g. an archive drawing
+  and the owner's own drawing.
+- `plan_scan_view`: a crop in plan mm with a labelled grid. With the
+  overlay on, the plan's walls are drawn on top.
+- `plan_scan_profile`: the ink runs along a line. Use it to measure a wall's
+  thickness and position to about one pixel.
+- `plan_scan_calibrate`: a least-squares scale from known distances (laser,
+  dimension figures, scale bar). Reports the residual of each measurement.
+  It scales around an anchor so that tracing near the anchor stays put.
+- `plan_scan_detect_walls`: proposes horizontal and vertical walls, as either
+  filled bands or pairs of outlines, each with a confidence. It changes
+  nothing.
+- `plan_scan_snap_walls`: places rough walls (or existing ones) on the
+  drawing. It takes cross-sections, fits a robust line, and uses the median
+  thickness. Ends are joined at centreline intersections, and openings keep
+  their place. The tool reports a confidence per wall. A wall it can't find
+  is left where it was and flagged.
+- `plan_scan_diff`: compares two calibrated sources (före/efter). Red means
+  removed, blue means added.
+- `plan_import`: creates a plan from full plan JSON.
+
+Measured dimensions (laser) take precedence over the drawing. Snap is a
+check on those walls, not something to apply to them. Accuracy on
+synthetic scans (`e2e/plan-scan.spec.ts`): within 1.5 px of the true
+centreline at 1:100/300 dpi and at 3.6 mm/px, for both filled and outlined
+walls.
+
 ## Tests
 
 `e2e/plan-*.spec.ts`. Browser tests need Chromium; set

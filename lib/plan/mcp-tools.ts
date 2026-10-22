@@ -2,6 +2,7 @@ import { checkPlan } from './checks'
 import { sheetPng } from './export'
 import { wallLength } from './geometry'
 import type { Op } from './ops'
+import { handleScanTool, SCAN_TOOLS } from './scan/tools'
 import { createPlan, editPlan, loadPlan } from './service'
 import { getAsset, listPlans, listRevisions } from './store'
 import type { Plan, View } from './types'
@@ -87,6 +88,16 @@ export const PLAN_TOOLS = [
     description: 'Lists the revision history of a floor plan (who changed what, issued revision letters).',
     inputSchema: { type: 'object', properties: { plan_id: { type: 'string' } }, required: ['plan_id'] },
   },
+  {
+    name: 'plan_import',
+    description: 'Creates a new floor plan from a full plan JSON (walls, openings, fixtures, rooms, sheet…), e.g. one traced elsewhere or exported with plan_get include_json. Returns the new id.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string' }, plan: { type: 'object' } },
+      required: ['name', 'plan'],
+    },
+  },
+  ...SCAN_TOOLS,
 ]
 
 type Content = Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>
@@ -127,6 +138,8 @@ export function summarisePlan(plan: Plan): string {
   for (const f of plan.fixtures) lines.push(`- ${f.id}: ${f.kind} @(${f.x},${f.y}) ${f.w}×${f.d} ${f.phase}${f.label ? ` "${f.label}"` : ''}`)
   lines.push(`Rum: ${plan.rooms.map((r) => `${r.id} "${r.name}${r.renamed ? `→${r.renamed}` : ''}" @(${r.at.x},${r.at.y})`).join('; ') || '–'}`)
   if (plan.dimensions.length) lines.push(`Mått: ${plan.dimensions.map((d) => `${d.id} (${d.a.x},${d.a.y})–(${d.b.x},${d.b.y})`).join('; ')}`)
+  for (const src of plan.sources ?? [])
+    lines.push(`Källa ${src.id} (${src.role}) "${src.name}": ${src.widthPx}×${src.heightPx} px, ${src.mmPerPx.toFixed(4)} mm/px vid (${src.x},${src.y})${src.calibration ? `, kalibrerad: ${src.calibration}` : ', ej kalibrerad'}`)
   if (plan.underlay) lines.push(`Underlag: ${plan.underlay.widthPx}×${plan.underlay.heightPx} px, ${plan.underlay.mmPerPx.toFixed(3)} mm/px vid (${plan.underlay.x},${plan.underlay.y})`)
   return lines.join('\n')
 }
@@ -146,6 +159,8 @@ const text = (t: string): { type: 'text'; text: string } => ({ type: 'text', tex
 
 export async function handlePlanTool(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
   if (!PLAN_TOOLS.some((t) => t.name === name)) return null
+  const scan = await handleScanTool(name, args)
+  if (scan) return scan
   const planId = String(args.plan_id ?? '')
   const view: View = args.view === 'fore' ? 'fore' : 'efter'
 
@@ -158,6 +173,18 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     const res = await createPlan({ name: String(args.name ?? 'Planritning'), template: args.template === 'demo' ? 'demo' : 'empty', author: 'claude' })
     if ('errors' in res) return { content: [text(res.errors!.join('\n'))], isError: true }
     return { content: [text(`Skapad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan.id, res.revision.n)}`), await preview(res.plan, 'efter', false)] }
+  }
+
+  if (name === 'plan_import') {
+    const input = args.plan as Partial<Plan> | undefined
+    if (!input || !Array.isArray(input.walls) || !input.sheet) return { content: [text('plan med walls och sheet krävs')], isError: true }
+    const plan = { openings: [], fixtures: [], rooms: [], dimensions: [], notes: [], ...input } as Plan
+    // Sources and underlay point at another plan's files; they don't come along.
+    delete plan.underlay
+    delete plan.sources
+    const res = await createPlan({ name: String(args.name ?? input.name ?? 'Planritning'), plan, author: 'claude' })
+    if ('errors' in res) return { content: [text(`Kunde inte importera:\n${res.errors!.join('\n')}`)], isError: true }
+    return { content: [text(`Importerad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan.id, res.revision.n)}`), await preview(res.plan, 'efter', false)] }
   }
 
   if (name === 'plan_get') {
