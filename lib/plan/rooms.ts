@@ -6,6 +6,7 @@ import type { Plan, Pt, Room, View } from './types'
 // each room label. A room open to the outside gets no area.
 
 const CELL = 10 // mm; error is about half a cell along the room's perimeter
+const JOIN_SLACK = 2 * CELL
 
 function insideConvex(p: Pt, q: Pt[]): boolean {
   let sign = 0
@@ -22,6 +23,19 @@ function insideConvex(p: Pt, q: Pt[]): boolean {
 }
 
 export function roomAreas(plan: Plan, view: View): Map<string, number> {
+  return roomSpaces(plan, view).areas
+}
+
+// Areas per room label, plus — for a space holding several labels (open
+// plan, or rooms merged by demolition) — the other names it includes, so
+// the one area shown can say what it covers.
+export function roomSpaces(plan: Plan, view: View): { areas: Map<string, number>; includes: Map<string, string[]> } {
+  const includes = new Map<string, string[]>()
+  const areas = spaces(plan, view, includes)
+  return { areas, includes }
+}
+
+function spaces(plan: Plan, view: View, includes: Map<string, string[]>): Map<string, number> {
   const out = new Map<string, number>()
   const rooms = plan.rooms.filter((r) => !r.polygon && !(view === 'efter' && r.goneAfter))
   for (const r of plan.rooms) if (r.polygon && r.polygon.length >= 3) out.set(r.id, polygonArea(r.polygon))
@@ -37,7 +51,12 @@ export function roomAreas(plan: Plan, view: View): Map<string, number> {
 
   const solid = new Uint8Array(nx * ny)
   for (const w of walls) {
-    const q = wallQuad(w)
+    // Ends stretched a little so hairline gaps at joints (a traced wall
+    // stopping a few mm short of the one it meets) don't let rooms merge.
+    const len = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1
+    const ux = ((w.b.x - w.a.x) / len) * JOIN_SLACK
+    const uy = ((w.b.y - w.a.y) / len) * JOIN_SLACK
+    const q = wallQuad({ ...w, a: { x: w.a.x - ux, y: w.a.y - uy }, b: { x: w.b.x + ux, y: w.b.y + uy } })
     const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
     const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
     const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
@@ -53,8 +72,12 @@ export function roomAreas(plan: Plan, view: View): Map<string, number> {
     if (si < 0 || sj < 0 || si >= nx || sj >= ny || solid[sj * nx + si]) return
     const start = sj * nx + si
     // Same space as an earlier label (e.g. rooms merged by demolition): the
-    // area is shown once, under the first label.
-    if (seen[start] >= 0) return
+    // area is shown once, under the first label, which lists the others.
+    if (seen[start] >= 0) {
+      const first = rooms[seen[start]]
+      includes.set(first.id, [...(includes.get(first.id) ?? []), view === 'efter' && r.renamed ? r.renamed : r.name])
+      return
+    }
     const stack = [start]
     seen[start] = k
     let count = 0

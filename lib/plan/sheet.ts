@@ -1,5 +1,5 @@
 import { add, along, bounds, dist, leftNormal, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
-import { roomAreas } from './rooms'
+import { roomSpaces } from './rooms'
 import type { Fixture, Opening, Phase, Plan, Pt, View, Wall } from './types'
 
 // Renders a plan as a printable drawing sheet. All output coordinates are
@@ -312,8 +312,11 @@ function renderFixture(fx: Fixture, view: View, L: SheetLayout): string {
     const label = base && st === 'demolish' ? `${base} (rivs)` : base
     if (label && fx.kind !== 'shaft') {
       // Labels that don't fit inside the symbol go just outside it.
-      const fits = label.length * TEXT * 0.55 <= w - 1 && d >= TEXT + 0.6
-      out.push(text(fits ? { x: c.x, y: c.y + TEXT * 0.35 } : { x: c.x, y: y0 + d + TEXT + 0.6 }, label, TEXT))
+      const len = label.length * TEXT * 0.55
+      if (len <= w - 1 && d >= TEXT + 0.6) out.push(text({ x: c.x, y: c.y + TEXT * 0.35 }, label, TEXT))
+      // Tall, narrow symbols (a kitchen run along a wall): along the long side.
+      else if (len <= d - 1 && w >= TEXT + 0.6) out.push(text({ x: c.x + TEXT * 0.35, y: c.y }, label, TEXT, { angle: -90 }))
+      else out.push(text({ x: c.x, y: y0 + d + TEXT + 0.6 }, label, TEXT))
     }
   }
   return `<g data-fixture="${esc(fx.id)}" data-phase="${st}"${rot}>${out.join('')}</g>`
@@ -400,14 +403,17 @@ function renderDimensions(plan: Plan, L: SheetLayout): string {
 }
 
 function renderRooms(plan: Plan, view: View, L: SheetLayout): string {
-  const areas = roomAreas(plan, view)
+  const { areas, includes } = roomSpaces(plan, view)
   return plan.rooms
     .filter((r) => !(view === 'efter' && r.goneAfter))
     .map((r) => {
       const p = L.toPaper(r.at)
       let s = text(p, view === 'efter' && r.renamed ? r.renamed : r.name, 3, { weight: 'bold' })
       const area = areas.get(r.id)
-      if (area !== undefined) s += text({ x: p.x, y: p.y + 3.6 }, fmtArea(area), TEXT)
+      if (area !== undefined) {
+        const more = includes.get(r.id)
+        s += text({ x: p.x, y: p.y + 3.6 }, more ? `${fmtArea(area)} inkl. ${more.join(', ')}` : fmtArea(area), TEXT)
+      }
       return `<g data-room="${esc(r.id)}">${s}</g>`
     })
     .join('')
