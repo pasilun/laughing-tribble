@@ -94,6 +94,10 @@ handlers against the local store:
   thickness. Ends are joined at centreline intersections, and openings keep
   their place. The tool reports a confidence per wall. A wall it can't find
   is left where it was and flagged.
+- `plan_scan_register`: aligns one source to another (scale and offset) by
+  matching ink. It searches coarse to fine with a symmetric overlap score and
+  refines the best coarse candidates. Use it to bring a ventilation or
+  structural drawing onto the architectural plan.
 - `plan_scan_diff`: compares two calibrated sources (före/efter). Red means
   removed, blue means added.
 - `plan_import`: creates a plan from full plan JSON.

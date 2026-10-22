@@ -8,6 +8,7 @@ import { detectWalls } from './detect'
 import { scanDiff } from './diff'
 import { profile, roundRun } from './profile'
 import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Raster } from './raster'
+import { register } from './register'
 import { snapWalls } from './snap'
 import { scanView, type Rect } from './view'
 
@@ -123,6 +124,27 @@ export const SCAN_TOOLS = [
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
+    },
+  },
+  {
+    name: 'plan_scan_register',
+    description:
+      'Aligns a source drawing to a reference source (scale + offset) by matching ink over an area both show — e.g. a ventilation or structural drawing onto the architectural plan. Place it roughly first (within shift_mm). Returns the fit and an overlay image of both (reference red, aligned source blue); apply=true saves the new position.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        base_revision: { type: 'number' },
+        source_id: { type: 'string', description: 'The drawing to move' },
+        reference: { type: 'string', description: 'Source id to align to' },
+        rect: RECT,
+        scale_min: { type: 'number', description: 'default 0.9' },
+        scale_max: { type: 'number', description: 'default 1.1' },
+        shift_mm: { type: 'number', description: 'Search ± this far (default 2000)' },
+        apply: { type: 'boolean' },
+        threshold: { type: 'number' },
+      },
+      required: ['plan_id', 'source_id', 'reference', 'rect'],
     },
   },
   {
@@ -310,6 +332,28 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
       const summary = res.walls.map((w) => `  ${w.id}: (${w.a.x},${w.a.y})→(${w.b.x},${w.b.y}) längd ${Math.round(wallLength(w))} tj ${w.thickness}`)
       const v = await scanView(planId, after, r, around(res.walls), { overlay: true })
       return { content: [text(`${head}\n${lines.join('\n')}\nResultat:\n${summary.join('\n')}`), image(v.png)] }
+    }
+
+    if (name === 'plan_scan_register') {
+      const rect = rectOf(args.rect)
+      if (!rect) return err('rect {x,y,w,h} i mm krävs')
+      const rr = resolveSource(plan, String(args.reference))
+      if (rr.id === r.id) return err('source_id och reference måste vara olika källor')
+      const fit = register({ g: await loadGray(planId, rr), r: rr }, { g, r }, rect, {
+        scaleMin: typeof args.scale_min === 'number' ? args.scale_min : undefined,
+        scaleMax: typeof args.scale_max === 'number' ? args.scale_max : undefined,
+        shiftMm: typeof args.shift_mm === 'number' ? args.shift_mm : undefined,
+        threshold,
+      })
+      let out = `${r.id} mot ${rr.id}: skala ×${fit.scale.toFixed(4)} → ${fit.mmPerPx.toFixed(4)} mm/px, flytt (${fit.dx}, ${fit.dy}) mm → övre vänstra hörnet (${fit.x},${fit.y}). Överlapp ${fit.score} (1 = perfekt; under ~0.3 är tveksamt).`
+      const moved: Raster = { ...r, mmPerPx: fit.mmPerPx, x: fit.x, y: fit.y }
+      if (args.apply) {
+        const saved = await save(planId, args.base_revision, sourceOps(plan, r, { mmPerPx: fit.mmPerPx, x: fit.x, y: fit.y, calibration: `inpassad mot ${rr.id} (överlapp ${fit.score})` }), `Passade in ${r.id} mot ${rr.id}`)
+        if (typeof saved === 'string') return err(`${out}\n\n${saved}`)
+        out += `\nSparad som revision ${saved.n}.`
+      }
+      const d = await scanDiff({ g: await loadGray(planId, rr), r: rr }, { g, r: moved }, rect, { threshold })
+      return { content: [text(`${out}\nBild: rött = bara ${rr.id}, blått = bara ${r.id}, grått = båda.`), image(d.png)] }
     }
 
     // plan_scan_diff

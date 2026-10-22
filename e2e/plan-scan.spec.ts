@@ -7,6 +7,7 @@ import { calibrate } from '@/lib/plan/scan/calibrate'
 import { detectWalls } from '@/lib/plan/scan/detect'
 import { profile } from '@/lib/plan/scan/profile'
 import type { Gray, Raster } from '@/lib/plan/scan/raster'
+import { register } from '@/lib/plan/scan/register'
 import { snapWalls } from '@/lib/plan/scan/snap'
 
 // Accuracy of the scan tools on synthetic "scans": a known plan is drawn
@@ -137,4 +138,15 @@ test('calibrate finds the scale and residuals', () => {
   ])
   expect(c.factor).toBeCloseTo(5000 / 4900, 4)
   expect(c.rmsMm).toBeLessThanOrEqual(1)
+})
+
+test('register recovers scale and offset between two sources', async () => {
+  const truth = demoPlan()
+  const { g, r } = await scan(truth, 10, 'outline')
+  // Same drawing, wrongly placed: 3 % too small and 400/−250 mm off.
+  const off: Raster = { ...r, mmPerPx: r.mmPerPx / 1.03, x: r.x - 400, y: r.y + 250 }
+  const fit = register({ g, r }, { g, r: off }, { x: -500, y: -500, w: 13000, h: 8000 }, { scaleMin: 0.95, scaleMax: 1.1, shiftMm: 800 })
+  expect(Math.abs(fit.mmPerPx - r.mmPerPx)).toBeLessThan(0.02)
+  expect(Math.abs(fit.x - r.x)).toBeLessThanOrEqual(30)
+  expect(Math.abs(fit.y - r.y)).toBeLessThanOrEqual(30)
 })
