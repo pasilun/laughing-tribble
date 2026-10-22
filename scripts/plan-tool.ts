@@ -6,6 +6,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import path from 'path'
 
 process.env.PLAN_STORE ??= 'fs'
+// Piping into head etc. closes stdout early; that's not an error.
+process.stdout.on('error', () => {})
 
 async function main() {
   const argv = process.argv.slice(2)
