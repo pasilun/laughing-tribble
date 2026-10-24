@@ -7,7 +7,8 @@ import { calibrate } from '@/lib/plan/scan/calibrate'
 import { detectWalls } from '@/lib/plan/scan/detect'
 import { profile } from '@/lib/plan/scan/profile'
 import type { Gray, Raster } from '@/lib/plan/scan/raster'
-import { readDoors } from '@/lib/plan/scan/doors'
+import { readDoor, readDoors } from '@/lib/plan/scan/doors'
+import { newOpenings } from '@/lib/plan/scan/openings'
 import { register } from '@/lib/plan/scan/register'
 import { snapWalls } from '@/lib/plan/scan/snap'
 
@@ -220,3 +221,19 @@ for (const leafDeg of [60, 90]) {
     }
   })
 }
+
+test('openings: gaps in drawn walls become openings, then doors with their swing', async () => {
+  const truth = demoPlan()
+  const { g, r } = await doorScan(truth, 5, 60, { x: 0, y: 0 })
+  const bare: Plan = { ...truth, openings: [] }
+  const found = newOpenings(g, r, bare)
+  for (const o of truth.openings.filter((x) => x.kind !== 'window')) {
+    const hit = found.find((f) => f.wallId === o.wallId && Math.abs(f.offset - o.offset) <= 30 && Math.abs(f.width - o.width) <= 60)
+    expect(hit, `${o.id} ${JSON.stringify(found.filter((f) => f.wallId === o.wallId))}`).toBeTruthy()
+    if (o.kind === 'door') {
+      const wall = truth.walls.find((w) => w.id === o.wallId)!
+      const rd = readDoor(g, r, wall, { ...hit!, kind: 'door' })
+      expect(rd.confident && `${rd.best!.hinge}/${rd.best!.swing}`, o.id).toBe(`${o.hinge ?? 'a'}/${o.swing ?? 'left'}`)
+    }
+  }
+})

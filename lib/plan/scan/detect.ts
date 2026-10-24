@@ -57,23 +57,25 @@ function transpose(g: Gray): Gray {
 function rowWalls(g: Gray, box: { x0: number; x1: number; y0: number; y1: number }, mmPerPx: number, o: Required<Omit<DetectOptions, 'rect'>>) {
   const minRun = Math.max(5, Math.round(o.minLengthMm / mmPerPx))
   const all = bands(g, box.x0, box.x1, box.y0, box.y1, minRun, o.threshold)
-  const lineMax = Math.max(3.5, 35 / mmPerPx)
+  // Archive scans draw walls with pens up to ~1 mm at 1:100, i.e. lines up
+  // to ~120 mm thick in plan terms: anything that thin may be one face of an
+  // outlined wall, so pairing comes first.
+  const lineMax = Math.max(3.5, 130 / mmPerPx)
+  const thin = Math.max(3.5, 35 / mmPerPx)
   const out: Array<{ x0: number; x1: number; y: number; t: number; style: 'filled' | 'outline'; confidence: number }> = []
   const tMin = o.minThicknessMm / mmPerPx
   const tMax = o.maxThicknessMm / mmPerPx
-  for (const b of all) {
-    const t = b.y1 - b.y0
-    if (t > lineMax && t >= tMin && t <= tMax) out.push({ x0: b.x0, x1: b.x1, y: (b.y0 + b.y1) / 2, t, style: 'filled', confidence: Math.min(1, b.rows / t) })
-  }
-  // Pair thin lines: nearest partner below within the thickness range.
+  const mid = (b: Band) => (b.y0 + b.y1) / 2
+  // Pair lines: nearest partner below, wall thickness measured line centre
+  // to line centre (lines straddle the wall faces).
   const lines = all.filter((b) => b.y1 - b.y0 <= lineMax).sort((p, q) => p.y0 - q.y0)
   const used = new Set<Band>()
   for (const l of lines) {
     if (used.has(l)) continue
     let best: { m: Band; ov: number } | null = null
     for (const m of lines) {
-      if (m === l || used.has(m) || m.y0 <= l.y0) continue
-      const span = m.y1 - l.y0
+      if (m === l || used.has(m) || m.y0 <= l.y1) continue
+      const span = mid(m) - mid(l)
       if (span < tMin) continue
       if (span > tMax) break
       const ov = Math.min(l.x1, m.x1) - Math.max(l.x0, m.x0)
@@ -85,11 +87,20 @@ function rowWalls(g: Gray, box: { x0: number; x1: number; y0: number; y1: number
     out.push({
       x0: Math.max(l.x0, best.m.x0),
       x1: Math.min(l.x1, best.m.x1),
-      y: (l.y0 + best.m.y1) / 2,
-      t: best.m.y1 - l.y0,
+      y: (mid(l) + mid(best.m)) / 2,
+      t: mid(best.m) - mid(l),
       style: 'outline',
       confidence: Math.round(best.ov * 100) / 100,
     })
+  }
+  // Unpaired bands thick enough to be a wall: a filled wall. One as thin as
+  // a pen line is more likely a lone line (furniture, a dimension), so it
+  // gets a low confidence.
+  for (const b of all) {
+    if (used.has(b)) continue
+    const t = b.y1 - b.y0
+    if (t > thin && t >= tMin && t <= tMax)
+      out.push({ x0: b.x0, x1: b.x1, y: mid(b), t, style: 'filled', confidence: t > lineMax ? Math.min(1, b.rows / t) : 0.4 })
   }
   return out
 }

@@ -94,6 +94,10 @@ handlers against the local store:
   thickness. Ends are joined at centreline intersections, and openings keep
   their place. The tool reports a confidence per wall. A wall it can't find
   is left where it was and flagged.
+- `plan_scan_openings`: finds openings where both drawn faces of a wall
+  stop, and reads each one as a door (with its swing) or an open passage.
+  It doesn't detect windows. It also can't read drawings that mark doorways
+  only by dashing one face (e.g. Stockholm's 1999 informationsritningar).
 - `plan_scan_doors`: reads door hinges and swings off a source. It scores all
   four options per door: a straight leaf from the hinge (line-centre fit) plus
   an arc of constant radius around it. It lets the symbol slide up to about

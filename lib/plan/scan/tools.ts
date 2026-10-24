@@ -6,7 +6,8 @@ import type { Plan, Pt, Source, Wall } from '../types'
 import { calibrate, rescaleAround, type Measurement } from './calibrate'
 import { detectWalls } from './detect'
 import { scanDiff } from './diff'
-import { describeDoor, readDoors } from './doors'
+import { describeDoor, readDoor, readDoors } from './doors'
+import { newOpenings } from './openings'
 import { profile, roundRun } from './profile'
 import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Raster } from './raster'
 import { register } from './register'
@@ -122,6 +123,23 @@ export const SCAN_TOOLS = [
         search_mm: { type: 'number' },
         keep_thickness: { type: 'boolean' },
         join_mm: { type: 'number', description: 'default 250' },
+        threshold: { type: 'number' },
+      },
+      required: ['plan_id'],
+    },
+  },
+  {
+    name: 'plan_scan_openings',
+    description:
+      'Finds openings in the plan\'s walls from a source drawing: where both drawn faces of a wall stop for at least min_width_mm, there is an opening. Each one is then read as a door (with hinge and swing, via the door reader) when a door symbol is clearly drawn there, otherwise as an open passage. Windows are not detected. apply=true adds them.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        base_revision: { type: 'number' },
+        source_id: SRC,
+        wall_ids: { type: 'array', items: { type: 'string' }, description: 'Default: all walls' },
+        apply: { type: 'boolean' },
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
@@ -350,6 +368,31 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
       const summary = res.walls.map((w) => `  ${w.id}: (${w.a.x},${w.a.y})→(${w.b.x},${w.b.y}) längd ${Math.round(wallLength(w))} tj ${w.thickness}`)
       const v = await scanView(planId, after, r, around(res.walls), { overlay: true })
       return { content: [text(`${head}\n${lines.join('\n')}\nResultat:\n${summary.join('\n')}`), image(v.png)] }
+    }
+
+    if (name === 'plan_scan_openings') {
+      const ids = Array.isArray(args.wall_ids) ? args.wall_ids.map(String) : undefined
+      const found = newOpenings(g, r, plan, ids, threshold)
+      const lines: string[] = []
+      const ops: Op[] = []
+      for (const o of found) {
+        const wall = plan.walls.find((w) => w.id === o.wallId)!
+        const rd = readDoor(g, r, wall, { ...o, kind: 'door' }, threshold)
+        const item: typeof o = rd.best && rd.confident ? { ...o, kind: 'door', hinge: rd.best.hinge, swing: rd.best.swing } : o
+        ops.push({ op: 'add', kind: 'opening', item })
+        lines.push(`- ${item.id}: ${item.kind === 'door' ? `dörr ${describeDoor(wall, item)}` : 'öppning'} i ${o.wallId}, offset ${o.offset}, bredd ${o.width}${item.kind === 'door' ? '' : ` [dörr? ${rd.candidates.map((c) => `${c.hinge}/${c.swing} ${Math.round(c.score * 100)}%`).join(', ')}]`}`)
+      }
+      let head = `${found.length} öppningar hittade (fönster ingår inte).`
+      let after = plan
+      if (args.apply && ops.length) {
+        const saved = await save(planId, args.base_revision, ops, `Öppningar och dörrar från ${r.id}`)
+        if (typeof saved === 'string') return err(`${head}\n${lines.join('\n')}\n\n${saved}`)
+        head += ` Sparad som revision ${saved.n}.`
+        after = saved.plan
+      }
+      const content: Content = [text(`${head}\n${lines.join('\n')}`)]
+      if (after.walls.length) content.push(image((await scanView(planId, after, r, around(after.walls, 400), { overlay: true, view: 'fore' })).png))
+      return { content }
     }
 
     if (name === 'plan_scan_doors') {
