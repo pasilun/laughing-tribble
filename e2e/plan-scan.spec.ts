@@ -463,3 +463,35 @@ test('snap consensus: median over drawings, a tilted fit is left out', async () 
   expect(res.wall!.a.y).toBe(res.wall!.b.y)
   expect(Math.abs(res.wall!.thickness - 100)).toBeLessThanOrEqual(10)
 })
+
+test('openings: a wall drawn in parts is located stretch by stretch; a stretch whose faces stop is a passage', async () => {
+  const mmPerPx = 8.5
+  const P = (mm: number) => (mm / mmPerPx).toFixed(2)
+  const line = (x0: number, y0: number, x1: number, y1: number) => `<line x1="${P(x0)}" y1="${P(y0)}" x2="${P(x1)}" y2="${P(y1)}" stroke="#000" stroke-width="2"/>`
+  // Wall along y≈1000 from x 500 to 8500: 450 thick west of x 4000, 350
+  // thick east of it (the south face jogs). Crossing walls at 2000, 3200,
+  // 4000 and 6000. Between 2000 and 3200 the faces stop, with a label
+  // written across the north face; at 6500-7500 a WC bowl sits on it.
+  const parts = [
+    line(500, 775, 2000, 775), line(500, 1225, 2000, 1225),
+    line(3200, 775, 8500, 775), line(3200, 1225, 4000, 1225), line(4000, 1125, 8500, 1125),
+    ...[2000, 3200, 4000, 6000].flatMap((x) => [line(x - 50, 0, x - 50, 775), line(x + 50, 0, x + 50, 775), line(x - 50, 1225, x - 50, 2000), line(x + 50, 1225, x + 50, 2000)]),
+    `<text x="${P(2300)}" y="${P(850)}" font-size="${P(180)}" font-family="sans-serif">40 /</text>`,
+    `<circle cx="${P(7000)}" cy="${P(950)}" r="${P(160)}" fill="none" stroke="#000" stroke-width="2"/>`,
+  ]
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${P(9000)}" height="${P(2000)}"><rect width="100%" height="100%" fill="#fff"/>${parts.join('')}</svg>`
+  const { data, info } = await sharp(Buffer.from(svg)).grayscale().raw().toBuffer({ resolveWithObject: true })
+  const g: Gray = { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), w: info.width, h: info.height }
+  const r: Raster = { id: 's', mmPerPx, x: 0, y: 0, widthPx: info.width, heightPx: info.height, src: '', rotation: 0 }
+  const wall: Wall = { id: 'mur', a: { x: 500, y: 1000 }, b: { x: 8500, y: 1000 }, thickness: 400, phase: 'existing', loadBearing: true }
+  const cross = [2000, 3200, 4000, 6000].flatMap((x, i): Wall[] => [
+    { id: `n${i}`, a: { x, y: 0 }, b: { x, y: 800 }, thickness: 100, phase: 'existing' },
+    { id: `s${i}`, a: { x, y: 1200 }, b: { x, y: 2000 }, thickness: 100, phase: 'existing' },
+  ])
+  const plan: Plan = { ...demoPlan(), walls: [wall, ...cross], openings: [] }
+  const found = newOpenings(g, r, plan, ['mur'], undefined, ['mellanrum']).openings
+  expect(found).toHaveLength(1)
+  expect(found[0].evidence![0].method).toContain('hel sträcka')
+  expect(Math.abs(found[0].offset + 500 - 2090)).toBeLessThanOrEqual(30)
+  expect(Math.abs(found[0].offset + found[0].width + 500 - 3110)).toBeLessThanOrEqual(30)
+})

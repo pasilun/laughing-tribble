@@ -249,6 +249,85 @@ function mergeGaps(gs: Gap[]): Gap[] {
   return out
 }
 
+// A long wall is often drawn in parts (a face that jogs, another thickness
+// past a crossing wall), and one straight fit then misses it or scatters.
+// Each stretch between crossing walls is located on its own instead.
+const PART_RMS = 40
+
+export function locateParts(g: Gray, r: Raster, wall: Wall, plan: Plan, threshold?: number): Array<{ t0: number; t1: number; part: Wall; drawn?: Wall }> {
+  const len = wallLength(wall)
+  const cuts = junctionsOn(wall, plan)
+    .filter(([t]) => t > 0 && t < len)
+    .sort((a, b) => a[0] - b[0])
+  const out: Array<{ t0: number; t1: number; part: Wall; drawn?: Wall }> = []
+  let prev: [number, number] = [0, 0]
+  for (const cut of [...cuts, [len, 0] as [number, number]]) {
+    const t0 = prev[0] + prev[1]
+    const t1 = cut[0] - cut[1]
+    prev = cut
+    if (t1 - t0 < 300) continue
+    const part: Wall = { ...wall, id: `${wall.id}@${Math.round(t0)}`, a: along(wall, t0), b: along(wall, t1) }
+    const fit = snapWall(g, r, part, [], { threshold, square: true })
+    out.push({ t0, t1, part, drawn: fit.wall && fit.report.ok ? fit.wall : undefined })
+  }
+  // A stretch much thinner than the rest, or off their line, is a label or
+  // a leader line read as a wall.
+  const drawn = out.filter((x) => x.drawn)
+  const thick = drawn.map((x) => x.drawn!.thickness).sort((a, b) => a - b)[drawn.length >> 1]
+  const off = (q: Wall) => offsetOf(wall, along(q, wallLength(q) / 2))
+  const odd = drawn.filter((x) => {
+    const others = drawn.filter((o) => o !== x).map((o) => off(o.drawn!))
+    return x.drawn!.thickness < 0.6 * thick || (others.length > 0 && others.every((o) => Math.abs(o - off(x.drawn!)) > 0.3 * thick))
+  })
+  for (const x of odd) x.drawn = undefined
+  return out
+}
+
+// Stretches drawn with clearly different thickness or line: one fit for
+// the whole wall would misread them.
+function partsDiffer(parts: Array<{ part: Wall; drawn?: Wall }>): boolean {
+  const ds = parts.filter((x) => x.drawn).map((x) => ({ t: x.drawn!.thickness, c: offsetOf(x.part, along(x.drawn!, wallLength(x.drawn!) / 2)) }))
+  return ds.some((a) => ds.some((b) => Math.abs(a.t - b.t) > 0.2 * Math.max(a.t, b.t) || Math.abs(a.c - b.c) > 0.2 * Math.max(a.t, b.t)))
+}
+
+// Signed distance of p from the wall's centreline (towards its left normal).
+function offsetOf(wall: Wall, p: { x: number; y: number }): number {
+  const n = leftNormal(wallDir(wall))
+  return (p.x - wall.a.x) * n.x + (p.y - wall.a.y) * n.y
+}
+
+// Do the faces of the drawn stretches either side stop across this one?
+// Both must: a wall hidden by fixtures still has its faces running through.
+function facesStop(g: Gray, r: Raster, wall: Wall, x: { t0: number; t1: number }, sides: Array<{ drawn?: Wall } | undefined>, threshold?: number): boolean {
+  const ns = sides.map((p) => p?.drawn)
+  if (!ns[0] || !ns[1]) return false
+  const n = leftNormal(wallDir(wall))
+  const th = threshold ?? 128
+  const centres = ns.map((d) => offsetOf(wall, along(d!, wallLength(d!) / 2)))
+  const mid = (centres[0] + centres[1]) / 2
+  const faces = ns.flatMap((d, i) => [centres[i] - d!.thickness / 2, centres[i] + d!.thickness / 2])
+  // A face line runs on unbroken; a label written across it does not.
+  return faces.every((f) => {
+    let run = 0
+    let longest = 0
+    let tot = 0
+    for (let t = x.t0 + 60; t <= x.t1 - 60; t += 10) {
+      const c = along(wall, t)
+      tot++
+      const inkAt = (o: number) => {
+        const p = toPx(r, { x: c.x + n.x * o, y: c.y + n.y * o })
+        return dark(g, p.x, p.y, th)
+      }
+      // Line-like: ink at the face, paper just outside the wall.
+      let hit = false
+      for (let e = -20; e <= 20 && !hit; e += 5) hit = inkAt(f + e) && !inkAt(f + e + Math.sign(f - mid) * 70)
+      run = hit ? run + 1 : 0
+      longest = Math.max(longest, run)
+    }
+    return tot > 0 && longest / tot < 0.4
+  })
+}
+
 // How far a's position moved along the wall when it was located in the source.
 function shiftOf(w: Wall, drawn: Wall): number {
   const d = wallDir(w)
@@ -318,20 +397,33 @@ export function newOpenings(
   const walls = plan.walls.filter((w) => !ids || ids.includes(w.id) || plan.openings.some((o) => o.wallId === w.id && o.kind !== 'window'))
   for (const w of walls) {
     const per: Record<string, Find[]> = { mellanrum: [], streckad: [], mittstreck: [], dörrbåge: [] }
-    const fit = snapWall(g, r, w, [], { threshold, square: true })
-    if (!fit.wall || !fit.report.ok) skipped.push(w.id)
-    else {
-      const drawn = fit.wall
-      located.set(w, drawn)
-      const shift = shiftOf(w, drawn)
+    // One-sided marks only in light interior partitions (WC and closet
+    // doors): on facades, party and load-bearing walls whatever is drawn
+    // on the far side reads as a mark.
+    const light = !w.exterior && !w.apartmentBoundary && !w.loadBearing
+    // Reads the detectors along a located stretch `drawn` that starts at `from` on w.
+    const read = (drawn: Wall, part: Wall, from: number) => {
+      const shift = from + shiftOf(part, drawn)
       const junctions = junctionsOn(w, plan).map(([t, rad]) => [t - shift, rad] as [number, number])
-      per.mellanrum = findGaps(g, r, drawn, { threshold }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
-      per.streckad = findDashed(g, r, drawn, { threshold, junctions }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
-      // One-sided marks only in light interior partitions (WC and closet
-      // doors): on facades, party and load-bearing walls whatever is drawn
-      // on the far side reads as a mark.
-      const light = !w.exterior && !w.apartmentBoundary && !w.loadBearing
-      per.mittstreck = findCentreMarks(g, r, drawn, { threshold, junctions, oneSided: light }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
+      const back = (fs: Gap[]) => fs.map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
+      per.mellanrum.push(...back(findGaps(g, r, drawn, { threshold })))
+      per.streckad.push(...back(findDashed(g, r, drawn, { threshold, junctions })))
+      per.mittstreck.push(...back(findCentreMarks(g, r, drawn, { threshold, junctions, oneSided: light })))
+    }
+    const fit = snapWall(g, r, w, [], { threshold, square: true })
+    const parts = locateParts(g, r, w, plan, threshold)
+    if (fit.wall && fit.report.ok && fit.report.rmsMm <= PART_RMS && !partsDiffer(parts)) {
+      located.set(w, fit.wall)
+      read(fit.wall, w, 0)
+    } else {
+      if (!parts.some((x) => x.drawn)) skipped.push(w.id)
+      parts.forEach((x, i) => {
+        if (x.drawn) read(x.drawn, x.part, x.t0)
+        // A stretch whose faces stop between two stretches that are drawn: a
+        // passage the whole width between the crossing walls.
+        else if (x.t1 - x.t0 >= 450 && x.t1 - x.t0 <= 2600 && facesStop(g, r, w, x, [parts[i - 1], parts[i + 1]], threshold))
+          per.mellanrum.push({ wallId: w.id, offset: Math.round(x.t0), width: Math.round(x.t1 - x.t0), method: 'mellanrum (hel sträcka)' })
+      })
     }
     per.dörrbåge = findDoorSymbols(g, r, w, { threshold }).map((d) => ({ wallId: w.id, offset: d.offset, width: d.width, hinge: d.hinge, swing: d.swing, method: 'dörrbåge' }))
     raw.set(w.id, per)

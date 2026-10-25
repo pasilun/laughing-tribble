@@ -103,6 +103,16 @@ handlers against the local store:
   took G-vagg from 195 mm (one blurred scan) to 85 mm (survey: 89).
 - `plan_scan_openings`: finds openings where both drawn faces of a wall
   stop, and reads each one as a door (with its swing) or an open passage.
+  Long walls are often drawn in parts (a face that jogs, another thickness
+  past a crossing wall). When one straight fit misses or scatters, or the
+  stretches between crossing walls disagree, each stretch is located on
+  its own. A stretch read much thinner than the rest, or off their line,
+  is a label or leader line, not wall. A stretch whose neighbours' face
+  lines stop across it is a passage the whole width between the crossing
+  walls (`mellanrum (hel sträcka)`). Faces must run on unbroken and line-like
+  (paper just outside), so a label written over a face or a WC bowl beside
+  it does not count either way. On Gnejsen this found 154's passage
+  through mur-syd in both va-1936 and a00.
   It doesn't detect windows. It also can't read drawings that mark doorways
   only by dashing one face (e.g. Stockholm's 1999 informationsritningar).
 - `plan_scan_elevation`: reads windows from a facade drawing (a source added
