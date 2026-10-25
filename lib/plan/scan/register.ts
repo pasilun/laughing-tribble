@@ -107,7 +107,8 @@ export function register(
   }
   // Cells must be well above the scan's pixel size or sampling aliasing
   // decides the fit instead of the drawing.
-  const minC = 2.5 * Math.max(ref.r.mmPerPx, mov.r.mmPerPx)
+  // …and, on large areas, coarse enough to stay fast (≤ ~250k cells).
+  const minC = Math.max(2.5 * Math.max(ref.r.mmPerPx, mov.r.mmPerPx), Math.sqrt((rect.w * rect.h) / 250_000))
   const coarseC = Math.max(60, 4 * minC, Math.max(rect.w, rect.h) / 120)
   // Each finer level also sharpens the tolerance, so it can tell close fits apart.
   // Coarse scores are close for neighbouring scales, so the best few coarse

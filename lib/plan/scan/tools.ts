@@ -132,7 +132,7 @@ export const SCAN_TOOLS = [
   {
     name: 'plan_scan_openings',
     description:
-      'Finds openings in the plan\'s walls from a source drawing: where both drawn faces of a wall stop for at least min_width_mm, there is an opening. Each one is then read as a door (with hinge and swing, via the door reader) when a door symbol is clearly drawn there, otherwise as an open passage. Windows are not detected. apply=true adds them.',
+      'Finds openings in the plan\'s walls from a source drawing: where both drawn faces of a wall stop, or one face is drawn dashed (older Stockholm drawings outline rooms and dash the outline across doorways; ends then ±1 dash ≈ 0.3 m), there is an opening. Each one is then read as a door (with hinge and swing, via the door reader) when a door symbol is clearly drawn there, otherwise as an open passage. Openings in walls on the outer edge of the plan are reported as windows – check them when the plan covers only part of a building (a party wall is on its edge too). apply=true adds them.',
     inputSchema: {
       type: 'object',
       properties: {

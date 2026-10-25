@@ -8,7 +8,7 @@ import { detectWalls } from '@/lib/plan/scan/detect'
 import { profile } from '@/lib/plan/scan/profile'
 import type { Gray, Raster } from '@/lib/plan/scan/raster'
 import { readDoor, readDoors } from '@/lib/plan/scan/doors'
-import { newOpenings } from '@/lib/plan/scan/openings'
+import { findDashed, newOpenings } from '@/lib/plan/scan/openings'
 import { register } from '@/lib/plan/scan/register'
 import { snapWalls } from '@/lib/plan/scan/snap'
 
@@ -251,4 +251,33 @@ test('openings: gaps in drawn walls become openings, then doors with their swing
       expect(rd.confident && `${rd.best!.hinge}/${rd.best!.swing}`, o.id).toBe(`${o.hinge ?? 'a'}/${o.swing ?? 'left'}`)
     }
   }
+})
+
+test('openings: a doorway drawn as a dashed face is found, a junction break is not', async () => {
+  // One 4 m wall, 120 thick, at 1:100/300 dpi. The lower face is dashed
+  // (300 mm dashes, 60 mm gaps) over 1000-1900; the upper face has one
+  // 120 mm break where a crossing wall meets it at 3000.
+  const mmPerPx = 8.467
+  const P = (mm: number) => (mm / mmPerPx).toFixed(2)
+  const lw = (2.5).toFixed(2)
+  const y1 = 1000 - 60
+  const y2 = 1000 + 60
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${P(5000)}" height="${P(2000)}"><rect width="100%" height="100%" fill="#fff"/>
+    <line x1="${P(500)}" y1="${P(y1)}" x2="${P(2940)}" y2="${P(y1)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(3060)}" y1="${P(y1)}" x2="${P(4500)}" y2="${P(y1)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(3000)}" y1="${P(y1)}" x2="${P(3000)}" y2="${P(200)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(500)}" y1="${P(y2)}" x2="${P(1000)}" y2="${P(y2)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(1000)}" y1="${P(y2)}" x2="${P(1900)}" y2="${P(y2)}" stroke="#000" stroke-width="${lw}" stroke-dasharray="${P(300)} ${P(60)}"/>
+    <line x1="${P(1900)}" y1="${P(y2)}" x2="${P(4500)}" y2="${P(y2)}" stroke="#000" stroke-width="${lw}"/>
+  </svg>`
+  const { data, info } = await sharp(Buffer.from(svg)).grayscale().raw().toBuffer({ resolveWithObject: true })
+  const g: Gray = { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), w: info.width, h: info.height }
+  const r: Raster = { id: 's', mmPerPx, x: 0, y: 0, widthPx: info.width, heightPx: info.height, src: '', rotation: 0 }
+  const wall: Wall = { id: 'w', a: { x: 500, y: 1000 }, b: { x: 4500, y: 1000 }, thickness: 120, phase: 'existing' }
+  const found = findDashed(g, r, wall, { junctions: [[2500, 100]] })
+  expect(found).toHaveLength(1)
+  // Where the last dash runs into the solid line can't be seen: ends are
+  // good to about one dash (300 mm here).
+  expect(Math.abs(found[0].offset - 500)).toBeLessThanOrEqual(150)
+  expect(Math.abs(found[0].offset + found[0].width - 1400)).toBeLessThanOrEqual(150)
 })
