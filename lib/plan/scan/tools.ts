@@ -145,7 +145,7 @@ export const SCAN_TOOLS = [
         wall_ids: { type: 'array', items: { type: 'string' }, description: 'Default: all walls' },
         apply: { type: 'boolean' },
         accept: { type: 'array', items: { type: 'string' }, description: 'With apply: ids of the new openings to add (from a preview); default all. Confirmations of existing openings are always recorded.' },
-        methods: { type: 'array', items: { type: 'string', enum: ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge'] }, description: 'Detectors to run: mellanrum = both faces stop, streckad = dashed face, mittstreck = centre mark across the wall (1936 plans; width estimated 800), dörrbåge = door symbol. Default auto: each is tried on the openings the plan already has, and used if it finds at least a quarter of them (with fewer than 3 known openings, all are used).' },
+        methods: { type: 'array', items: { type: 'string', enum: ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge'] }, description: 'Detectors to run: mellanrum = both faces stop, streckad = dashed face, mittstreck = centre mark across the wall (1936 plans; width estimated 800), dörrbåge = door symbol. Default auto: each is tried on the openings other archive drawings already show, and used if it finds at least a quarter of them (with fewer than 3 such openings, all are used). For an independent build from one set of drawings, give methods explicitly.' },
         threshold: { type: 'number' },
       },
       required: ['plan_id'],

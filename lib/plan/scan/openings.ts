@@ -301,7 +301,11 @@ export function newOpenings(
     raw.set(w.id, per)
   }
   // 2. Which methods this drawing answers to.
-  const known = plan.openings.filter((o) => o.kind !== 'window' && raw.has(o.wallId))
+  // Learn only from openings some other archive drawing shows: not ones
+  // drawn in by hand, nor ones from a survey of today's flat (role
+  // before/after) – that would let the survey steer an archive-only build.
+  const archive = new Set((plan.sources ?? []).filter((x) => x.role === 'archive' && x.id !== r.id).map((x) => x.id))
+  const known = plan.openings.filter((o) => o.kind !== 'window' && raw.has(o.wallId) && (o.evidence ?? []).some((e) => archive.has(e.source)))
   const hitsKnown = (f: Find, o: Opening) => f.wallId === o.wallId && Math.min(f.offset + f.width, o.offset + o.width) - Math.max(f.offset, o.offset) >= 0.5 * Math.min(f.width, o.width)
   const checks: MethodCheck[] = METHODS.map((m) => {
     const found = known.filter((o) => (raw.get(o.wallId)?.[m] ?? []).some((f) => hitsKnown(f, o))).length

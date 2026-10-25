@@ -349,13 +349,15 @@ test('openings auto: only the detectors that find the known openings in this dra
   const truth = demoPlan()
   // Doors drawn as arcs: the door-symbol detector finds the known doors.
   const { g, r } = await doorScan(truth, 5, 60, { x: 0, y: 0 })
-  const res = newOpenings(g, r, truth)
+  const src = (id: string) => ({ id, name: id, role: "archive" as const, src: "", widthPx: 1, heightPx: 1, mmPerPx: 1, x: 0, y: 0, rotation: 0 })
+  const known: Plan = { ...truth, sources: [src("other")], openings: truth.openings.map((o) => ({ ...o, evidence: [{ source: "other", method: "streckad", offset: o.offset, width: o.width }] })) }
+  const res = newOpenings(g, r, known)
   const arc = res.checks.find((c) => c.method === 'dörrbåge')!
   expect(arc.used, JSON.stringify(res.checks)).toBe(true)
   // Walls only, no door marks at all: nothing finds the known doors, so
   // nothing is used and no noise comes out.
   const bare = await scan(truth, 5, 'outline')
-  const none = newOpenings(bare.g, bare.r, truth)
+  const none = newOpenings(bare.g, bare.r, known)
   expect(none.checks.find((c) => c.method === 'dörrbåge')!.used, JSON.stringify(none.checks)).toBe(false)
   expect(none.openings.filter((o) => o.kind === 'door')).toHaveLength(0)
 })

@@ -118,7 +118,8 @@ handlers against the local store:
 - `plan_import` with `copy_sources_from` copies the source drawings along,
   for branching a plan (e.g. a city-drawings-only version).
 - Method selection: `plan_scan_openings` runs every detector, tests each
-  on the plan's known openings (doors and passages), and by default uses
+  on the openings other archive drawings already show (never hand-drawn
+  ones or ones from a survey of today's flat), and by default uses
   those that find at least a quarter of them. Drawings use one or two
   conventions, so a method that finds no known openings in a drawing only
   finds noise there. On Gnejsen: the 1936 drainage drawing → dashed only;
