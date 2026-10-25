@@ -3,7 +3,8 @@ import { applyOps } from '@/lib/plan/ops'
 import { demoPlan } from '@/lib/plan/demo'
 import { renderSheet, layoutSheet } from '@/lib/plan/sheet'
 import { checkPlan } from '@/lib/plan/checks'
-import type { Plan } from '@/lib/plan/types'
+import type { Plan, Wall } from '@/lib/plan/types'
+import { clashes, clipToFree, shiftToFree } from '@/lib/plan/clear'
 
 // Pure model tests — no browser needed.
 
@@ -159,4 +160,19 @@ test('ops: moving a wall start keeps its openings where they were drawn', () => 
   // A move across the wall (no change along it) leaves the offset alone.
   const across = applyOps(plan, [{ op: 'update', kind: 'wall', id: 'mur', patch: { a: { x: 1000, y: 100 } } }]).plan
   expect(across.openings[0].offset).toBe(1500)
+})
+
+test('openings clear of the walls they meet: a window through a corner is cut back, a door against a wall moves', () => {
+  const W: Wall = { id: 'W', a: { x: 0, y: 0 }, b: { x: 4000, y: 0 }, thickness: 200, phase: 'existing' }
+  const P: Wall = { id: 'P', a: { x: 1000, y: -1000 }, b: { x: 1000, y: 1000 }, thickness: 200, phase: 'existing' }
+  const plan: Plan = { ...demoPlan(), walls: [W, P], openings: [] }
+  // A 1.5 m window from the corner runs into P (x 900–1100): it is cut back to the free 0.8 m.
+  expect(clashes(plan, W, 0, 1500)).toEqual(['P'])
+  expect(clipToFree(plan, W, 0, 1500)).toEqual({ offset: 0, width: 800 })
+  // A centre-marked door of unknown width moves clear of P (1200 is the nearest free start).
+  expect(shiftToFree(plan, W, 1000, 500)).toBe(1200)
+  // The plan check reports the window that runs into a wall.
+  const bad: Plan = { ...plan, openings: [{ id: 'win', kind: 'window', wallId: 'W', offset: 0, width: 1500, phase: 'existing' }] }
+  expect(checkPlan(bad).some((f) => f.code === 'opening-in-wall' && f.ref === 'win')).toBe(true)
+  expect(checkPlan({ ...plan, openings: [{ id: 'win', kind: 'window', wallId: 'W', offset: 1300, width: 1000, phase: 'existing' }] }).some((f) => f.code === 'opening-in-wall')).toBe(false)
 })

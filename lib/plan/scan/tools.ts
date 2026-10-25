@@ -8,6 +8,7 @@ import { detectWalls } from './detect'
 import { scanDiff } from './diff'
 import { describeDoor, readDoor, readDoors } from './doors'
 import { findWindows, windowsOnWall, type Anchor } from './elevation'
+import { clipToFree } from '../clear'
 import { newOpenings, showsWall } from './openings'
 import { profile, roundRun } from './profile'
 import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Gray, type Raster } from './raster'
@@ -477,12 +478,16 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
       }
       const lines = on.map((w, i) => {
         const clash = existing.find((o) => Math.min(o.offset + o.width, w.offset + w.width) - Math.max(o.offset, w.offset) > 0)
-        const ev = { source: r.id, method: 'fasad', offset: w.offset, width: w.width }
+        // A window keeps clear of the walls it meets: a corner it runs into is cut off.
+        const fit = clipToFree(plan, wall, w.offset, w.width)
+        const cut = fit && (fit.offset !== w.offset || fit.width !== w.width)
+        const ev = { source: r.id, method: cut ? 'fasad (beskuren mot vägg)' : 'fasad', offset: w.offset, width: w.width }
         const known = clash?.evidence?.some((e) => e.source === ev.source && e.method === ev.method)
         if (clash && !known) ops.push({ op: 'update', kind: 'opening', id: clash.id, patch: { evidence: [...(clash.evidence ?? []), ev] } })
-        else if (!clash) ops.push({ op: 'add', kind: 'opening', item: { id: freeId(), wallId: wall.id, kind: 'window', offset: w.offset, width: w.width, height: w.height, phase: 'existing', evidence: [ev] } })
-        const note = !clash ? '' : known ? ` – finns redan som ${clash.id}, belägg från ${r.id} finns redan` : ` – finns redan som ${clash.id} (${clash.kind} offset ${clash.offset} bredd ${clash.width}), lägger till belägg`
-        return `- ${i + 1}: offset ${w.offset}, bredd ${w.width}, höjd ${w.height}${note}`
+        else if (!clash && fit) ops.push({ op: 'add', kind: 'opening', item: { id: freeId(), wallId: wall.id, kind: 'window', offset: fit.offset, width: fit.width, height: w.height, phase: 'existing', evidence: [ev] } })
+        const note = !clash ? (fit ? '' : ' – ligger i hörnet mot en vägg, utelämnad') : known ? ` – finns redan som ${clash.id}, belägg från ${r.id} finns redan` : ` – finns redan som ${clash.id} (${clash.kind} offset ${clash.offset} bredd ${clash.width}), lägger till belägg`
+        const at = fit ?? w
+        return `- ${i + 1}: offset ${at.offset}, bredd ${at.width}, höjd ${w.height}${cut ? ` (ritad ${w.offset}/${w.width}, beskuren mot vägg)` : ''}${note}`
       })
       if (!wall.exterior) ops.push({ op: 'update', kind: 'wall', id: wall.id, patch: { exterior: true } })
       let head = `${wins.length} fönster i raden, ${on.length} på väggen ${wall.id}.`

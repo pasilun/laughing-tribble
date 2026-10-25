@@ -1,4 +1,5 @@
 import { along, leftNormal, wallDir, wallLength } from '../geometry'
+import { shiftToFree } from '../clear'
 import type { Evidence, Opening, Plan, Wall } from '../types'
 import { dark, toPx, type Gray, type Raster } from './raster'
 import { findDoorSymbols } from './doors'
@@ -408,7 +409,15 @@ export function newOpenings(
       const back = (fs: Gap[]) => fs.map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
       per.mellanrum.push(...back(findGaps(g, r, drawn, { threshold })))
       per.streckad.push(...back(findDashed(g, r, drawn, { threshold, junctions })))
-      per.mittstreck.push(...back(findCentreMarks(g, r, drawn, { threshold, junctions, oneSided: light })))
+      // A centre mark gives the centre only, and its width is a guess: it moves
+      // along the wall (up to 0.25 m) to clear the walls it meets, and says so.
+      const clearMark = (f: Gap): Gap => {
+        const o = shiftToFree(plan, w, f.offset, f.width)
+        if (o === null) return { ...f, method: `${f.method}, ligger mot vägg` }
+        if (o === f.offset) return f
+        return { ...f, offset: o, method: `${f.method}, flyttad ${Math.abs(o - f.offset)} mm från vägg` }
+      }
+      per.mittstreck.push(...back(findCentreMarks(g, r, drawn, { threshold, junctions, oneSided: light })).map(clearMark))
     }
     const fit = snapWall(g, r, w, [], { threshold, square: true })
     const parts = locateParts(g, r, w, plan, threshold)

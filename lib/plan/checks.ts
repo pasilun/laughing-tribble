@@ -1,3 +1,4 @@
+import { clashes } from './clear'
 import { validatePlan } from './ops'
 import { layoutSheet } from './sheet'
 import type { Plan } from './types'
@@ -46,6 +47,15 @@ export function checkPlan(plan: Plan): Finding[] {
   if (!changes) out.push({ level: 'warning', code: 'no-change', message: 'Inga ändringar är markerade (rivs/ny) – före och efter blir likadana' })
 
   const walls = new Map(plan.walls.map((w) => [w.id, w]))
+  // An opening that runs into another wall: a window through a corner, a door against a stair wall.
+  const KIND = { window: 'Fönster', door: 'Dörr', opening: 'Öppning' } as const
+  for (const o of plan.openings) {
+    const w = walls.get(o.wallId)
+    if (!w) continue
+    const hit = clashes(plan, w, o.offset, o.width)
+    if (hit.length)
+      out.push({ level: 'error', code: 'opening-in-wall', ref: o.id, message: `${KIND[o.kind]} ${o.id} går in i ${hit.join(', ')} – flytta eller beskär öppningen` })
+  }
   for (const w of plan.walls) {
     if (w.phase === 'demolish' && w.loadBearing)
       out.push({ level: 'warning', code: 'load-bearing', ref: w.id, message: `Bärande vägg ${w.id} rivs – kräver konstruktionshandling och beräkning` })
