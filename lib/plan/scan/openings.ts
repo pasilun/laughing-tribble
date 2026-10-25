@@ -499,6 +499,8 @@ export function newOpenings(
         width: gp.width,
         phase: 'existing',
         ...(gp.hinge ? { hinge: gp.hinge, swing: gp.swing } : {}),
+        // No wall left between the walls it runs between: the rooms either side are one space.
+        ...(!gp.hinge && gp.method?.includes('hel sträcka') ? { through: true } : {}),
         evidence: [evidence],
       })
     }

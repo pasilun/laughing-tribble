@@ -1,9 +1,10 @@
-import { bounds, polygonArea, wallQuad } from './geometry'
+import { along, bounds, polygonArea, wallLength, wallQuad, wallSegments } from './geometry'
 import type { Plan, Pt, Room, View } from './types'
 
 // Room areas from the walls: rasterise the walls shown in a view (openings
-// count as closed, so rooms don't leak through doors) and flood-fill from
-// each room label. A room open to the outside gets no area.
+// count as closed, so rooms don't leak through doors, except a passage marked
+// through, which has no wall in it) and flood-fill from each room label. A
+// room open to the outside gets no area.
 
 const CELL = 10 // mm; error is about half a cell along the room's perimeter
 const JOIN_SLACK = 2 * CELL
@@ -50,19 +51,28 @@ function spaces(plan: Plan, view: View, includes: Map<string, string[]>): Map<st
   if (nx * ny > 8_000_000) return out // unreasonably large plan; skip
 
   const solid = new Uint8Array(nx * ny)
+  // A passage marked through leaves its stretch of the wall open.
+  const through = plan.openings.filter((o) => o.through && o.phase !== (view === 'fore' ? 'new' : 'demolish'))
   for (const w of walls) {
-    // Ends stretched a little so hairline gaps at joints (a traced wall
-    // stopping a few mm short of the one it meets) don't let rooms merge.
-    const len = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1
-    const ux = ((w.b.x - w.a.x) / len) * JOIN_SLACK
-    const uy = ((w.b.y - w.a.y) / len) * JOIN_SLACK
-    const q = wallQuad({ ...w, a: { x: w.a.x - ux, y: w.a.y - uy }, b: { x: w.b.x + ux, y: w.b.y + uy } })
-    const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
-    const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
-    const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
-    const j1 = Math.min(ny - 1, Math.ceil((Math.max(...q.map((p) => p.y)) - y0) / CELL))
-    for (let j = j0; j <= j1; j++)
-      for (let i = i0; i <= i1; i++) if (insideConvex({ x: x0 + (i + 0.5) * CELL, y: y0 + (j + 0.5) * CELL }, q)) solid[j * nx + i] = 1
+    const len = wallLength(w) || 1
+    const dx = (w.b.x - w.a.x) / len
+    const dy = (w.b.y - w.a.y) / len
+    for (const [s, e] of wallSegments(w, through)) {
+      // Ends of the wall itself are stretched a little so hairline gaps at joints
+      // (a traced wall stopping a few mm short of the one it meets) don't let
+      // rooms merge; the ends beside a passage are left as they are.
+      const ua = s <= 0.5 ? JOIN_SLACK : 0
+      const ub = e >= len - 0.5 ? JOIN_SLACK : 0
+      const a = along(w, s)
+      const b = along(w, e)
+      const q = wallQuad({ ...w, a: { x: a.x - dx * ua, y: a.y - dy * ua }, b: { x: b.x + dx * ub, y: b.y + dy * ub } })
+      const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
+      const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
+      const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
+      const j1 = Math.min(ny - 1, Math.ceil((Math.max(...q.map((p) => p.y)) - y0) / CELL))
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++) if (insideConvex({ x: x0 + (i + 0.5) * CELL, y: y0 + (j + 0.5) * CELL }, q)) solid[j * nx + i] = 1
+    }
   }
 
   const seen = new Int32Array(nx * ny).fill(-1)

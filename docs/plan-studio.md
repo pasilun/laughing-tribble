@@ -128,6 +128,19 @@ handlers against the local store:
   test picks candidates and the leaf+arc test decides. This finds doors in
   walls that can't be located in the drawing (mostly door, or drawn more
   than 0.15 m off), and gives their width and swing.
+- Openings keep clear of the walls they meet (`lib/plan/clear.ts`). A window
+  that runs into a corner wall is cut back to the free part of the wall,
+  100 mm clear of the other wall; a centre-marked opening, whose width is only
+  a guess and whose centre is good to about ±0.2 m, moves along the wall (up
+  to 0.25 m) to clear it, and says so in its method. `plan_check` reports an
+  opening that runs into another wall as an error.
+- Through passages. Room areas treat openings as closed, so rooms don't merge
+  through doorways. A gap with no wall in it between two walls (found as
+  `mellanrum (hel sträcka)`) is marked `through: true`: the stretch is left
+  open when areas are computed, so the rooms either side are one space with
+  one label and one area. The 154 hall is the example: the 1936 and 1999
+  drawings write one label ("TMB", "Hall") in the gap through mur-syd, and
+  the plan now shows one "Tamb." of 2.3 m² instead of two.
 - Centre marks (`mittstreck`): the 1936 floor plans mark each opening
   only by a short line across the wall at its centre. That gives the
   position, but the width is set to a standard 800 mm and labelled

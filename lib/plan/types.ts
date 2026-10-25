@@ -33,6 +33,7 @@ export type Opening = {
   phase: Phase
   hinge?: 'a' | 'b'          // door hinge at the end nearest wall.a or wall.b
   swing?: 'left' | 'right'   // side of the wall the leaf swings to, seen from a → b
+  through?: boolean          // an open passage: no wall, door or frame in this stretch, so the rooms either side are one space
   evidence?: Evidence[]      // the drawings that show it, and how it was read
 }
 

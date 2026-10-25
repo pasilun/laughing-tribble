@@ -3,7 +3,7 @@ import { applyOps } from '@/lib/plan/ops'
 import { demoPlan } from '@/lib/plan/demo'
 import { renderSheet, layoutSheet } from '@/lib/plan/sheet'
 import { checkPlan } from '@/lib/plan/checks'
-import type { Plan, Wall } from '@/lib/plan/types'
+import type { Opening, Plan, Wall } from '@/lib/plan/types'
 import { clashes, clipToFree, shiftToFree } from '@/lib/plan/clear'
 
 // Pure model tests — no browser needed.
@@ -127,6 +127,21 @@ test.describe('room areas', () => {
     // Kitchen wall demolished: Rum and Kök become one space, area shown once.
     expect(efter.get('r-a-rum')! / 1e6).toBeCloseTo(18.2, 1)
     expect(efter.has('r-a-kok')).toBe(false)
+  })
+
+  test('a passage with no wall in it joins the rooms either side; a doorway does not', async () => {
+    const { roomAreas } = await import('@/lib/plan/rooms')
+    const wall = (id: string, ax: number, ay: number, bx: number, by: number): Wall => ({ id, a: { x: ax, y: ay }, b: { x: bx, y: by }, thickness: 100, phase: 'existing' })
+    const walls = [wall('n', 0, 0, 4000, 0), wall('s', 0, 2000, 4000, 2000), wall('w', 0, 0, 0, 2000), wall('e', 4000, 0, 4000, 2000), wall('m', 2000, 0, 2000, 2000)]
+    const rooms = [{ id: 'r1', name: 'Hall', at: { x: 1000, y: 1000 } }, { id: 'r2', name: 'Hall', at: { x: 3000, y: 1000 } }]
+    const base: Plan = { ...demoPlan(), walls, rooms, fixtures: [], openings: [] }
+    const withOpening = (o: Partial<Opening>): Plan => ({ ...base, openings: [{ id: 'o', kind: 'opening', wallId: 'm', offset: 50, width: 1900, phase: 'existing', ...o }] })
+    // Even a doorway across the whole wall leaves two rooms, each with its own area.
+    expect(roomAreas(withOpening({}), 'fore').size).toBe(2)
+    // Marked through: one space (3900 × 1900 mm), its area shown once, under the first label.
+    const joined = roomAreas(withOpening({ through: true }), 'fore')
+    expect(joined.has('r2')).toBe(false)
+    expect(Math.abs(joined.get('r1')! / 1e6 - 7.41)).toBeLessThan(0.1)
   })
 })
 

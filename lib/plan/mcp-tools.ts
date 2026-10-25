@@ -15,7 +15,7 @@ import type { Plan, View } from './types'
 
 const OPS_DOC = `Operations (all lengths in whole millimetres; x to the right, y DOWN; ids are stable strings):
 - {"op":"add","kind":"wall","item":{"id":"v1","a":{"x":0,"y":0},"b":{"x":4000,"y":0},"thickness":100,"phase":"existing"|"demolish"|"new","loadBearing"?:true,"fireRating"?:"EI60","fireRatingAfter"?:""|"EI60","apartmentBoundary"?:true}}
-- {"op":"add","kind":"opening","item":{"id":"o1","wallId":"v1","kind":"door"|"opening"|"window","offset":1200,"width":900,"height"?:2100,"phase":"new","hinge"?:"a"|"b","swing"?:"left"|"right"}}  (offset = distance from the wall's a-end to the opening's near edge). hinge/swing: don't set them by eye — with a source drawing run plan_scan_doors; plan_get lists each door in words ("gångjärn vid västra karmen, öppnar mot norr") to check.
+- {"op":"add","kind":"opening","item":{"id":"o1","wallId":"v1","kind":"door"|"opening"|"window","offset":1200,"width":900,"height"?:2100,"phase":"new","hinge"?:"a"|"b","swing"?:"left"|"right"}}  (offset = distance from the wall's a-end to the opening's near edge). "through":true marks an open passage with no wall, door or frame in the stretch between two walls: the rooms either side count as one space (one label, one area). hinge/swing: don't set them by eye — with a source drawing run plan_scan_doors; plan_get lists each door in words ("gångjärn vid västra karmen, öppnar mot norr") to check.
 - {"op":"add","kind":"fixture","item":{"id":"i1","kind":"kitchen"|"stove"|"sink"|"radiator"|"exhaust"|"shaft"|"wc"|"shower"|"bath"|"plug"|"box","x":..,"y":..,"w":..,"d":..,"rotation"?:0,"phase":"existing","label"?:"..."}}  (x,y = centre)
 - {"op":"add","kind":"room","item":{"id":"r1","name":"Kök","renamed"?:"Rum","goneAfter"?:true,"at":{"x":..,"y":..},"polygon"?:[{x,y},...]}}
 - {"op":"add","kind":"dimension","item":{"id":"m1","a":{..},"b":{..},"offset":500}}
@@ -152,7 +152,7 @@ export function summarisePlan(plan: Plan): string {
   for (const o of plan.openings) {
     const w = plan.walls.find((x) => x.id === o.wallId)
     const swing = o.kind === 'door' && w ? `, ${describeDoor(w, o)}` : ''
-    lines.push(`- ${o.id}: ${o.kind} i ${o.wallId} offset ${o.offset} bredd ${o.width}${o.height ? ` höjd ${o.height}` : ''} ${o.phase}${swing}`)
+    lines.push(`- ${o.id}: ${o.kind} i ${o.wallId} offset ${o.offset} bredd ${o.width}${o.height ? ` höjd ${o.height}` : ''} ${o.phase}${swing}${o.through ? ', genomgång (rummen går ihop)' : ''}`)
   }
   lines.push(`Inredning (${plan.fixtures.length}):`)
   for (const f of plan.fixtures) lines.push(`- ${f.id}: ${f.kind} @(${f.x},${f.y}) ${f.w}×${f.d} ${f.phase}${f.label ? ` "${f.label}"` : ''}`)
