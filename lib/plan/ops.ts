@@ -1,4 +1,4 @@
-import { dist, wallDir } from './geometry'
+import { dist, wallDir, wallLength } from './geometry'
 import type { Dimension, Fixture, Note, Opening, Plan, Pt, Room, Sheet, Source, TitleBlock, Underlay, Wall } from './types'
 
 // Small, targeted edits. Claude and the editor both change a plan only
@@ -61,16 +61,29 @@ function roundItem<T>(item: T): T {
   return out as T
 }
 
-function moveVertex(plan: Plan, from: Pt, to: Pt): Plan {
-  const target = roundPt(to)
+// Openings are measured from the wall's a-end. When that end moves, its
+// openings move with it, so they stay where they were drawn (kept on the wall).
+function followA(plan: Plan, before: Wall, after: Wall): Plan {
+  const d = wallDir(before)
+  const shift = (after.a.x - before.a.x) * d.x + (after.a.y - before.a.y) * d.y
+  if (Math.abs(shift) < 0.5) return plan
+  const len = wallLength(after)
   return {
     ...plan,
-    walls: plan.walls.map((w) => ({
-      ...w,
-      a: dist(w.a, from) <= JOIN_TOLERANCE ? target : w.a,
-      b: dist(w.b, from) <= JOIN_TOLERANCE ? target : w.b,
-    })),
+    openings: plan.openings.map((o) =>
+      o.wallId !== after.id ? o : { ...o, offset: Math.round(Math.max(0, Math.min(len - o.width, o.offset - shift))) },
+    ),
   }
+}
+
+function moveVertex(plan: Plan, from: Pt, to: Pt): Plan {
+  const target = roundPt(to)
+  const walls = plan.walls.map((w) => ({
+    ...w,
+    a: dist(w.a, from) <= JOIN_TOLERANCE ? target : w.a,
+    b: dist(w.b, from) <= JOIN_TOLERANCE ? target : w.b,
+  }))
+  return plan.walls.reduce((next, before, i) => (before.a === walls[i].a ? next : followA(next, before, walls[i])), { ...plan, walls })
 }
 
 export function validatePlan(plan: Plan): string[] {
@@ -116,7 +129,10 @@ function applyOne(plan: Plan, op: Op): Plan {
       const list = (plan[key] ?? []) as Array<{ id: string }>
       if (!list.some((i) => i.id === op.id)) throw new Error(`${op.kind} ${op.id} finns inte`)
       if ('id' in op.patch && op.patch.id !== op.id) throw new Error('id kan inte ändras')
-      return { ...plan, [key]: list.map((i) => (i.id === op.id ? roundItem({ ...i, ...op.patch }) : i)) }
+      const next = { ...plan, [key]: list.map((i) => (i.id === op.id ? roundItem({ ...i, ...op.patch }) : i)) }
+      if (op.kind !== 'wall' || !('a' in op.patch)) return next
+      const before = plan.walls.find((w) => w.id === op.id)!
+      return followA(next, before, (next.walls ?? []).find((w) => w.id === op.id)!)
     }
     case 'delete': {
       const key = COLLECTION[op.kind]

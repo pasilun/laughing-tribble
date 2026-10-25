@@ -21,7 +21,8 @@ export class ConflictError extends Error {
 
 interface Backend {
   read(key: string): Promise<Buffer | null>
-  write(key: string, data: Buffer | string, contentType: string): Promise<void>
+  // createOnly: fails (returns false) instead of replacing an existing file.
+  write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }): Promise<boolean>
   keys(prefix: string): Promise<string[]>
 }
 
@@ -39,16 +40,29 @@ class FsBackend implements Backend {
       return null
     }
   }
-  async write(key: string, data: Buffer | string) {
+  async write(key: string, data: Buffer | string, _contentType: string, opts?: { createOnly?: boolean }) {
     const p = this.file(key)
     await fs.mkdir(path.dirname(p), { recursive: true })
-    await fs.writeFile(p, data)
+    // Written beside the target, then linked or renamed into place: a read never
+    // sees half a file, and a link fails if the file already exists.
+    const tmp = `${p}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
+    await fs.writeFile(tmp, data)
+    try {
+      if (opts?.createOnly) await fs.link(tmp, p)
+      else await fs.rename(tmp, p)
+      return true
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'EEXIST') return false
+      throw e
+    } finally {
+      await fs.unlink(tmp).catch(() => undefined)
+    }
   }
   async keys(prefix: string) {
     const dir = this.file(prefix)
     try {
       const entries = await fs.readdir(dir, { recursive: true, withFileTypes: true })
-      return entries.filter((e) => e.isFile()).map((e) => path.relative(this.root, path.join(e.parentPath, e.name)))
+      return entries.filter((e) => e.isFile() && !e.name.endsWith('.tmp')).map((e) => path.relative(this.root, path.join(e.parentPath, e.name)))
     } catch {
       return []
     }
@@ -62,8 +76,14 @@ class BlobBackend implements Backend {
     if (!res || res.statusCode !== 200) return null
     return Buffer.from(await new Response(res.stream).arrayBuffer())
   }
-  async write(key: string, data: Buffer | string, contentType: string) {
-    await put(key, data, { access: 'private', token: this.token, allowOverwrite: true, contentType, addRandomSuffix: false })
+  async write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }) {
+    try {
+      await put(key, data, { access: 'private', token: this.token, allowOverwrite: !opts?.createOnly, contentType, addRandomSuffix: false })
+      return true
+    } catch (e) {
+      if (opts?.createOnly && (await this.read(key))) return false
+      throw e
+    }
   }
   async keys(prefix: string) {
     const out: string[] = []
@@ -144,7 +164,9 @@ export async function saveRevision(
   if (baseRevision !== null && baseRevision !== current) throw new ConflictError(current)
   const rev: Revision = { n: current + 1, author: meta.author, message: meta.message, createdAt: new Date().toISOString() }
   if (meta.issued) rev.issued = meta.issued
-  await b.write(revKey(plan.id, rev.n), JSON.stringify({ plan, meta: rev }), 'application/json')
+  // Two saves can read the same head: only one may create the next revision.
+  const created = await b.write(revKey(plan.id, rev.n), JSON.stringify({ plan, meta: rev }), 'application/json', { createOnly: true })
+  if (!created) throw new ConflictError(rev.n)
   const next: Head = {
     revision: rev.n,
     name: plan.name,

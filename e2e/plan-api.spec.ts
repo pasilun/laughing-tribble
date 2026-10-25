@@ -54,3 +54,16 @@ test('plan revisions, conflict guard and exports', async ({ request }) => {
   const checks = await (await request.get(`/api/plans/${id}/checks`)).json()
   expect(checks.findings.some((f: { code: string }) => f.code === 'fire')).toBe(true)
 })
+
+test('two saves from the same revision at once: one is kept, the other is a conflict', async ({ request }) => {
+  const created = await (await request.post('/api/plans', { data: { name: 'Samtidig' } })).json()
+  const id = created.plan.id as string
+  const add = (n: number) => ({ op: 'add', kind: 'wall', item: { id: `v${n}`, a: { x: 0, y: n * 500 }, b: { x: 3000, y: n * 500 }, thickness: 100, phase: 'existing' } })
+  const [a, b] = await Promise.all([1, 2].map((n) => request.post(`/api/plans/${id}/ops`, { data: { baseRevision: 1, ops: [add(n)], message: `vägg ${n}` } })))
+  const statuses = [a.status(), b.status()].sort()
+  expect(statuses).toEqual([200, 409])
+  const revs = (await (await request.get(`/api/plans/${id}/revisions`)).json()).revisions as Array<{ n: number }>
+  expect(revs.map((r) => r.n)).toEqual([1, 2])
+  const head = await (await request.get(`/api/plans/${id}`)).json()
+  expect(head.plan.walls).toHaveLength(1)
+})

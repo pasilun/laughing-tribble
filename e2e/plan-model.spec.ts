@@ -3,6 +3,7 @@ import { applyOps } from '@/lib/plan/ops'
 import { demoPlan } from '@/lib/plan/demo'
 import { renderSheet, layoutSheet } from '@/lib/plan/sheet'
 import { checkPlan } from '@/lib/plan/checks'
+import type { Plan } from '@/lib/plan/types'
 
 // Pure model tests — no browser needed.
 
@@ -142,4 +143,20 @@ test('a room marked goneAfter has no label in efter', () => {
   const { plan } = applyOps(demoPlan(), [{ op: 'update', kind: 'room', id: 'r-a-kok', patch: { goneAfter: true } }])
   expect(renderSheet(plan, 'fore')).toContain('data-room="r-a-kok"')
   expect(renderSheet(plan, 'efter')).not.toContain('data-room="r-a-kok"')
+})
+
+test('ops: moving a wall start keeps its openings where they were drawn', () => {
+  const plan: Plan = {
+    ...demoPlan(),
+    walls: [{ id: 'mur', a: { x: 1000, y: 0 }, b: { x: 5000, y: 0 }, thickness: 200, phase: 'existing' }],
+    openings: [{ id: 'd', kind: 'door', wallId: 'mur', offset: 1500, width: 800, phase: 'existing' }],
+  }
+  // The start moves 300 mm west along the wall: the door keeps its place at x 2500–3300.
+  const moved = applyOps(plan, [{ op: 'update', kind: 'wall', id: 'mur', patch: { a: { x: 700, y: 0 } } }]).plan
+  const o = moved.openings[0]
+  expect(moved.walls[0].a.x + o.offset).toBe(2500)
+  expect(o.width).toBe(800)
+  // A move across the wall (no change along it) leaves the offset alone.
+  const across = applyOps(plan, [{ op: 'update', kind: 'wall', id: 'mur', patch: { a: { x: 1000, y: 100 } } }]).plan
+  expect(across.openings[0].offset).toBe(1500)
 })

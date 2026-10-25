@@ -95,7 +95,7 @@ test('select a wall, change its length and phase', async ({ page, request }) => 
   await page.getByTestId('wall-length').fill('3000')
   await page.getByTestId('wall-phase').selectOption('demolish')
   await page.getByTestId('save').click()
-  await expect(page.getByTestId('save-state')).toContainText('sparad')
+  await expect(page.getByTestId('save-state')).toContainText('rev 2 · sparad')
   const saved = await (await request.get(`/api/plans/${id}`)).json()
   const w = saved.plan.walls.find((x: { id: string }) => x.id === 'a-hall')
   expect(w.b).toEqual({ x: 3000, y: 3500 })
@@ -129,7 +129,7 @@ test('trace a room along its inner faces: corners close at the centre lines', as
   await page.getByTestId('opt-thickness').fill('100')
   for (const [x, y] of [[0, 0], [1500, 0], [1500, 1000], [0, 1000], [0, 0]]) await clickAt(page, x, y)
   await page.getByTestId('save').click()
-  await expect(page.getByTestId('save-state')).toContainText('sparad')
+  await expect(page.getByTestId('save-state')).toContainText('rev 2 · sparad')
   const saved = await (await request.get(`/api/plans/${id}`)).json()
   const walls = saved.plan.walls as Array<{ a: { x: number; y: number }; b: { x: number; y: number } }>
   expect(walls).toHaveLength(4)

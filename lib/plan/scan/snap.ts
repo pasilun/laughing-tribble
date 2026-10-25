@@ -280,20 +280,13 @@ export function snapWalls(
       if (others.some((o) => dist(o.a, orig[end]) <= 1 || dist(o.b, orig[end]) <= 1)) ops.push({ op: 'moveVertex', from: orig[end], to: w[end] })
   })
   joined.forEach((w, i) => {
-    const { wall: orig, isNew } = targets[i]
+    const { isNew } = targets[i]
     if (isNew) {
       ops.push({ op: 'add', kind: 'wall', item: w })
       return
     }
+    // Moving the a-end carries the openings with it (see ops.ts).
     ops.push({ op: 'update', kind: 'wall', id: w.id, patch: { a: w.a, b: w.b, thickness: w.thickness } })
-    // Openings are measured from the a-end: keep them where they were drawn.
-    const d = wallDir(w)
-    const shift = (orig.a.x - w.a.x) * d.x + (orig.a.y - w.a.y) * d.y
-    const newLen = wallLength(w)
-    for (const o of plan.openings.filter((x) => x.wallId === w.id)) {
-      const offset = Math.round(Math.max(0, Math.min(newLen - o.width, o.offset + shift)))
-      if (offset !== o.offset) ops.push({ op: 'update', kind: 'opening', id: o.id, patch: { offset } })
-    }
   })
   return { ops, reports, walls: joined }
 }
