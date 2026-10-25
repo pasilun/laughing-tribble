@@ -145,7 +145,7 @@ export const SCAN_TOOLS = [
         wall_ids: { type: 'array', items: { type: 'string' }, description: 'Default: all walls' },
         apply: { type: 'boolean' },
         accept: { type: 'array', items: { type: 'string' }, description: 'With apply: ids of the new openings to add (from a preview); default all. Confirmations of existing openings are always recorded.' },
-        methods: { type: 'array', items: { type: 'string', enum: ['mellanrum', 'streckad', 'dörrbåge'] }, description: 'Detectors to run: mellanrum = both faces stop, streckad = dashed face, dörrbåge = door symbol. Default auto: each is tried on the openings the plan already has, and used if it finds at least a quarter of them (with fewer than 3 known openings, all are used).' },
+        methods: { type: 'array', items: { type: 'string', enum: ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge'] }, description: 'Detectors to run: mellanrum = both faces stop, streckad = dashed face, mittstreck = centre mark across the wall (1936 plans; width estimated 800), dörrbåge = door symbol. Default auto: each is tried on the openings the plan already has, and used if it finds at least a quarter of them (with fewer than 3 known openings, all are used).' },
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
@@ -525,7 +525,7 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
         const what = item.kind === 'door' ? `dörr ${describeDoor(wall, item)}` : item.kind === 'window' ? 'fönster' : 'öppning'
         const alt = item.kind === 'opening' ? ` [dörr? ${rd.candidates.map((c) => `${c.hinge}/${c.swing} ${Math.round(c.score * 100)}%`).join(', ')}]` : ''
         const method = item.evidence?.[0]?.method ?? ''
-        const color = item.kind === 'window' ? '#2563eb' : method.includes('dörrbåge') ? '#16a34a' : method.includes('streckad') ? '#ea580c' : '#ca8a04'
+        const color = item.kind === 'window' ? '#2563eb' : method.includes('dörrbåge') ? '#16a34a' : method.includes('streckad') ? '#ea580c' : method.includes('mittstreck') ? '#db2777' : '#ca8a04'
         marks[item.id] = { label: String(lines.length + 1), color }
         previewOpenings.push(item)
         lines.push(`${lines.length + 1}. ${item.id}: ${what} i ${o.wallId}, offset ${o.offset}, bredd ${o.width} [${method}]${alt}${accepted ? '' : ' (ej vald)'}`)
@@ -537,7 +537,7 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
         marks[o.id] = { label: 'B', color: '#0891b2' }
         lines.push(`B. ${o.id}: finns, bekräftas av ${r.id} (${c.evidence.method}, offset ${c.evidence.offset} bredd ${c.evidence.width} – planen ${o.offset}/${o.width})`)
       }
-      const perMethod = ['mellanrum', 'streckad', 'dörrbåge'].map((m) => `${m} ${found.filter((o) => (o.evidence?.[0]?.method ?? '').includes(m)).length}`).join(', ')
+      const perMethod = ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge'].map((m) => `${m} ${found.filter((o) => (o.evidence?.[0]?.method ?? '').includes(m)).length}`).join(', ')
       const how = checks.map((c) => `${c.method} ${c.found}/${c.known}${c.used ? '' : ' – används inte'}`).join(', ')
       let head = `Metoder mot kända öppningar: ${how}.\n${found.length} nya öppningar (${perMethod}), ${confirms.length} bekräftade${skipped.length ? `; väggar som inte syns i ${r.id} (hoppade över): ${skipped.join(', ')}` : ''}.`
       let after = plan

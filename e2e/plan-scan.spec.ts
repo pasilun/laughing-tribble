@@ -8,7 +8,7 @@ import { detectWalls } from '@/lib/plan/scan/detect'
 import { profile } from '@/lib/plan/scan/profile'
 import type { Gray, Raster } from '@/lib/plan/scan/raster'
 import { findDoorSymbols, readDoor, readDoors } from '@/lib/plan/scan/doors'
-import { findDashed, newOpenings } from '@/lib/plan/scan/openings'
+import { findCentreMarks, findDashed, newOpenings } from '@/lib/plan/scan/openings'
 import { findWindows, windowsOnWall } from '@/lib/plan/scan/elevation'
 import { register } from '@/lib/plan/scan/register'
 import { snapWalls } from '@/lib/plan/scan/snap'
@@ -358,4 +358,26 @@ test('openings auto: only the detectors that find the known openings in this dra
   const none = newOpenings(bare.g, bare.r, truth)
   expect(none.checks.find((c) => c.method === 'dörrbåge')!.used, JSON.stringify(none.checks)).toBe(false)
   expect(none.openings.filter((o) => o.kind === 'door')).toHaveLength(0)
+})
+
+test('openings: centre marks across a wall are found, a crossing wall is not', async () => {
+  // A 4 m wall, 120 thick, 1:100/300 dpi. A centre mark (line across the
+  // wall reaching 300 mm past each face) at 1500; a crossing wall at 3000.
+  const mmPerPx = 8.467
+  const P = (mm: number) => (mm / mmPerPx).toFixed(2)
+  const lw = '2.5'
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${P(5000)}" height="${P(3000)}"><rect width="100%" height="100%" fill="#fff"/>
+    <line x1="${P(500)}" y1="${P(1440)}" x2="${P(4500)}" y2="${P(1440)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(500)}" y1="${P(1560)}" x2="${P(4500)}" y2="${P(1560)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(2000)}" y1="${P(1140)}" x2="${P(2000)}" y2="${P(1860)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(3500)}" y1="${P(100)}" x2="${P(3500)}" y2="${P(2900)}" stroke="#000" stroke-width="${lw}"/>
+  </svg>`
+  const { data, info } = await sharp(Buffer.from(svg)).grayscale().raw().toBuffer({ resolveWithObject: true })
+  const g: Gray = { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), w: info.width, h: info.height }
+  const r: Raster = { id: 's', mmPerPx, x: 0, y: 0, widthPx: info.width, heightPx: info.height, src: '', rotation: 0 }
+  const wall: Wall = { id: 'w', a: { x: 500, y: 1500 }, b: { x: 4500, y: 1500 }, thickness: 120, phase: 'existing' }
+  const found = findCentreMarks(g, r, wall)
+  expect(found).toHaveLength(1)
+  expect(Math.abs(found[0].offset + found[0].width / 2 - 1500)).toBeLessThanOrEqual(30)
+  expect(found[0].method).toContain('uppskattad')
 })

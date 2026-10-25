@@ -5,7 +5,7 @@ import type { Op } from './ops'
 import { describeDoor } from './scan/doors'
 import { handleScanTool, SCAN_TOOLS } from './scan/tools'
 import { createPlan, editPlan, loadPlan } from './service'
-import { getAsset, listPlans, listRevisions } from './store'
+import { getAsset, listPlans, listRevisions, putAsset } from './store'
 import type { Plan, View } from './types'
 
 // Claude tools for floor plans. Claude never regenerates a plan: it reads
@@ -94,7 +94,11 @@ export const PLAN_TOOLS = [
     description: 'Creates a new floor plan from a full plan JSON (walls, openings, fixtures, rooms, sheet…), e.g. one traced elsewhere or exported with plan_get include_json. Returns the new id.',
     inputSchema: {
       type: 'object',
-      properties: { name: { type: 'string' }, plan: { type: 'object' } },
+      properties: {
+        name: { type: 'string' },
+        plan: { type: 'object' },
+        copy_sources_from: { type: 'string', description: 'Plan id whose source drawings (plan.sources ids) are copied into the new plan; without it sources are dropped' },
+      },
       required: ['name', 'plan'],
     },
   },
@@ -186,8 +190,23 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     const plan = { openings: [], fixtures: [], rooms: [], dimensions: [], notes: [], ...input } as Plan
     // Sources and underlay point at another plan's files; they don't come along.
     delete plan.underlay
+    const from = typeof args.copy_sources_from === 'string' ? args.copy_sources_from : undefined
+    const wanted = from ? (plan.sources ?? []) : []
     delete plan.sources
     const res = await createPlan({ name: String(args.name ?? input.name ?? 'Planritning'), plan, author: 'claude' })
+    if (!('errors' in res) && wanted.length && from) {
+      // Copy each drawing's image into the new plan and point at it.
+      const copied = []
+      for (const src of wanted) {
+        const name = decodeURIComponent(src.src.split('/').pop() ?? '')
+        const data = await getAsset(from, name)
+        if (!data) continue
+        copied.push({ ...src, src: await putAsset(res.plan.id, name, data, 'image/png') })
+      }
+      const ops: Op[] = copied.map((item) => ({ op: 'add', kind: 'source', item }))
+      const ed = await editPlan(res.plan.id, ops, res.revision.n, 'claude', `Källritningar kopierade från ${from}`)
+      if (ed.status === 200) return { content: [text(`Importerad: ${res.plan.id}, revision ${ed.revision.n} (${copied.length} källritningar kopierade)\n${links(res.plan.id, ed.revision.n)}`)] }
+    }
     if ('errors' in res) return { content: [text(`Kunde inte importera:\n${res.errors!.join('\n')}`)], isError: true }
     return { content: [text(`Importerad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan.id, res.revision.n)}`), await preview(res.plan, 'efter', false)] }
   }

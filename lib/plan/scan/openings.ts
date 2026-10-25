@@ -167,6 +167,41 @@ export function findDashed(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: nu
   return mergeGaps(out)
 }
 
+// Opening centres drawn as a short line across the wall (the 1936 Stockholm
+// plans): ink just outside both faces, nothing running along the wall
+// beside it (so not a crossing wall), and ending within ~0.6 m (so not a
+// wall continuing). The drawing gives no width: a standard width is used,
+// marked as estimated in the method name.
+export const CENTRE_MARK_WIDTH = 800
+
+export function findCentreMarks(g: Gray, r: Raster, wall: Wall, opts: { threshold?: number; junctions?: Array<[number, number]>; width?: number } = {}): Gap[] {
+  const th = opts.threshold ?? 128
+  const width = opts.width ?? CENTRE_MARK_WIDTH
+  const d = wallDir(wall)
+  const n = leftNormal(d)
+  const len = wallLength(wall)
+  const h = wall.thickness / 2
+  const ink = (x: number, y: number) => {
+    const p = toPx(r, { x, y })
+    return dark(g, p.x, p.y, th) || dark(g, p.x + 1, p.y, th) || dark(g, p.x - 1, p.y, th) || dark(g, p.x, p.y + 1, th) || dark(g, p.x, p.y - 1, th)
+  }
+  const hits: number[] = []
+  for (let t = 150; t < len - 150; t += 10) {
+    if ((opts.junctions ?? []).some(([c, rad]) => Math.abs(t - c) < rad + 60)) continue
+    const c = along(wall, t)
+    const at = (side: number, off: number, dt = 0) => ink(c.x + n.x * side * (h + off) + d.x * dt, c.y + n.y * side * (h + off) + d.y * dt)
+    if ([1, -1].every((side) => at(side, 120) && at(side, 220) && !at(side, 170, 70) && !at(side, 170, -70) && !at(side, 750))) hits.push(t)
+  }
+  const marks: number[] = []
+  for (const t of hits) {
+    if (!marks.length || t - marks[marks.length - 1] > 60) marks.push(t)
+    else marks[marks.length - 1] = (marks[marks.length - 1] + t) / 2
+  }
+  return marks
+    .map((c) => ({ wallId: wall.id, offset: Math.round(Math.max(0, c - width / 2)), width: Math.round(Math.min(width, len)), method: 'mittstreck (bredd uppskattad)' }))
+    .filter((gp) => gp.offset + gp.width <= len)
+}
+
 // Overlapping finds (both faces, or gap and dashes) are one opening.
 function mergeGaps(gs: Gap[]): Gap[] {
   const sorted = [...gs].sort((a, b) => a.offset - b.offset)
@@ -215,7 +250,7 @@ function junctionsOn(w: Wall, plan: Plan): Array<[number, number]> {
   return out
 }
 
-export const METHODS = ['mellanrum', 'streckad', 'dörrbåge'] as const
+export const METHODS = ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge'] as const
 type Find = Gap & { hinge?: 'a' | 'b'; swing?: 'left' | 'right' }
 
 // How each method fares on the openings the plan already has (doors and
@@ -250,7 +285,7 @@ export function newOpenings(
   const raw = new Map<string, Record<string, Find[]>>()
   const walls = plan.walls.filter((w) => !ids || ids.includes(w.id) || plan.openings.some((o) => o.wallId === w.id && o.kind !== 'window'))
   for (const w of walls) {
-    const per: Record<string, Find[]> = { mellanrum: [], streckad: [], dörrbåge: [] }
+    const per: Record<string, Find[]> = { mellanrum: [], streckad: [], mittstreck: [], dörrbåge: [] }
     const fit = snapWall(g, r, w, [], { threshold, square: true })
     if (!fit.wall || !fit.report.ok) skipped.push(w.id)
     else {
@@ -260,6 +295,7 @@ export function newOpenings(
       const junctions = junctionsOn(w, plan).map(([t, rad]) => [t - shift, rad] as [number, number])
       per.mellanrum = findGaps(g, r, drawn, { threshold }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
       per.streckad = findDashed(g, r, drawn, { threshold, junctions }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
+      per.mittstreck = findCentreMarks(g, r, drawn, { threshold, junctions }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
     }
     per.dörrbåge = findDoorSymbols(g, r, w, { threshold }).map((d) => ({ wallId: w.id, offset: d.offset, width: d.width, hinge: d.hinge, swing: d.swing, method: 'dörrbåge' }))
     raw.set(w.id, per)
@@ -281,6 +317,9 @@ export function newOpenings(
     const per = raw.get(w.id)!
     const existing = plan.openings.filter((o) => o.wallId === w.id)
     const finds: Find[] = mergeGaps([...(isUsed('mellanrum') ? per.mellanrum : []), ...(isUsed('streckad') ? per.streckad : [])])
+    // A centre mark only where nothing better shows the opening.
+    for (const m of isUsed('mittstreck') ? per.mittstreck : [])
+      if (!finds.some((f) => Math.min(f.offset + f.width, m.offset + m.width) - Math.max(f.offset, m.offset) > 0)) finds.push(m)
     // A door symbol gives the opening's extent and swing.
     for (const dr of isUsed('dörrbåge') ? per.dörrbåge : []) {
       const same = finds.findIndex((f) => Math.min(f.offset + f.width, dr.offset + dr.width) - Math.max(f.offset, dr.offset) > 0.3 * dr.width)

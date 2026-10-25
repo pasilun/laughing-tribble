@@ -111,6 +111,12 @@ handlers against the local store:
   test picks candidates and the leaf+arc test decides. This finds doors in
   walls that can't be located in the drawing (mostly door, or drawn more
   than 0.15 m off), and gives their width and swing.
+- Centre marks (`mittstreck`): the 1936 floor plans mark each opening
+  only by a short line across the wall at its centre. That gives the
+  position, but the width is set to a standard 800 mm and labelled
+  "bredd uppskattad" (width estimated).
+- `plan_import` with `copy_sources_from` copies the source drawings along,
+  for branching a plan (e.g. a city-drawings-only version).
 - Method selection: `plan_scan_openings` runs every detector, tests each
   on the plan's known openings (doors and passages), and by default uses
   those that find at least a quarter of them. Drawings use one or two
