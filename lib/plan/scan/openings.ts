@@ -325,6 +325,14 @@ export function newOpenings(
   const isUsed = (m: string) => checks.find((c) => c.method === m)?.used
   // 3. Merge the used methods per wall, compare with the plan.
   const out: Opening[] = []
+  // Ids not used by the plan or by earlier finds.
+  const taken = new Set(plan.openings.map((o) => o.id))
+  const freeId = (wallId: string) => {
+    let k = 1
+    while (taken.has(`o-${wallId}-${k}`)) k++
+    taken.add(`o-${wallId}-${k}`)
+    return `o-${wallId}-${k}`
+  }
   const confirms: Array<{ id: string; evidence: Evidence }> = []
   for (const w of walls) {
     if (ids && !ids.includes(w.id)) continue
@@ -357,7 +365,7 @@ export function newOpenings(
         continue
       }
       out.push({
-        id: `o-${w.id}-${out.filter((o) => o.wallId === w.id).length + 1}`,
+        id: freeId(w.id),
         wallId: w.id,
         kind: gp.hinge ? 'door' : 'opening',
         offset,
