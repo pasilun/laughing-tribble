@@ -374,17 +374,37 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
 
     if (name === 'plan_scan_openings') {
       const ids = Array.isArray(args.wall_ids) ? args.wall_ids.map(String) : undefined
-      const found = newOpenings(g, r, plan, ids, threshold)
+      const { openings: found, skipped, located } = newOpenings(g, r, plan, ids, threshold)
+      // Facade walls (on the plan's outline) have windows, not passages.
+      const xs = plan.walls.flatMap((w) => [w.a.x, w.b.x])
+      const ys = plan.walls.flatMap((w) => [w.a.y, w.b.y])
+      const edge = (w: (typeof plan.walls)[number]) => {
+        const near = (v: number, e: number) => Math.abs(v - e) <= w.thickness
+        const minX = Math.min(...xs)
+        const maxX = Math.max(...xs)
+        const minY = Math.min(...ys)
+        const maxY = Math.max(...ys)
+        return (near(w.a.x, minX) && near(w.b.x, minX)) || (near(w.a.x, maxX) && near(w.b.x, maxX)) || (near(w.a.y, minY) && near(w.b.y, minY)) || (near(w.a.y, maxY) && near(w.b.y, maxY))
+      }
       const lines: string[] = []
       const ops: Op[] = []
       for (const o of found) {
         const wall = plan.walls.find((w) => w.id === o.wallId)!
-        const rd = readDoor(g, r, wall, { ...o, kind: 'door' }, threshold)
-        const item: typeof o = rd.best && rd.confident ? { ...o, kind: 'door', hinge: rd.best.hinge, swing: rd.best.swing } : o
+        const drawn = located.get(wall) ?? wall
+        // The door symbol sits on the wall as drawn in the source.
+        const shift = (drawn.a.x - wall.a.x) * (wall.b.x - wall.a.x) / wallLength(wall) + (drawn.a.y - wall.a.y) * (wall.b.y - wall.a.y) / wallLength(wall)
+        const rd = readDoor(g, r, drawn, { ...o, offset: o.offset - shift, kind: 'door' }, threshold)
+        const item: typeof o = edge(wall)
+          ? { ...o, kind: 'window' }
+          : rd.best && rd.confident
+            ? { ...o, kind: 'door', hinge: rd.best.hinge, swing: rd.best.swing }
+            : o
         ops.push({ op: 'add', kind: 'opening', item })
-        lines.push(`- ${item.id}: ${item.kind === 'door' ? `dörr ${describeDoor(wall, item)}` : 'öppning'} i ${o.wallId}, offset ${o.offset}, bredd ${o.width}${item.kind === 'door' ? '' : ` [dörr? ${rd.candidates.map((c) => `${c.hinge}/${c.swing} ${Math.round(c.score * 100)}%`).join(', ')}]`}`)
+        const what = item.kind === 'door' ? `dörr ${describeDoor(wall, item)}` : item.kind === 'window' ? 'fönster' : 'öppning'
+        const alt = item.kind === 'opening' ? ` [dörr? ${rd.candidates.map((c) => `${c.hinge}/${c.swing} ${Math.round(c.score * 100)}%`).join(', ')}]` : ''
+        lines.push(`- ${item.id}: ${what} i ${o.wallId}, offset ${o.offset}, bredd ${o.width}${alt}`)
       }
-      let head = `${found.length} öppningar hittade (fönster ingår inte).`
+      let head = `${found.length} öppningar hittade${skipped.length ? `; väggar som inte syns i ${r.id} (hoppade över): ${skipped.join(', ')}` : ''}.`
       let after = plan
       if (args.apply && ops.length) {
         const saved = await save(planId, args.base_revision, ops, `Öppningar och dörrar från ${r.id}`)

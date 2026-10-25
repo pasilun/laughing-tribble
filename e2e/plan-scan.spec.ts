@@ -241,7 +241,7 @@ test('openings: gaps in drawn walls become openings, then doors with their swing
   const truth = demoPlan()
   const { g, r } = await doorScan(truth, 5, 60, { x: 0, y: 0 })
   const bare: Plan = { ...truth, openings: [] }
-  const found = newOpenings(g, r, bare)
+  const found = newOpenings(g, r, bare).openings
   for (const o of truth.openings.filter((x) => x.kind !== 'window')) {
     const hit = found.find((f) => f.wallId === o.wallId && Math.abs(f.offset - o.offset) <= 30 && Math.abs(f.width - o.width) <= 60)
     expect(hit, `${o.id} ${JSON.stringify(found.filter((f) => f.wallId === o.wallId))}`).toBeTruthy()
