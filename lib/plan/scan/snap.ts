@@ -16,6 +16,24 @@ export type SnapOptions = {
   threshold?: number       // grey level counted as ink
   keepThickness?: boolean  // only move, don't change thickness
   joinMm?: number          // ends this close to another wall are joined
+  square?: boolean         // walls within SQUARE_DEG of the axes are made exactly straight (default on)
+}
+
+// Scans give noisy angles on short walls (fixtures in the way) and are often
+// slightly skewed; real walls near the axes are meant to be on them.
+const SQUARE_DEG = 3
+
+function squared(a: Pt, b: Pt): { a: Pt; b: Pt } {
+  const deg = (Math.atan2(Math.abs(b.y - a.y), Math.abs(b.x - a.x)) * 180) / Math.PI
+  if (deg <= SQUARE_DEG) {
+    const y = (a.y + b.y) / 2
+    return { a: { x: a.x, y }, b: { x: b.x, y } }
+  }
+  if (deg >= 90 - SQUARE_DEG) {
+    const x = (a.x + b.x) / 2
+    return { a: { x, y: a.y }, b: { x, y: b.y } }
+  }
+  return { a, b }
 }
 
 export type SnapReport = {
@@ -118,8 +136,8 @@ export function snapWall(g: Gray, r: Raster, wall: Wall, skip: Array<[number, nu
 
   const offA = fit.a
   const offB = fit.a + fit.b * len
-  const a = { x: wall.a.x + n.x * offA, y: wall.a.y + n.y * offA }
-  const b = { x: wall.b.x + n.x * offB, y: wall.b.y + n.y * offB }
+  const fitted = { a: { x: wall.a.x + n.x * offA, y: wall.a.y + n.y * offA }, b: { x: wall.b.x + n.x * offB, y: wall.b.y + n.y * offB } }
+  const { a, b } = opts.square === false ? fitted : squared(fitted.a, fitted.b)
   const confidence = inliers.length / picks.length
   const report: SnapReport = {
     id: wall.id,

@@ -122,6 +122,7 @@ export const SCAN_TOOLS = [
         message: { type: 'string' },
         search_mm: { type: 'number' },
         keep_thickness: { type: 'boolean' },
+        square: { type: 'boolean', description: 'Make walls within 3° of horizontal/vertical exactly straight (default true)' },
         join_mm: { type: 'number', description: 'default 250' },
         threshold: { type: 'number' },
       },
@@ -348,6 +349,7 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
       const res = snapWalls(g, r, plan, { ids, add }, {
         searchMm: typeof args.search_mm === 'number' ? args.search_mm : undefined,
         keepThickness: !!args.keep_thickness,
+        square: args.square !== false,
         joinMm: typeof args.join_mm === 'number' ? args.join_mm : undefined,
         threshold,
       })

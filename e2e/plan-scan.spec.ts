@@ -106,6 +106,21 @@ test('snap joins corners at the centreline intersection', async () => {
   expect(Math.abs(n.b.y)).toBeLessThanOrEqual(10)
 })
 
+test('snap squares near-axis walls, and leaves them be when asked', async () => {
+  const truth = demoPlan()
+  // The drawing itself slightly askew: every wall tilted 1.2°.
+  const k = Math.tan((1.2 * Math.PI) / 180)
+  const tilt = (p: { x: number; y: number }) => ({ x: p.x + k * p.y, y: p.y - k * p.x })
+  const askew: Plan = { ...truth, walls: truth.walls.map((w) => ({ ...w, a: tilt(w.a), b: tilt(w.b) })) }
+  const { g, r } = await scan(askew, 5, 'filled')
+  const rough: Plan = { ...askew, walls: askew.walls.map(nudge) }
+  const ids = ['lgh-grans', 'b-kok']
+  const sq = snapWalls(g, r, rough, { ids }, { joinMm: 0 })
+  for (const w of sq.walls) expect(Math.min(Math.abs(w.a.x - w.b.x), Math.abs(w.a.y - w.b.y)), w.id).toBe(0)
+  const raw = snapWalls(g, r, rough, { ids }, { joinMm: 0, square: false })
+  for (const w of raw.walls) expect(Math.min(Math.abs(w.a.x - w.b.x), Math.abs(w.a.y - w.b.y)), w.id).toBeGreaterThan(50)
+})
+
 test('detect proposes the long walls of a scan', async () => {
   const truth = demoPlan()
   for (const style of ['filled', 'outline'] as const) {
