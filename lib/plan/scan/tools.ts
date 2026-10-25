@@ -145,6 +145,7 @@ export const SCAN_TOOLS = [
         wall_ids: { type: 'array', items: { type: 'string' }, description: 'Default: all walls' },
         apply: { type: 'boolean' },
         accept: { type: 'array', items: { type: 'string' }, description: 'With apply: ids of the new openings to add (from a preview); default all. Confirmations of existing openings are always recorded.' },
+        methods: { type: 'array', items: { type: 'string', enum: ['mellanrum', 'streckad', 'dörrbåge'] }, description: 'Detectors to run: mellanrum = both faces stop, streckad = dashed face, dörrbåge = door symbol. Default auto: each is tried on the openings the plan already has, and used if it finds at least a quarter of them (with fewer than 3 known openings, all are used).' },
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
@@ -495,11 +496,17 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
 
     if (name === 'plan_scan_openings') {
       const ids = Array.isArray(args.wall_ids) ? args.wall_ids.map(String) : undefined
-      const { openings: found, confirms, skipped, located } = newOpenings(g, r, plan, ids, threshold)
+      const methods = Array.isArray(args.methods) && args.methods.length ? args.methods.map(String) : 'auto'
+      const { openings: found, confirms, skipped, located, checks } = newOpenings(g, r, plan, ids, threshold, methods)
       // Openings in facade walls are windows.
       const edge = (w: (typeof plan.walls)[number]) => !!w.exterior
       const lines: string[] = []
       const ops: Op[] = []
+      // Review image: every find numbered and coloured by how it was found
+      // (green door symbol, orange dashed face, yellow gap, blue window);
+      // confirmations of existing openings in teal.
+      const marks: Record<string, { label: string; color: string }> = {}
+      const previewOpenings: typeof plan.openings = []
       for (const o of found) {
         const wall = plan.walls.find((w) => w.id === o.wallId)!
         const drawn = located.get(wall) ?? wall
@@ -517,15 +524,22 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
         if (accepted) ops.push({ op: 'add', kind: 'opening', item })
         const what = item.kind === 'door' ? `dörr ${describeDoor(wall, item)}` : item.kind === 'window' ? 'fönster' : 'öppning'
         const alt = item.kind === 'opening' ? ` [dörr? ${rd.candidates.map((c) => `${c.hinge}/${c.swing} ${Math.round(c.score * 100)}%`).join(', ')}]` : ''
-        lines.push(`- ${item.id}: ${what} i ${o.wallId}, offset ${o.offset}, bredd ${o.width}${alt}${accepted ? '' : ' (ej vald)'}`)
+        const method = item.evidence?.[0]?.method ?? ''
+        const color = item.kind === 'window' ? '#2563eb' : method.includes('dörrbåge') ? '#16a34a' : method.includes('streckad') ? '#ea580c' : '#ca8a04'
+        marks[item.id] = { label: String(lines.length + 1), color }
+        previewOpenings.push(item)
+        lines.push(`${lines.length + 1}. ${item.id}: ${what} i ${o.wallId}, offset ${o.offset}, bredd ${o.width} [${method}]${alt}${accepted ? '' : ' (ej vald)'}`)
       }
       // Existing openings this drawing also shows: their evidence grows.
       for (const c of confirms) {
         const o = plan.openings.find((q) => q.id === c.id)!
         ops.push({ op: 'update', kind: 'opening', id: o.id, patch: { evidence: [...(o.evidence ?? []), c.evidence] } })
-        lines.push(`- ${o.id}: finns, bekräftas av ${r.id} (${c.evidence.method}, offset ${c.evidence.offset} bredd ${c.evidence.width} – planen ${o.offset}/${o.width})`)
+        marks[o.id] = { label: 'B', color: '#0891b2' }
+        lines.push(`B. ${o.id}: finns, bekräftas av ${r.id} (${c.evidence.method}, offset ${c.evidence.offset} bredd ${c.evidence.width} – planen ${o.offset}/${o.width})`)
       }
-      let head = `${found.length} nya öppningar, ${confirms.length} bekräftade${skipped.length ? `; väggar som inte syns i ${r.id} (hoppade över): ${skipped.join(', ')}` : ''}.`
+      const perMethod = ['mellanrum', 'streckad', 'dörrbåge'].map((m) => `${m} ${found.filter((o) => (o.evidence?.[0]?.method ?? '').includes(m)).length}`).join(', ')
+      const how = checks.map((c) => `${c.method} ${c.found}/${c.known}${c.used ? '' : ' – används inte'}`).join(', ')
+      let head = `Metoder mot kända öppningar: ${how}.\n${found.length} nya öppningar (${perMethod}), ${confirms.length} bekräftade${skipped.length ? `; väggar som inte syns i ${r.id} (hoppade över): ${skipped.join(', ')}` : ''}.`
       let after = plan
       if (args.apply && ops.length) {
         const saved = await save(planId, args.base_revision, ops, `Öppningar och dörrar från ${r.id}`)
@@ -534,7 +548,9 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
         after = saved.plan
       }
       const content: Content = [text(`${head}\n${lines.join('\n')}`)]
-      if (after.walls.length) content.push(image((await scanView(planId, after, r, around(after.walls, 400), { overlay: true, view: 'fore' })).png))
+      // Preview: the plan with the unsaved finds drawn in, numbered.
+      const shown = args.apply ? after : { ...plan, openings: [...plan.openings, ...previewOpenings] }
+      if (shown.walls.length) content.push(image((await scanView(planId, shown, r, around(shown.walls, 400), { overlay: true, view: 'fore', marks })).png))
       return { content }
     }
 

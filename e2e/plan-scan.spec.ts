@@ -242,7 +242,7 @@ test('openings: gaps in drawn walls become openings, then doors with their swing
   const truth = demoPlan()
   const { g, r } = await doorScan(truth, 5, 60, { x: 0, y: 0 })
   const bare: Plan = { ...truth, openings: [] }
-  const found = newOpenings(g, r, bare).openings
+  const found = newOpenings(g, r, bare, undefined, undefined, ['mellanrum', 'streckad', 'dörrbåge']).openings
   for (const o of truth.openings.filter((x) => x.kind !== 'window')) {
     const hit = found.find((f) => f.wallId === o.wallId && Math.abs(f.offset - o.offset) <= 30 && Math.abs(f.width - o.width) <= 60)
     expect(hit, `${o.id} ${JSON.stringify(found.filter((f) => f.wallId === o.wallId))}`).toBeTruthy()
@@ -343,4 +343,19 @@ test('door symbols: found along the plan line even with the drawing 150 mm off',
     expect(hit, `${o.id}: ${JSON.stringify(found)}`).toBeTruthy()
     expect(`${hit!.hinge}/${hit!.swing}`, o.id).toBe(`${o.hinge ?? 'a'}/${o.swing ?? 'left'}`)
   }
+})
+
+test('openings auto: only the detectors that find the known openings in this drawing are used', async () => {
+  const truth = demoPlan()
+  // Doors drawn as arcs: the door-symbol detector finds the known doors.
+  const { g, r } = await doorScan(truth, 5, 60, { x: 0, y: 0 })
+  const res = newOpenings(g, r, truth)
+  const arc = res.checks.find((c) => c.method === 'dörrbåge')!
+  expect(arc.used, JSON.stringify(res.checks)).toBe(true)
+  // Walls only, no door marks at all: nothing finds the known doors, so
+  // nothing is used and no noise comes out.
+  const bare = await scan(truth, 5, 'outline')
+  const none = newOpenings(bare.g, bare.r, truth)
+  expect(none.checks.find((c) => c.method === 'dörrbåge')!.used, JSON.stringify(none.checks)).toBe(false)
+  expect(none.openings.filter((o) => o.kind === 'door')).toHaveLength(0)
 })

@@ -18,6 +18,8 @@ export type ViewOptions = {
   overlay?: boolean    // draw the plan's walls and openings on top
   maxPx?: number       // output size (longest side)
   view?: 'fore' | 'efter'
+  // Openings to point out (review images): numbered label and colour by id.
+  marks?: Record<string, { label: string; color: string }>
 }
 
 export async function scanView(planId: string, plan: Plan, r: Raster, rect: Rect, opts: ViewOptions = {}): Promise<{ png: Buffer; scale: number }> {
@@ -109,7 +111,13 @@ function overlaySvg(plan: Plan, rect: Rect, k: number, w: number, h: number, opt
       const d = { x: (wall.b.x - wall.a.x) / len, y: (wall.b.y - wall.a.y) / len }
       const s = P({ x: wall.a.x + d.x * o.offset, y: wall.a.y + d.y * o.offset })
       const e = P({ x: wall.a.x + d.x * (o.offset + o.width), y: wall.a.y + d.y * (o.offset + o.width) })
-      parts.push(`<line x1="${s.x}" y1="${s.y}" x2="${e.x}" y2="${e.y}" stroke="#7c3aed" stroke-width="4" stroke-opacity="0.8"/>`)
+      const mark = opts.marks?.[o.id]
+      parts.push(`<line x1="${s.x}" y1="${s.y}" x2="${e.x}" y2="${e.y}" stroke="${mark?.color ?? '#7c3aed'}" stroke-width="${mark ? 7 : 4}" stroke-opacity="0.85"/>`)
+      if (mark) {
+        const mx = (s.x + e.x) / 2
+        const my = (s.y + e.y) / 2
+        parts.push(`<circle cx="${mx}" cy="${my}" r="11" fill="${mark.color}"/><text x="${mx}" y="${my + 4}" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">${mark.label}</text>`)
+      }
       if (o.kind === 'door') {
         // Leaf and swing arc as the sheet draws them, to compare with the source.
         const n = { x: d.y, y: -d.x }

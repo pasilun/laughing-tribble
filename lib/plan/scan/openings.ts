@@ -215,30 +215,42 @@ function junctionsOn(w: Wall, plan: Plan): Array<[number, number]> {
   return out
 }
 
+export const METHODS = ['mellanrum', 'streckad', 'dörrbåge'] as const
+type Find = Gap & { hinge?: 'a' | 'b'; swing?: 'left' | 'right' }
+
+// How each method fares on the openings the plan already has (doors and
+// passages; windows are read from facades): how many it finds. Drawings
+// use one or two conventions, so a method that finds (almost) none of the
+// known openings in a drawing only finds noise there.
+export type MethodCheck = { method: string; found: number; known: number; used: boolean }
+
 // Openings the source shows, against the plan: new ones (with evidence),
-// found as gaps, dashed faces or door symbols,
-// and confirmations of existing ones (evidence to add to them). The source
-// may draw a wall a little off the plan's line (another drawing, measured
-// differently): each wall is first located in the source with the snap fit,
-// gaps are read along that line, and walls the source doesn't show are
-// skipped rather than read as one long gap.
+// found as gaps, dashed faces or door symbols, and confirmations of
+// existing ones (evidence to add to them). The source may draw a wall a
+// little off the plan's line (another drawing, measured differently): each
+// wall is first located in the source with the snap fit, gaps are read
+// along that line, and walls the source doesn't show are skipped rather
+// than read as one long gap. Door symbols are searched along the plan's
+// line, so they are found in walls that can't be located too.
+//
+// methods: which detectors to use; 'auto' (default) tests each on the
+// plan's known openings and uses those that find at least a quarter of
+// them (old drawings leave WC and closet doors out, so not more).
 export function newOpenings(
   g: Gray,
   r: Raster,
   plan: Plan,
   ids?: string[],
   threshold?: number,
-): { openings: Opening[]; confirms: Array<{ id: string; evidence: Evidence }>; skipped: string[]; located: Map<Wall, Wall> } {
-  const out: Opening[] = []
-  const confirms: Array<{ id: string; evidence: Evidence }> = []
+  methods: string[] | 'auto' = 'auto',
+): { openings: Opening[]; confirms: Array<{ id: string; evidence: Evidence }>; skipped: string[]; located: Map<Wall, Wall>; checks: MethodCheck[] } {
   const skipped: string[] = []
   const located = new Map<Wall, Wall>()
-  for (const w of plan.walls) {
-    if (ids && !ids.includes(w.id)) continue
-    const existing = plan.openings.filter((o) => o.wallId === w.id)
-    // Gaps and dashes along the wall as drawn in the source (when it can be
-    // located), in plan offsets.
-    const finds: Array<Gap & { hinge?: 'a' | 'b'; swing?: 'left' | 'right' }> = []
+  // 1. Every method on every wall, kept apart.
+  const raw = new Map<string, Record<string, Find[]>>()
+  const walls = plan.walls.filter((w) => !ids || ids.includes(w.id) || plan.openings.some((o) => o.wallId === w.id && o.kind !== 'window'))
+  for (const w of walls) {
+    const per: Record<string, Find[]> = { mellanrum: [], streckad: [], dörrbåge: [] }
     const fit = snapWall(g, r, w, [], { threshold, square: true })
     if (!fit.wall || !fit.report.ok) skipped.push(w.id)
     else {
@@ -246,16 +258,34 @@ export function newOpenings(
       located.set(w, drawn)
       const shift = shiftOf(w, drawn)
       const junctions = junctionsOn(w, plan).map(([t, rad]) => [t - shift, rad] as [number, number])
-      for (const gp of mergeGaps([...findGaps(g, r, drawn, { threshold }), ...findDashed(g, r, drawn, { threshold, junctions })]))
-        finds.push({ ...gp, offset: Math.round(gp.offset + shift) })
+      per.mellanrum = findGaps(g, r, drawn, { threshold }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
+      per.streckad = findDashed(g, r, drawn, { threshold, junctions }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
     }
-    // Door symbols along the plan's line, whether or not the wall was
-    // located: a door found there gives the opening's extent and swing.
-    for (const dr of findDoorSymbols(g, r, w, { threshold })) {
+    per.dörrbåge = findDoorSymbols(g, r, w, { threshold }).map((d) => ({ wallId: w.id, offset: d.offset, width: d.width, hinge: d.hinge, swing: d.swing, method: 'dörrbåge' }))
+    raw.set(w.id, per)
+  }
+  // 2. Which methods this drawing answers to.
+  const known = plan.openings.filter((o) => o.kind !== 'window' && raw.has(o.wallId))
+  const hitsKnown = (f: Find, o: Opening) => f.wallId === o.wallId && Math.min(f.offset + f.width, o.offset + o.width) - Math.max(f.offset, o.offset) >= 0.5 * Math.min(f.width, o.width)
+  const checks: MethodCheck[] = METHODS.map((m) => {
+    const found = known.filter((o) => (raw.get(o.wallId)?.[m] ?? []).some((f) => hitsKnown(f, o))).length
+    const used = methods === 'auto' ? known.length < 3 || found >= Math.max(2, known.length / 4) : methods.includes(m)
+    return { method: m, found, known: known.length, used }
+  })
+  const isUsed = (m: string) => checks.find((c) => c.method === m)?.used
+  // 3. Merge the used methods per wall, compare with the plan.
+  const out: Opening[] = []
+  const confirms: Array<{ id: string; evidence: Evidence }> = []
+  for (const w of walls) {
+    if (ids && !ids.includes(w.id)) continue
+    const per = raw.get(w.id)!
+    const existing = plan.openings.filter((o) => o.wallId === w.id)
+    const finds: Find[] = mergeGaps([...(isUsed('mellanrum') ? per.mellanrum : []), ...(isUsed('streckad') ? per.streckad : [])])
+    // A door symbol gives the opening's extent and swing.
+    for (const dr of isUsed('dörrbåge') ? per.dörrbåge : []) {
       const same = finds.findIndex((f) => Math.min(f.offset + f.width, dr.offset + dr.width) - Math.max(f.offset, dr.offset) > 0.3 * dr.width)
-      const door = { wallId: w.id, offset: dr.offset, width: dr.width, hinge: dr.hinge, swing: dr.swing }
-      if (same >= 0) finds[same] = { ...door, method: `${finds[same].method}+dörrbåge` }
-      else finds.push({ ...door, method: 'dörrbåge' })
+      if (same >= 0) finds[same] = { ...dr, method: `${finds[same].method}+dörrbåge` }
+      else finds.push(dr)
     }
     for (const gp of finds) {
       const offset = gp.offset
@@ -264,17 +294,19 @@ export function newOpenings(
       const ov = (o: Opening) => Math.min(o.offset + o.width, offset + gp.width) - Math.max(o.offset, offset)
       const hit = existing.find((o) => ov(o) > 0)
       if (hit) {
+        // Plan drawings show windows as lines across the wall, not gaps:
+        // a find there is no evidence for the window (facades are).
+        if (hit.kind === 'window') continue
         // Evidence only when it is the same opening: overlapping by at least
         // half of the larger one (not a long merged find spanning several).
         const same = ov(hit) >= 0.5 * Math.max(hit.width, gp.width)
         if (same && !hit.evidence?.some((e) => e.source === r.id)) confirms.push({ id: hit.id, evidence })
         continue
       }
-      const kind = gp.hinge ? 'door' : 'opening'
       out.push({
         id: `o-${w.id}-${out.filter((o) => o.wallId === w.id).length + 1}`,
         wallId: w.id,
-        kind,
+        kind: gp.hinge ? 'door' : 'opening',
         offset,
         width: gp.width,
         phase: 'existing',
@@ -283,7 +315,7 @@ export function newOpenings(
       })
     }
   }
-  return { openings: out, confirms, skipped, located }
+  return { openings: out, confirms, skipped: skipped.filter((id) => !ids || ids.includes(id)), located, checks }
 }
 
 // Whether the source shows this stretch of wall as solid (no gap or dashes

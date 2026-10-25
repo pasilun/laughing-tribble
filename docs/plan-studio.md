@@ -111,6 +111,15 @@ handlers against the local store:
   test picks candidates and the leaf+arc test decides. This finds doors in
   walls that can't be located in the drawing (mostly door, or drawn more
   than 0.15 m off), and gives their width and swing.
+- Method selection: `plan_scan_openings` runs every detector, tests each
+  on the plan's known openings (doors and passages), and by default uses
+  those that find at least a quarter of them. Drawings use one or two
+  conventions, so a method that finds no known openings in a drawing only
+  finds noise there. On Gnejsen: the 1936 drainage drawing → dashed only;
+  the owner's drawing → gaps and door symbols; the 1999 A00:24 → none. The
+  preview is a numbered review image: green = door symbol, orange =
+  dashed, yellow = gap, blue = window, teal B = confirms an existing
+  opening.
 - `plan_openings_report`: every opening with its evidence (which drawing,
   which method, which position), the spread between the drawings, and
   conflicts. A conflict is an opening that a current survey (source role
