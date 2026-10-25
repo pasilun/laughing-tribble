@@ -17,6 +17,7 @@ export type SnapOptions = {
   keepThickness?: boolean  // only move, don't change thickness
   joinMm?: number          // ends this close to another wall are joined
   square?: boolean         // walls within SQUARE_DEG of the axes are made exactly straight (default on)
+  priorThickness?: number  // thickness to prefer instead of the wall's current one (which may be a bad first guess)
 }
 
 // Scans give noisy angles on short walls (fixtures in the way) and are often
@@ -117,7 +118,7 @@ export function snapWall(g: Gray, r: Raster, wall: Wall, skip: Array<[number, nu
     const c = { x: wall.a.x + d.x * t, y: wall.a.y + d.y * t }
     const from = { x: c.x - n.x * search, y: c.y - n.y * search }
     const to = { x: c.x + n.x * search, y: c.y + n.y * search }
-    const best = candidates(profile(g, r, from, to, opts.threshold).runs, search, wall.thickness)[0]
+    const best = candidates(profile(g, r, from, to, opts.threshold).runs, search, opts.priorThickness ?? wall.thickness)[0]
     // Section coordinate: + towards the left normal, 0 on the rough line.
     if (best && best.score < 1.2) sections.push({ t, centre: best.centre - search, width: best.width })
   }
@@ -150,6 +151,43 @@ export function snapWall(g: Gray, r: Raster, wall: Wall, skip: Array<[number, nu
     rmsMm: Math.round(rms * 10) / 10,
   }
   if (!report.ok) report.note = 'osäker – få tvärsnitt stämmer, kontrollera i bilden'
+  const t = opts.keepThickness ? wall.thickness : Math.round(thickness / 5) * 5
+  return { wall: { ...wall, a, b, thickness: t }, report }
+}
+
+// The same wall fitted in several drawings of the floor: each drawing's
+// pen and scan blur differ, so the median of their positions and
+// thicknesses is steadier than any one of them.
+export function snapWallConsensus(srcs: Array<{ g: Gray; r: Raster }>, wall: Wall, skip: Array<[number, number]>, opts: SnapOptions = {}): { wall?: Wall; report: SnapReport } {
+  const runs = srcs.map(({ g, r }) => ({ id: r.id, ...snapWall(g, r, wall, skip, opts) }))
+  // A fit tilted away from the others caught something else (a fixture, a
+  // neighbouring line) in that drawing.
+  const fits = runs.filter((x) => x.report.ok && x.wall)
+  const tilt = fits.length ? median(fits.map((x) => x.report.angleDeg)) : 0
+  const ok = fits.filter((x) => Math.abs(x.report.angleDeg - tilt) <= 1)
+  const per = runs.map((x) => `${x.id} ${ok.includes(x) ? x.report.thicknessMm : '–'}`).join(', ')
+  if (ok.length < Math.min(2, srcs.length)) {
+    const report = ok[0]?.report ?? runs[0].report
+    return { report: { ...report, id: wall.id, ok: false, note: `för få ritningar visar väggen (${per})` } }
+  }
+  const n = leftNormal(wallDir(wall))
+  const off = (p: Pt, q: Pt) => (q.x - p.x) * n.x + (q.y - p.y) * n.y
+  const offA = median(ok.map((x) => off(wall.a, x.wall!.a)))
+  const offB = median(ok.map((x) => off(wall.b, x.wall!.b)))
+  const thickness = median(ok.map((x) => x.report.thicknessMm))
+  const fitted = { a: { x: wall.a.x + n.x * offA, y: wall.a.y + n.y * offA }, b: { x: wall.b.x + n.x * offB, y: wall.b.y + n.y * offB } }
+  const { a, b } = opts.square === false ? fitted : squared(fitted.a, fitted.b)
+  const report: SnapReport = {
+    id: wall.id,
+    ok: true,
+    confidence: Math.round(median(ok.map((x) => x.report.confidence)) * 100) / 100,
+    sections: ok.reduce((t, x) => t + x.report.sections, 0),
+    shiftMm: Math.round(Math.max(Math.abs(offA), Math.abs(offB))),
+    angleDeg: Math.round((Math.atan2(offB - offA, wallLength(wall)) * 180) / Math.PI * 100) / 100,
+    thicknessMm: Math.round(thickness),
+    rmsMm: Math.round(median(ok.map((x) => x.report.rmsMm)) * 10) / 10,
+    note: `median av ${ok.length} ritningar (tj ${per})`,
+  }
   const t = opts.keepThickness ? wall.thickness : Math.round(thickness / 5) * 5
   return { wall: { ...wall, a, b, thickness: t }, report }
 }
@@ -196,12 +234,14 @@ function rounded(w: Wall): Wall {
 
 // Snaps existing walls (by id) and/or new rough walls, joins their ends and
 // returns the ops that apply the result, plus a report per wall.
+// With more drawings in `also`, each wall is the median over all of them.
 export function snapWalls(
   g: Gray,
   r: Raster,
   plan: Plan,
   input: { ids?: string[]; add?: Wall[] },
   opts: SnapOptions = {},
+  also: Array<{ g: Gray; r: Raster }> = [],
 ): { ops: Op[]; reports: SnapReport[]; walls: Wall[] } {
   const reports: SnapReport[] = []
   const snapped: Wall[] = []
@@ -220,7 +260,7 @@ export function snapWalls(
     const skip = plan.openings
       .filter((o) => o.wallId === wall.id)
       .map((o) => [o.offset, o.offset + o.width] as [number, number])
-    const res = snapWall(g, r, wall, skip, opts)
+    const res = also.length ? snapWallConsensus([{ g, r }, ...also], wall, skip, opts) : snapWall(g, r, wall, skip, opts)
     reports.push(res.report)
     // An unsure fit still joins, but keeps its rough position.
     snapped.push(res.wall && res.report.ok ? res.wall : wall)

@@ -1,4 +1,5 @@
 import { checkPlan } from './checks'
+import { comparePlans } from './compare'
 import { sheetPng } from './export'
 import { wallLength } from './geometry'
 import type { Op } from './ops'
@@ -102,6 +103,16 @@ export const PLAN_TOOLS = [
       required: ['name', 'plan'],
     },
   },
+  {
+    name: 'plan_compare',
+    description:
+      'Compares a plan with a reference plan of the same floor (e.g. archive-built vs surveyed). Walls are paired by id and the reference is mapped into the plan\'s frame by a fitted scale+offset per axis. Reports each wall\'s centreline and thickness difference, walls in only one plan, and openings matched (centre and width difference), missed and extra – a score for how well a plan was built.',
+    inputSchema: {
+      type: 'object',
+      properties: { plan_id: { type: 'string' }, reference_id: { type: 'string' }, match_mm: { type: 'number', description: 'Max centre distance for an opening match (default 450)' } },
+      required: ['plan_id', 'reference_id'],
+    },
+  },
   ...SCAN_TOOLS,
 ]
 
@@ -182,6 +193,26 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     const res = await createPlan({ name: String(args.name ?? 'Planritning'), template: args.template === 'demo' ? 'demo' : 'empty', author: 'claude' })
     if ('errors' in res) return { content: [text(res.errors!.join('\n'))], isError: true }
     return { content: [text(`Skapad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan.id, res.revision.n)}`), await preview(res.plan, 'efter', false)] }
+  }
+
+  if (name === 'plan_compare') {
+    const a = await loadPlan(planId)
+    const b = await loadPlan(String(args.reference_id ?? ''))
+    if (!a || !b) return { content: [text('plan_id och reference_id måste finnas')], isError: true }
+    const c = comparePlans(a.plan, b.plan, { matchMm: typeof args.match_mm === 'number' ? args.match_mm : undefined })
+    const fit = (f: { scale: number; offset: number; rmsMm: number; n: number }) => `skala ${f.scale.toFixed(4)}, ${f.n} väggar, spridning ${f.rmsMm} mm`
+    const lines = [
+      `Inpassning x: ${fit(c.fit.x)}; y: ${fit(c.fit.y)}`,
+      `Väggar (${c.walls.length} gemensamma): läge plan − referens, tjocklek plan − referens`,
+      ...c.walls.map((w) => `- ${w.id} (${w.axis}): ${w.diffMm >= 0 ? '+' : ''}${w.diffMm} mm, tj ${w.thickness} mot ${w.refThickness} (${w.thicknessDiffMm >= 0 ? '+' : ''}${w.thicknessDiffMm})`),
+      `Bara i referensen: ${c.wallsOnlyInRef.join(', ') || '–'}`,
+      `Bara i planen: ${c.wallsOnlyInPlan.join(', ') || '–'}`,
+      `Öppningar: ${c.openings.matched.length} matchade, ${c.openings.missed.length} saknas, ${c.openings.extra.length} extra`,
+      ...c.openings.matched.map((m) => `- ✓ ${m.id} = ${m.refId}: mitt ${m.centreDiffMm} mm ifrån, bredd ${m.widthDiffMm >= 0 ? '+' : ''}${m.widthDiffMm}`),
+      ...c.openings.missed.map((m) => `- ✗ saknas: ${m.refId} (${m.kind} i ${m.wallId})`),
+      ...c.openings.extra.map((m) => `- + extra: ${m.id} (${m.kind} i ${m.wallId})`),
+    ]
+    return { content: [text(lines.join('\n'))] }
   }
 
   if (name === 'plan_import') {

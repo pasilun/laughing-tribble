@@ -10,7 +10,7 @@ import { describeDoor, readDoor, readDoors } from './doors'
 import { findWindows, windowsOnWall, type Anchor } from './elevation'
 import { newOpenings, showsWall } from './openings'
 import { profile, roundRun } from './profile'
-import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Raster } from './raster'
+import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Gray, type Raster } from './raster'
 import { register } from './register'
 import { snapWalls } from './snap'
 import { scanView, type Rect } from './view'
@@ -128,6 +128,8 @@ export const SCAN_TOOLS = [
         square: { type: 'boolean', description: 'Make walls within 3° of horizontal/vertical exactly straight (default true)' },
         join_mm: { type: 'number', description: 'default 250' },
         threshold: { type: 'number' },
+        also_sources: { type: 'array', items: { type: 'string' }, description: 'More registered drawings of the same floor: each wall is fitted in every drawing and the median position and thickness used. Steadier than one scan when the drawings disagree.' },
+        prior_thickness: { type: 'number', description: 'Thickness to prefer when a cross-section could be read several ways (one thick band or two outlines), instead of each wall\'s current thickness. Use when the current thickness is a guess, e.g. ~100 for light partitions.' },
       },
       required: ['plan_id'],
     },
@@ -145,7 +147,7 @@ export const SCAN_TOOLS = [
         wall_ids: { type: 'array', items: { type: 'string' }, description: 'Default: all walls' },
         apply: { type: 'boolean' },
         accept: { type: 'array', items: { type: 'string' }, description: 'With apply: ids of the new openings to add (from a preview); default all. Confirmations of existing openings are always recorded.' },
-        methods: { type: 'array', items: { type: 'string', enum: ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge'] }, description: 'Detectors to run: mellanrum = both faces stop, streckad = dashed face, mittstreck = centre mark across the wall (1936 plans; width estimated 800), dörrbåge = door symbol. Default auto: each is tried on the openings other archive drawings already show, and used if it finds at least a quarter of them (with fewer than 3 such openings, all are used). For an independent build from one set of drawings, give methods explicitly.' },
+        methods: { type: 'array', items: { type: 'string', enum: ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge'] }, description: 'Detectors to run: mellanrum = both faces stop, streckad = dashed face, mittstreck = centre mark across the wall (1936 plans; width estimated 800, or 700 for a one-sided mark), dörrbåge = door symbol. Default auto: each is tried on the openings other archive drawings already show, and used if it finds at least a quarter of them (with fewer than 3 such openings, all are used). For an independent build from one set of drawings, give methods explicitly.' },
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
@@ -421,13 +423,20 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
       const add = (Array.isArray(args.walls) ? args.walls : []) as Wall[]
       if (!ids.length && !add.length) return err('ange wall_ids och/eller walls')
       for (const w of add) if (!w.id || !w.a || !w.b) return err('varje ny vägg behöver id, a och b')
+      const also: Array<{ g: Gray; r: Raster }> = []
+      for (const id of Array.isArray(args.also_sources) ? args.also_sources.map(String) : []) {
+        if (id === r.id) continue
+        const rr = resolveSource(plan, id)
+        also.push({ g: await loadGray(planId, rr), r: rr })
+      }
       const res = snapWalls(g, r, plan, { ids, add }, {
         searchMm: typeof args.search_mm === 'number' ? args.search_mm : undefined,
         keepThickness: !!args.keep_thickness,
         square: args.square !== false,
         joinMm: typeof args.join_mm === 'number' ? args.join_mm : undefined,
+        priorThickness: typeof args.prior_thickness === 'number' ? args.prior_thickness : undefined,
         threshold,
-      })
+      }, also)
       const lines = res.reports.map((x) =>
         `- ${x.id}: ${x.ok ? 'ok' : 'OSÄKER'} säkerhet ${x.confidence} (${x.sections} tvärsnitt), flytt ${x.shiftMm} mm, vinkel ${x.angleDeg}°, tj ${x.thicknessMm}, spridning ${x.rmsMm} mm${x.note ? ` – ${x.note}` : ''}`)
       const apply = args.apply !== false

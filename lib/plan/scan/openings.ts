@@ -178,7 +178,7 @@ export function findDashed(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: nu
 // marked as estimated in the method name.
 export const CENTRE_MARK_WIDTH = 800
 
-export function findCentreMarks(g: Gray, r: Raster, wall: Wall, opts: { threshold?: number; junctions?: Array<[number, number]>; width?: number } = {}): Gap[] {
+export function findCentreMarks(g: Gray, r: Raster, wall: Wall, opts: { threshold?: number; junctions?: Array<[number, number]>; width?: number; oneSided?: boolean; oneSidedWidth?: number } = {}): Gap[] {
   const th = opts.threshold ?? 128
   const width = opts.width ?? CENTRE_MARK_WIDTH
   const d = wallDir(wall)
@@ -190,26 +190,48 @@ export function findCentreMarks(g: Gray, r: Raster, wall: Wall, opts: { threshol
     return dark(g, p.x, p.y, th) || dark(g, p.x + 1, p.y, th) || dark(g, p.x - 1, p.y, th) || dark(g, p.x, p.y + 1, th) || dark(g, p.x, p.y - 1, th)
   }
   const hits: number[] = []
+  const oneSided: number[] = []
   for (let t = 150; t < len - 150; t += 10) {
     if ((opts.junctions ?? []).some(([c, rad]) => Math.abs(t - c) < rad + 60)) continue
     const c = along(wall, t)
     const at = (side: number, off: number, dt = 0) => ink(c.x + n.x * side * (h + off) + d.x * dt, c.y + n.y * side * (h + off) + d.y * dt)
     // The mark ends somewhere 0.26-0.7 m out (a wall would continue); room
     // labels written near a door must not hide that end.
-    const ends = (side: number) => {
-      for (let o = 260; o <= 700; o += 20) if (!at(side, o)) return true
+    const ends = (side: number, from = 260) => {
+      for (let o = from; o <= 700; o += 20) if (!at(side, o)) return true
       return false
     }
-    if ([1, -1].every((side) => at(side, 120) && at(side, 220) && !at(side, 170, 70) && !at(side, 170, -70) && ends(side))) hits.push(t)
+    // A mark: drawn from the face out, thin (nothing beside it), ending.
+    const mark = (side: number) => at(side, 40) && at(side, 120) && at(side, 220) && !at(side, 170, 70) && !at(side, 170, -70) && ends(side)
+    if (mark(1) && mark(-1)) hits.push(t)
+    // Doors into small rooms (WC, closet) are often marked on the hall side
+    // only: one-sided marks, kept apart and given a smaller standard width.
+    // These are drawn shorter (~0.15-0.25 m), so they need less length,
+    // and must stay clear of the wall's ends (corner lines look the same).
+    else if (opts.oneSided !== false && t > 300 && t < len - 300 && !(opts.junctions ?? []).some(([c, rad]) => Math.abs(t - c) < rad + 250)) {
+      const short = (side: number) => at(side, 40) && at(side, 120) && !at(side, 120, 70) && !at(side, 120, -70) && ends(side, 160)
+      if (short(1) || short(-1)) oneSided.push(t)
+    }
   }
-  const marks: number[] = []
-  for (const t of hits) {
-    if (!marks.length || t - marks[marks.length - 1] > 60) marks.push(t)
-    else marks[marks.length - 1] = (marks[marks.length - 1] + t) / 2
+  // A line drawn with a pen is 1-3 px wide: hits within 60 mm are one mark;
+  // a run much wider than a pen line is something else (a wall, text).
+  const group = (ts: number[]) => {
+    const out: Array<[number, number]> = []
+    for (const t of ts) {
+      const last = out[out.length - 1]
+      if (last && t - last[1] <= 60) last[1] = t
+      else out.push([t, t])
+    }
+    return out.filter(([a, b]) => b - a <= Math.max(60, 6 * r.mmPerPx)).map(([a, b]) => (a + b) / 2)
   }
-  return marks
-    .map((c) => ({ wallId: wall.id, offset: Math.round(Math.max(0, c - width / 2)), width: Math.round(Math.min(width, len)), method: 'mittstreck (bredd uppskattad)' }))
+  const one = group(oneSided).filter((c) => !hits.some((t) => Math.abs(t - c) < 150))
+  const make = (c: number, w: number, method: string) => ({ wallId: wall.id, offset: Math.round(Math.max(0, c - w / 2)), width: Math.round(Math.min(w, len)), method })
+  return [
+    ...group(hits).map((c) => make(c, width, 'mittstreck (bredd uppskattad)')),
+    ...one.map((c) => make(c, opts.oneSidedWidth ?? 700, 'mittstreck ensidig (bredd uppskattad)')),
+  ]
     .filter((gp) => gp.offset + gp.width <= len)
+    .sort((a, b) => a.offset - b.offset)
 }
 
 // Overlapping finds (both faces, or gap and dashes) are one opening.
@@ -305,7 +327,11 @@ export function newOpenings(
       const junctions = junctionsOn(w, plan).map(([t, rad]) => [t - shift, rad] as [number, number])
       per.mellanrum = findGaps(g, r, drawn, { threshold }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
       per.streckad = findDashed(g, r, drawn, { threshold, junctions }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
-      per.mittstreck = findCentreMarks(g, r, drawn, { threshold, junctions }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
+      // One-sided marks only in light interior partitions (WC and closet
+      // doors): on facades, party and load-bearing walls whatever is drawn
+      // on the far side reads as a mark.
+      const light = !w.exterior && !w.apartmentBoundary && !w.loadBearing
+      per.mittstreck = findCentreMarks(g, r, drawn, { threshold, junctions, oneSided: light }).map((f) => ({ ...f, offset: Math.round(f.offset + shift) }))
     }
     per.dörrbåge = findDoorSymbols(g, r, w, { threshold }).map((d) => ({ wallId: w.id, offset: d.offset, width: d.width, hinge: d.hinge, swing: d.swing, method: 'dörrbåge' }))
     raw.set(w.id, per)

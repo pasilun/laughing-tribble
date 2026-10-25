@@ -93,7 +93,14 @@ handlers against the local store:
   drawing. It takes cross-sections, fits a robust line, and uses the median
   thickness. Ends are joined at centreline intersections, and openings keep
   their place. The tool reports a confidence per wall. A wall it can't find
-  is left where it was and flagged.
+  is left where it was and flagged. A cross-section can often be read
+  several ways (one thick band, or two outlines with a fixture line beside
+  them), and the tool prefers the wall's current thickness, so a bad first
+  guess repeats itself. `prior_thickness` (e.g. ~100 for light
+  partitions) replaces that preference. `also_sources` fits each wall in
+  further registered drawings and uses the median position and thickness.
+  A fit tilted more than 1° from the others is left out. On Gnejsen this
+  took G-vagg from 195 mm (one blurred scan) to 85 mm (survey: 89).
 - `plan_scan_openings`: finds openings where both drawn faces of a wall
   stop, and reads each one as a door (with its swing) or an open passage.
   It doesn't detect windows. It also can't read drawings that mark doorways
@@ -114,7 +121,19 @@ handlers against the local store:
 - Centre marks (`mittstreck`): the 1936 floor plans mark each opening
   only by a short line across the wall at its centre. That gives the
   position, but the width is set to a standard 800 mm and labelled
-  "bredd uppskattad" (width estimated).
+  "bredd uppskattad" (width estimated). Doors into WCs and closets are
+  often marked on one side only, with a shorter line. These are read only
+  in light partitions (not on party or facade walls), away from wall ends
+  and junctions, and get 700 mm. The jambs could in principle give the
+  width, but the 1936 sheets seldom draw them, and the junction blobs look
+  the same, so the width stays estimated.
+- `plan_compare`: compares a plan with a reference plan of the same floor
+  (e.g. city drawings against a survey). Walls are paired by id, with a
+  scale and offset fitted per axis. It reports the position and thickness
+  difference per wall, and matched, missed and extra openings. During
+  development, `scripts/eval-openings.ts` scores one detector on one
+  source against a reference (`--rescan` first drops what that source
+  already gave).
 - `plan_import` with `copy_sources_from` copies the source drawings along,
   for branching a plan (e.g. a city-drawings-only version).
 - Method selection: `plan_scan_openings` runs every detector, tests each

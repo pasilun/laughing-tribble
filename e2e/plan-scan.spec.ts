@@ -11,7 +11,7 @@ import { findDoorSymbols, readDoor, readDoors } from '@/lib/plan/scan/doors'
 import { findCentreMarks, findDashed, newOpenings } from '@/lib/plan/scan/openings'
 import { findWindows, windowsOnWall } from '@/lib/plan/scan/elevation'
 import { register } from '@/lib/plan/scan/register'
-import { snapWalls } from '@/lib/plan/scan/snap'
+import { snapWallConsensus, snapWalls } from '@/lib/plan/scan/snap'
 
 // Accuracy of the scan tools on synthetic "scans": a known plan is drawn
 // into an image, the walls are nudged off, and the tools must find them.
@@ -397,4 +397,69 @@ test('openings: two unlike breaks in a face (scan noise) are not a dashed doorwa
   const r: Raster = { id: 's', mmPerPx, x: 0, y: 0, widthPx: info.width, heightPx: info.height, src: '', rotation: 0 }
   const wall: Wall = { id: 'w', a: { x: 500, y: 1000 }, b: { x: 4500, y: 1000 }, thickness: 120, phase: 'existing' }
   expect(findDashed(g, r, wall)).toHaveLength(0)
+})
+
+test('openings: one-sided centre marks in a light partition, not at a junction or on a party wall', async () => {
+  const mmPerPx = 8.467
+  const P = (mm: number) => (mm / mmPerPx).toFixed(2)
+  const lw = '2.5'
+  // Wall 4 m, faces at y 940/1060. One-sided 0.2 m marks below the wall at
+  // 1500 and 3300; a wall meets the lower face at 2500.
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${P(5000)}" height="${P(2000)}"><rect width="100%" height="100%" fill="#fff"/>
+    <line x1="${P(500)}" y1="${P(940)}" x2="${P(4500)}" y2="${P(940)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(500)}" y1="${P(1060)}" x2="${P(4500)}" y2="${P(1060)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(2000)}" y1="${P(1060)}" x2="${P(2000)}" y2="${P(1290)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(3800)}" y1="${P(1060)}" x2="${P(3800)}" y2="${P(1290)}" stroke="#000" stroke-width="${lw}"/>
+    <line x1="${P(3000)}" y1="${P(1060)}" x2="${P(3000)}" y2="${P(1950)}" stroke="#000" stroke-width="${lw}"/>
+  </svg>`
+  const { data, info } = await sharp(Buffer.from(svg)).grayscale().raw().toBuffer({ resolveWithObject: true })
+  const g: Gray = { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), w: info.width, h: info.height }
+  const r: Raster = { id: 's', mmPerPx, x: 0, y: 0, widthPx: info.width, heightPx: info.height, src: '', rotation: 0 }
+  const wall: Wall = { id: 'w', a: { x: 500, y: 1000 }, b: { x: 4500, y: 1000 }, thickness: 120, phase: 'existing' }
+  const light = findCentreMarks(g, r, wall, { junctions: [[2500, 100]] })
+  expect(light.map((f) => Math.round((f.offset + f.width / 2) / 50) * 50)).toEqual([1500, 3300])
+  expect(light.every((f) => f.method!.includes('ensidig'))).toBe(true)
+  // The same wall as a party wall: one-sided marks are not trusted there.
+  expect(findCentreMarks(g, r, wall, { junctions: [[2500, 100]], oneSided: false })).toHaveLength(0)
+})
+
+// A horizontal wall drawn as two face lines (y in mm), with optional extra lines.
+async function faces(lines: Array<{ y0: number; y1?: number }>, mmPerPx = 8.5): Promise<{ g: Gray; r: Raster }> {
+  const P = (mm: number) => (mm / mmPerPx).toFixed(2)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${P(5000)}" height="${P(2000)}"><rect width="100%" height="100%" fill="#fff"/>
+    ${lines.map(({ y0, y1 = y0 }) => `<line x1="${P(500)}" y1="${P(y0)}" x2="${P(4500)}" y2="${P(y1)}" stroke="#000" stroke-width="2"/>`).join('')}
+  </svg>`
+  const { data, info } = await sharp(Buffer.from(svg)).grayscale().raw().toBuffer({ resolveWithObject: true })
+  return {
+    g: { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), w: info.width, h: info.height },
+    r: { id: `s${lines.map((l) => l.y0).join('-')}`, mmPerPx, x: 0, y: 0, widthPx: info.width, heightPx: info.height, src: '', rotation: 0 },
+  }
+}
+
+test('snap: a prior thickness overrides a bad first guess', async () => {
+  // Faces 100 mm apart, and a fixture line another 100 mm out.
+  const { g, r } = await faces([{ y0: 950 }, { y0: 1050 }, { y0: 1150 }])
+  const wall: Wall = { id: 'w', a: { x: 600, y: 1030 }, b: { x: 4400, y: 1030 }, thickness: 200, phase: 'existing' }
+  const plan = { ...demoPlan(), walls: [wall], openings: [] }
+  const guessed = snapWalls(g, r, plan, { ids: ['w'] }, { joinMm: 0 }).walls[0]
+  expect(guessed.thickness).toBeGreaterThan(170)
+  const fixed = snapWalls(g, r, plan, { ids: ['w'] }, { joinMm: 0, priorThickness: 100 }).walls[0]
+  expect(Math.abs(fixed.thickness - 100)).toBeLessThanOrEqual(15)
+  expect(Math.abs(fixed.a.y - 1000)).toBeLessThanOrEqual(15)
+})
+
+test('snap consensus: median over drawings, a tilted fit is left out', async () => {
+  const srcs = await Promise.all([
+    faces([{ y0: 950 }, { y0: 1050 }]),          // centre 1000, 100 thick
+    faces([{ y0: 970 }, { y0: 1090 }]),          // centre 1030, 120
+    faces([{ y0: 965 }, { y0: 1055 }]),          // centre 1010, 90
+    faces([{ y0: 900, y1: 1200 }, { y0: 1000, y1: 1300 }]), // tilted ~4°
+  ])
+  const wall: Wall = { id: 'w', a: { x: 600, y: 1000 }, b: { x: 4400, y: 1000 }, thickness: 100, phase: 'existing' }
+  const res = snapWallConsensus(srcs, wall, [])
+  expect(res.report.ok).toBe(true)
+  expect(res.report.note).toContain('median av 3')
+  expect(Math.abs(res.wall!.a.y - 1010)).toBeLessThanOrEqual(10)
+  expect(res.wall!.a.y).toBe(res.wall!.b.y)
+  expect(Math.abs(res.wall!.thickness - 100)).toBeLessThanOrEqual(10)
 })
