@@ -194,7 +194,13 @@ export function findCentreMarks(g: Gray, r: Raster, wall: Wall, opts: { threshol
     if ((opts.junctions ?? []).some(([c, rad]) => Math.abs(t - c) < rad + 60)) continue
     const c = along(wall, t)
     const at = (side: number, off: number, dt = 0) => ink(c.x + n.x * side * (h + off) + d.x * dt, c.y + n.y * side * (h + off) + d.y * dt)
-    if ([1, -1].every((side) => at(side, 120) && at(side, 220) && !at(side, 170, 70) && !at(side, 170, -70) && !at(side, 750))) hits.push(t)
+    // The mark ends somewhere 0.26-0.7 m out (a wall would continue); room
+    // labels written near a door must not hide that end.
+    const ends = (side: number) => {
+      for (let o = 260; o <= 700; o += 20) if (!at(side, o)) return true
+      return false
+    }
+    if ([1, -1].every((side) => at(side, 120) && at(side, 220) && !at(side, 170, 70) && !at(side, 170, -70) && ends(side))) hits.push(t)
   }
   const marks: number[] = []
   for (const t of hits) {
