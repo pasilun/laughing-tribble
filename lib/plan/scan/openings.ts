@@ -152,7 +152,11 @@ export function findDashed(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: nu
     let k = 0
     while (k < breaks.length) {
       let m = k
-      while (m + 1 < breaks.length && breaks[m + 1][0] - breaks[m][1] >= 120 && breaks[m + 1][0] - breaks[m][1] <= 550) m++
+      // Dash gaps are drawn alike: lengths within a factor 2 of each other
+      // (scan noise makes breaks of any length).
+      const blen = (q: number) => breaks[q][1] - breaks[q][0]
+      const alike = (q: number) => Math.max(blen(q), blen(k)) <= 2 * Math.min(blen(q), blen(k))
+      while (m + 1 < breaks.length && breaks[m + 1][0] - breaks[m][1] >= 120 && breaks[m + 1][0] - breaks[m][1] <= 550 && alike(m + 1)) m++
       if (m > k) {
         let dash = 0
         for (let q = k; q < m; q++) dash += breaks[q + 1][0] - breaks[q][1]

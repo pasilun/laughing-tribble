@@ -383,3 +383,18 @@ test('openings: centre marks across a wall are found, a crossing wall is not', a
   expect(Math.abs(found[0].offset + found[0].width / 2 - 1500)).toBeLessThanOrEqual(30)
   expect(found[0].method).toContain('uppskattad')
 })
+
+test('openings: two unlike breaks in a face (scan noise) are not a dashed doorway', async () => {
+  const mmPerPx = 8.467
+  const P = (mm: number) => (mm / mmPerPx).toFixed(2)
+  // Lower face broken at 1500 (90 mm) and 1800 (25 mm): not dashes.
+  const seg = (x0: number, x1: number) => `<line x1="${P(x0)}" y1="${P(1060)}" x2="${P(x1)}" y2="${P(1060)}" stroke="#000" stroke-width="2.5"/>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${P(5000)}" height="${P(2000)}"><rect width="100%" height="100%" fill="#fff"/>
+    <line x1="${P(500)}" y1="${P(940)}" x2="${P(4500)}" y2="${P(940)}" stroke="#000" stroke-width="2.5"/>
+    ${seg(500, 1500)}${seg(1590, 1800)}${seg(1825, 4500)}</svg>`
+  const { data, info } = await sharp(Buffer.from(svg)).grayscale().raw().toBuffer({ resolveWithObject: true })
+  const g: Gray = { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), w: info.width, h: info.height }
+  const r: Raster = { id: 's', mmPerPx, x: 0, y: 0, widthPx: info.width, heightPx: info.height, src: '', rotation: 0 }
+  const wall: Wall = { id: 'w', a: { x: 500, y: 1000 }, b: { x: 4500, y: 1000 }, thickness: 120, phase: 'existing' }
+  expect(findDashed(g, r, wall)).toHaveLength(0)
+})
