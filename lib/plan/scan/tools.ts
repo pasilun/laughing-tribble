@@ -8,7 +8,7 @@ import { detectWalls } from './detect'
 import { scanDiff } from './diff'
 import { describeDoor, readDoor, readDoors } from './doors'
 import { findWindows, windowsOnWall, type Anchor } from './elevation'
-import { newOpenings } from './openings'
+import { newOpenings, showsWall } from './openings'
 import { profile, roundRun } from './profile'
 import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Raster } from './raster'
 import { register } from './register'
@@ -144,6 +144,7 @@ export const SCAN_TOOLS = [
         source_id: SRC,
         wall_ids: { type: 'array', items: { type: 'string' }, description: 'Default: all walls' },
         apply: { type: 'boolean' },
+        accept: { type: 'array', items: { type: 'string' }, description: 'With apply: ids of the new openings to add (from a preview); default all. Confirmations of existing openings are always recorded.' },
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
@@ -171,6 +172,16 @@ export const SCAN_TOOLS = [
         threshold: { type: 'number' },
       },
       required: ['plan_id', 'source_id', 'wall_id', 'band', 'anchors'],
+    },
+  },
+  {
+    name: 'plan_openings_report',
+    description:
+      'Lists every opening with its evidence – which drawings show it, by what method (mellanrum, streckad, dörrbåge, fasad), and where each puts it – the spread between them, and conflicts: an opening that a current survey (sources with role before/after, or check_sources) draws as solid wall, or one with no evidence at all. Use it to decide which openings to trust; older drawings show the building as it was then.',
+    inputSchema: {
+      type: 'object',
+      properties: { plan_id: { type: 'string' }, check_sources: { type: 'array', items: { type: 'string' }, description: 'Sources to check each opening against (default: plan sources with role before/after)' } },
+      required: ['plan_id'],
     },
   },
   {
@@ -308,6 +319,40 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
           image(view.png),
         ],
       }
+    }
+
+    if (name === 'plan_openings_report') {
+      const srcs = plan.sources ?? []
+      const checkIds = Array.isArray(args.check_sources) ? args.check_sources.map(String) : srcs.filter((x) => (x.role === 'before' || x.role === 'after') && x.view !== 'elevation').map((x) => x.id)
+      const checks = await Promise.all(checkIds.map(async (id) => {
+        const rr = resolveSource(plan, id)
+        return { rr, g: await loadGray(planId, rr) }
+      }))
+      const label = (id: string) => {
+        const x = srcs.find((q) => q.id === id)
+        return x?.year ? `${id} (${x.year})` : id
+      }
+      const lines = plan.openings.map((o) => {
+        const wall = plan.walls.find((w) => w.id === o.wallId)!
+        const ev = o.evidence ?? []
+        const spread = ev.length ? Math.max(...ev.map((e) => Math.max(Math.abs(e.offset - o.offset), Math.abs(e.offset + e.width - o.offset - o.width)))) : 0
+        const flags: string[] = []
+        if (!ev.length) flags.push('inga belägg (inlagd för hand)')
+        for (const c of checks) {
+          if (ev.some((e) => e.source === c.rr.id)) continue
+          // Plan drawings draw windows as lines across the wall, never as
+          // gaps: the gap check can't judge them (facades are their evidence).
+          if (o.kind === 'window') continue
+          const solid = showsWall(c.g, c.rr, plan, wall, o.offset, o.width)
+          if (solid === true) flags.push(`VÄGG i ${label(c.rr.id)}`)
+          else if (solid === undefined) flags.push(`väggen syns inte i ${label(c.rr.id)}`)
+          else flags.push(`öppen i ${label(c.rr.id)}`)
+        }
+        const evs = ev.map((e) => `${label(e.source)} ${e.method} ${e.offset}/${e.width}`).join('; ')
+        return `- ${o.id}: ${o.kind} i ${o.wallId} ${o.offset}/${o.width}${ev.length > 1 ? `, spridning ${spread} mm` : ''} | ${evs || '–'}${flags.length ? ` | ${flags.join(', ')}` : ''}`
+      })
+      const conflicts = lines.filter((l) => l.includes('VÄGG i')).length
+      return { content: [text(`${plan.openings.length} öppningar, ${conflicts} motsägs av en aktuell ritning (kontroll mot: ${checkIds.join(', ') || '–'}).\nFormat: id: typ i vägg offset/bredd | belägg (källa metod offset/bredd) | kontroll\n${lines.join('\n')}`)] }
     }
 
     const r = resolveSource(plan, typeof args.source_id === 'string' ? args.source_id : undefined)
@@ -450,7 +495,7 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
 
     if (name === 'plan_scan_openings') {
       const ids = Array.isArray(args.wall_ids) ? args.wall_ids.map(String) : undefined
-      const { openings: found, skipped, located } = newOpenings(g, r, plan, ids, threshold)
+      const { openings: found, confirms, skipped, located } = newOpenings(g, r, plan, ids, threshold)
       // Openings in facade walls are windows.
       const edge = (w: (typeof plan.walls)[number]) => !!w.exterior
       const lines: string[] = []
@@ -464,14 +509,21 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
         const item: typeof o = edge(wall)
           ? { ...o, kind: 'window' }
           : rd.best && rd.confident
-            ? { ...o, kind: 'door', hinge: rd.best.hinge, swing: rd.best.swing }
+            ? { ...o, kind: 'door', hinge: rd.best.hinge, swing: rd.best.swing, evidence: (o.evidence ?? []).map((e) => ({ ...e, method: `${e.method}+dörrbåge` })) }
             : o
-        ops.push({ op: 'add', kind: 'opening', item })
+        const accepted = !Array.isArray(args.accept) || args.accept.map(String).includes(item.id)
+        if (accepted) ops.push({ op: 'add', kind: 'opening', item })
         const what = item.kind === 'door' ? `dörr ${describeDoor(wall, item)}` : item.kind === 'window' ? 'fönster' : 'öppning'
         const alt = item.kind === 'opening' ? ` [dörr? ${rd.candidates.map((c) => `${c.hinge}/${c.swing} ${Math.round(c.score * 100)}%`).join(', ')}]` : ''
-        lines.push(`- ${item.id}: ${what} i ${o.wallId}, offset ${o.offset}, bredd ${o.width}${alt}`)
+        lines.push(`- ${item.id}: ${what} i ${o.wallId}, offset ${o.offset}, bredd ${o.width}${alt}${accepted ? '' : ' (ej vald)'}`)
       }
-      let head = `${found.length} öppningar hittade${skipped.length ? `; väggar som inte syns i ${r.id} (hoppade över): ${skipped.join(', ')}` : ''}.`
+      // Existing openings this drawing also shows: their evidence grows.
+      for (const c of confirms) {
+        const o = plan.openings.find((q) => q.id === c.id)!
+        ops.push({ op: 'update', kind: 'opening', id: o.id, patch: { evidence: [...(o.evidence ?? []), c.evidence] } })
+        lines.push(`- ${o.id}: finns, bekräftas av ${r.id} (${c.evidence.method}, offset ${c.evidence.offset} bredd ${c.evidence.width} – planen ${o.offset}/${o.width})`)
+      }
+      let head = `${found.length} nya öppningar, ${confirms.length} bekräftade${skipped.length ? `; väggar som inte syns i ${r.id} (hoppade över): ${skipped.join(', ')}` : ''}.`
       let after = plan
       if (args.apply && ops.length) {
         const saved = await save(planId, args.base_revision, ops, `Öppningar och dörrar från ${r.id}`)

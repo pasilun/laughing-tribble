@@ -1,5 +1,5 @@
 import { along, leftNormal, wallDir, wallLength } from '../geometry'
-import type { Opening, Plan, Wall } from '../types'
+import type { Evidence, Opening, Plan, Wall } from '../types'
 import { dark, toPx, type Gray, type Raster } from './raster'
 import { snapWall } from './snap'
 
@@ -8,7 +8,7 @@ import { snapWall } from './snap'
 // wall. Gaps of door width and up are returned as openings; which of them
 // are doors, and which way those open, is for readDoors to decide.
 
-export type Gap = { wallId: string; offset: number; width: number }
+export type Gap = { wallId: string; offset: number; width: number; method?: string }
 
 function inkNear(g: Gray, r: Raster, x: number, y: number, threshold: number): boolean {
   const p = toPx(r, { x, y })
@@ -69,7 +69,7 @@ export function findGaps(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: numb
       const s0 = Math.max(0, ts[start] - k * step)
       const s1 = Math.min(len, ts[i - 1] + step + k * step)
       const w = s1 - s0
-      if (w >= minW && w <= maxW) gaps.push({ wallId: wall.id, offset: Math.round(s0), width: Math.round(w) })
+      if (w >= minW && w <= maxW) gaps.push({ wallId: wall.id, offset: Math.round(s0), width: Math.round(w), method: 'mellanrum' })
       start = -1
     }
   }
@@ -158,7 +158,7 @@ export function findDashed(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: nu
         dash /= m - k
         const s0 = Math.max(0, breaks[k][0] - dash)
         const s1 = Math.min(len, breaks[m][1] + dash)
-        if (s1 - s0 >= minW && s1 - s0 <= maxW) out.push({ wallId: wall.id, offset: Math.round(s0), width: Math.round(s1 - s0) })
+        if (s1 - s0 >= minW && s1 - s0 <= maxW) out.push({ wallId: wall.id, offset: Math.round(s0), width: Math.round(s1 - s0), method: 'streckad' })
       }
       k = m + 1
     }
@@ -175,6 +175,7 @@ function mergeGaps(gs: Gap[]): Gap[] {
     if (last && last.wallId === gp.wallId && gp.offset <= last.offset + last.width) {
       const end = Math.max(last.offset + last.width, gp.offset + gp.width)
       last.width = end - last.offset
+      if (gp.method && !(last.method ?? '').split('+').includes(gp.method)) last.method = last.method ? `${last.method}+${gp.method}` : gp.method
     } else out.push({ ...gp })
   }
   return out
@@ -213,13 +214,21 @@ function junctionsOn(w: Wall, plan: Plan): Array<[number, number]> {
   return out
 }
 
-// New openings for the plan: gaps not already covered by an opening there.
-// The source may draw a wall a little off the plan's line (another drawing,
-// measured differently): each wall is first located in the source with the
-// snap fit, gaps are read along that line, and walls the source doesn't
-// show are skipped rather than read as one long gap.
-export function newOpenings(g: Gray, r: Raster, plan: Plan, ids?: string[], threshold?: number): { openings: Opening[]; skipped: string[]; located: Map<Wall, Wall> } {
+// Openings the source shows, against the plan: new ones (with evidence),
+// and confirmations of existing ones (evidence to add to them). The source
+// may draw a wall a little off the plan's line (another drawing, measured
+// differently): each wall is first located in the source with the snap fit,
+// gaps are read along that line, and walls the source doesn't show are
+// skipped rather than read as one long gap.
+export function newOpenings(
+  g: Gray,
+  r: Raster,
+  plan: Plan,
+  ids?: string[],
+  threshold?: number,
+): { openings: Opening[]; confirms: Array<{ id: string; evidence: Evidence }>; skipped: string[]; located: Map<Wall, Wall> } {
   const out: Opening[] = []
+  const confirms: Array<{ id: string; evidence: Evidence }> = []
   const skipped: string[] = []
   const located = new Map<Wall, Wall>()
   for (const w of plan.walls) {
@@ -235,14 +244,33 @@ export function newOpenings(g: Gray, r: Raster, plan: Plan, ids?: string[], thre
     const shift = shiftOf(w, drawn)
     const existing = plan.openings.filter((o) => o.wallId === w.id)
     // Junction positions on the drawn line (it may start a little off the plan's).
-    const junctions = junctionsOn(w, plan).map(([t, rad]) => [t - shiftOf(w, drawn), rad] as [number, number])
+    const junctions = junctionsOn(w, plan).map(([t, rad]) => [t - shift, rad] as [number, number])
     for (const gp of mergeGaps([...findGaps(g, r, drawn, { threshold }), ...findDashed(g, r, drawn, { threshold, junctions })])) {
       const offset = Math.round(gp.offset + shift)
       if (offset < 0 || offset + gp.width > wallLength(w)) continue
-      const overlaps = existing.some((o) => Math.min(o.offset + o.width, offset + gp.width) - Math.max(o.offset, offset) > 0)
-      if (overlaps) continue
-      out.push({ id: `o-${w.id}-${out.filter((o) => o.wallId === w.id).length + 1}`, wallId: w.id, kind: 'opening', offset, width: gp.width, phase: 'existing' })
+      const evidence: Evidence = { source: r.id, method: gp.method ?? 'mellanrum', offset, width: gp.width }
+      const ov = (o: Opening) => Math.min(o.offset + o.width, offset + gp.width) - Math.max(o.offset, offset)
+      const hit = existing.find((o) => ov(o) > 0)
+      if (hit) {
+        // Evidence only when it is the same opening: overlapping by at least
+        // half of the larger one (not a long merged find spanning several).
+        const same = ov(hit) >= 0.5 * Math.max(hit.width, gp.width)
+        if (same && !hit.evidence?.some((e) => e.source === r.id)) confirms.push({ id: hit.id, evidence })
+        continue
+      }
+      out.push({ id: `o-${w.id}-${out.filter((o) => o.wallId === w.id).length + 1}`, wallId: w.id, kind: 'opening', offset, width: gp.width, phase: 'existing', evidence: [evidence] })
     }
   }
-  return { openings: out, skipped, located }
+  return { openings: out, confirms, skipped, located }
+}
+
+// Whether the source shows this stretch of wall as solid (no gap or dashes
+// overlapping it) – for checking an opening found in another drawing.
+export function showsWall(g: Gray, r: Raster, plan: Plan, wall: Wall, offset: number, width: number, threshold?: number): boolean | undefined {
+  const fit = snapWall(g, r, wall, [], { threshold, square: true })
+  if (!fit.wall || !fit.report.ok) return undefined
+  const shift = shiftOf(wall, fit.wall)
+  const junctions = junctionsOn(wall, plan).map(([t, rad]) => [t - shift, rad] as [number, number])
+  const gaps = mergeGaps([...findGaps(g, r, fit.wall, { threshold }), ...findDashed(g, r, fit.wall, { threshold, junctions })])
+  return !gaps.some((gp) => Math.min(gp.offset + shift + gp.width, offset + width) - Math.max(gp.offset + shift, offset) > 0.3 * width)
 }

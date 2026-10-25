@@ -317,3 +317,18 @@ test('elevation: windows read off a speckled facade and mapped (mirrored) onto a
   const on = windowsOnWall(found, wall, [{ facadeX: 0, plan: { x: 120000, y: 0 } }, { facadeX: 20000, plan: { x: 100000, y: 0 } }])
   expect(on.map((w) => Math.round(w.offset / 100) * 100)).toEqual([3800, 9800, 15800])
 })
+
+test('openings: a drawing that shows an existing opening confirms it (evidence), a long merged gap does not', async () => {
+  const truth = demoPlan()
+  const { g, r } = await doorScan(truth, 5, 60, { x: 0, y: 0 })
+  const door = truth.openings.find((o) => o.id === 'd-a-hall')!
+  // The plan already has the door; and a 3 m "opening" on b-kok that no single find matches.
+  const plan: Plan = { ...truth, openings: [door, { id: 'bred', wallId: 'b-kok', kind: 'opening', offset: 500, width: 3000, phase: 'existing' }] }
+  const res = newOpenings(g, r, plan)
+  const c = res.confirms.find((x) => x.id === 'd-a-hall')
+  expect(c, JSON.stringify(res.confirms)).toBeTruthy()
+  expect(c!.evidence.source).toBe(r.id)
+  expect(Math.abs(c!.evidence.offset - door.offset)).toBeLessThanOrEqual(60)
+  expect(res.confirms.some((x) => x.id === 'bred')).toBe(false)
+  expect(res.openings.some((o) => o.wallId === 'a-hall')).toBe(false)
+})

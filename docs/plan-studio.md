@@ -105,6 +105,15 @@ handlers against the local store:
   height and two anchors that link facade x to plan points (e.g. the
   building's corners); this also handles a mirrored facade. The tool marks
   the wall `exterior` and records evidence on each window.
+- `plan_openings_report`: every opening with its evidence (which drawing,
+  which method, which position), the spread between the drawings, and
+  conflicts. A conflict is an opening that a current survey (source role
+  before/after) draws as solid wall, or one with no evidence at all.
+  `plan_scan_openings` and `plan_scan_elevation` record evidence: a find
+  that matches an existing opening (overlapping by at least half) is added
+  as evidence, and new finds are added only if listed in `accept` after a
+  preview. Sources carry a `year`: old drawings show the building as it
+  was built.
 - `plan_scan_doors`: reads door hinges and swings off a source. It scores all
   four options per door: a straight leaf from the hinge (line-centre fit) plus
   an arc of constant radius around it. It lets the symbol slide up to about
