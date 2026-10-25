@@ -89,6 +89,16 @@ handlers against the local store:
 - `plan_scan_detect_walls`: proposes horizontal and vertical walls, as either
   filled bands or pairs of outlines, each with a confidence. It changes
   nothing.
+- `plan_scan_missing_walls`: finds walls the drawings show and the plan lacks.
+  It runs wall detection on every archive drawing, groups the walls they
+  agree on (same line, overlapping, within 0.2 m), keeps the ones at least 3
+  drawings show (or all, when fewer), and drops what the plan already has. The
+  result is a numbered, ranked list with an image (plan in red, candidates in
+  blue). It is triage, not a verdict: handwriting underlines, kitchen counters
+  and chimney symbols make long strokes too, so every candidate is checked in
+  the drawings before it is added with `plan_scan_snap_walls`. On Gnejsen,
+  run before the 153 closets were added, it ranked their hall-side wall third
+  of 17.
 - `plan_scan_snap_walls`: places rough walls (or existing ones) on the
   drawing. It takes cross-sections, fits a robust line, and uses the median
   thickness. Ends are joined at centreline intersections, and openings keep

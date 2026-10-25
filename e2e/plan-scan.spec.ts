@@ -11,6 +11,8 @@ import { findDoorSymbols, readDoor, readDoors } from '@/lib/plan/scan/doors'
 import { findCentreMarks, findDashed, newOpenings } from '@/lib/plan/scan/openings'
 import { findWindows, windowsOnWall } from '@/lib/plan/scan/elevation'
 import { register } from '@/lib/plan/scan/register'
+import { missingWalls } from '@/lib/plan/scan/missing'
+import type { Proposal } from '@/lib/plan/scan/detect'
 import { snapWallConsensus, snapWalls } from '@/lib/plan/scan/snap'
 
 // Accuracy of the scan tools on synthetic "scans": a known plan is drawn
@@ -494,4 +496,23 @@ test('openings: a wall drawn in parts is located stretch by stretch; a stretch w
   expect(found[0].evidence![0].method).toContain('hel sträcka')
   expect(Math.abs(found[0].offset + 500 - 2090)).toBeLessThanOrEqual(30)
   expect(Math.abs(found[0].offset + found[0].width + 500 - 3110)).toBeLessThanOrEqual(30)
+})
+
+test('missing walls: a wall several drawings agree on and the plan lacks is reported; covered and single-drawing ones are not', () => {
+  const plan: Plan = { ...demoPlan(), walls: [{ id: 'a', a: { x: 0, y: 0 }, b: { x: 4000, y: 0 }, thickness: 200, phase: 'existing' }], openings: [] }
+  const line = (x0: number, y0: number, x1: number, y1: number, thickness = 100): Proposal => ({ a: { x: x0, y: y0 }, b: { x: x1, y: y1 }, thickness, style: 'filled', confidence: 0.8 })
+  const found = [
+    // The plan's own wall (drawn 10 mm off) and a wall it lacks.
+    { source: 's1', proposals: [line(0, 10, 4000, 10, 200), line(1000, 2000, 1000, 3500)] },
+    // The same two, the missing one drawn 60 mm to the side and thicker.
+    { source: 's2', proposals: [line(0, -20, 4000, -20, 200), line(1060, 2000, 1060, 3500, 110)] },
+    // A stroke only one drawing has.
+    { source: 's3', proposals: [line(5000, 5000, 5000, 6000)] },
+  ]
+  const miss = missingWalls(plan, found, { minSources: 2 })
+  expect(miss).toHaveLength(1)
+  expect(miss[0].sources.sort()).toEqual(['s1', 's2'])
+  expect(Math.abs(miss[0].a.x - 1030)).toBeLessThanOrEqual(30)
+  expect(Math.round(Math.hypot(miss[0].b.x - miss[0].a.x, miss[0].b.y - miss[0].a.y))).toBe(1500)
+  expect(miss[0].covered).toBe(0)
 })

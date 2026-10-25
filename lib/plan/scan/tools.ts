@@ -1,4 +1,4 @@
-import { wallLength } from '../geometry'
+import { bounds, wallLength } from '../geometry'
 import type { Op } from '../ops'
 import { editPlan, loadPlan } from '../service'
 import { putAsset } from '../store'
@@ -9,6 +9,7 @@ import { scanDiff } from './diff'
 import { describeDoor, readDoor, readDoors } from './doors'
 import { findWindows, windowsOnWall, type Anchor } from './elevation'
 import { clipToFree } from '../clear'
+import { missingWalls } from './missing'
 import { newOpenings, showsWall } from './openings'
 import { profile, roundRun } from './profile'
 import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Gray, type Raster } from './raster'
@@ -105,6 +106,25 @@ export const SCAN_TOOLS = [
         min_length_mm: { type: 'number', description: 'default 500' },
         min_thickness_mm: { type: 'number', description: 'default 60' },
         max_thickness_mm: { type: 'number', description: 'default 500' },
+        threshold: { type: 'number' },
+      },
+      required: ['plan_id'],
+    },
+  },
+  {
+    name: 'plan_scan_missing_walls',
+    description:
+      'Finds walls the drawings show and the plan lacks. Runs wall detection on several source drawings (default: all archive plan drawings), groups the walls they agree on, and drops what the plan already has. Returns numbered candidates (m1, m2…) with the drawings that show each, plus an image with the plan in red and the candidates in blue, strongest first. A candidate is something to LOOK at in the images, not a wall to add unseen: handwriting underlines, counters and other fixtures make long strokes too. Add a real one with plan_scan_snap_walls (walls: [{id, a, b, thickness}], also_sources) and check it there.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        sources: { type: 'array', items: { type: 'string' }, description: 'Drawings to read (default: every archive source that is not a facade)' },
+        rect: RECT,
+        min_sources: { type: 'number', description: 'How many drawings must show a wall (default 3, or all when fewer)' },
+        min_length_mm: { type: 'number', description: 'default 700' },
+        min_thickness_mm: { type: 'number', description: 'default 40' },
+        max_thickness_mm: { type: 'number', description: 'default 450' },
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
@@ -357,6 +377,42 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
       })
       const conflicts = lines.filter((l) => l.includes('VÄGG i')).length
       return { content: [text(`${plan.openings.length} öppningar, ${conflicts} motsägs av en aktuell ritning (kontroll mot: ${checkIds.join(', ') || '–'}).\nFormat: id: typ i vägg offset/bredd | belägg (källa metod offset/bredd) | kontroll\n${lines.join('\n')}`)] }
+    }
+
+    if (name === 'plan_scan_missing_walls') {
+      const srcs = plan.sources ?? []
+      const ids = Array.isArray(args.sources) ? args.sources.map(String) : srcs.filter((x) => x.role === 'archive' && x.view !== 'elevation').map((x) => x.id)
+      if (ids.length < 2) return err('minst två ritningar krävs – ange sources eller lägg till fler arkivritningar')
+      const b = bounds(plan)
+      const area = rectOf(args.rect) ?? { x: b.minX - 300, y: b.minY - 300, w: b.maxX - b.minX + 600, h: b.maxY - b.minY + 600 }
+      const num = (v: unknown) => (typeof v === 'number' ? v : undefined)
+      const read = await Promise.all(
+        ids.map(async (id) => {
+          const rr = resolveSource(plan, id)
+          const gg = await loadGray(planId, rr)
+          const proposals = detectWalls(gg, rr, {
+            rect: area,
+            minLengthMm: num(args.min_length_mm) ?? 700,
+            minThicknessMm: num(args.min_thickness_mm) ?? 40,
+            maxThicknessMm: num(args.max_thickness_mm) ?? 450,
+            threshold: num(args.threshold),
+          })
+          return { source: id, r: rr, proposals }
+        }),
+      )
+      const need = num(args.min_sources) ?? Math.min(3, ids.length)
+      // Only inside the plan's own outline: lines outside it (a stair, the yard) are not this apartment.
+      const found = missingWalls(plan, read, { minSources: need }).filter((m) => {
+        const cx = (m.a.x + m.b.x) / 2
+        const cy = (m.a.y + m.b.y) / 2
+        return cx >= b.minX && cx <= b.maxX && cy >= b.minY && cy <= b.maxY
+      })
+      const cands: Wall[] = found.map((m, i) => ({ id: `m${i + 1}`, a: m.a, b: m.b, thickness: m.thickness, phase: 'new' }))
+      const lines = found.map((m, i) => `m${i + 1}: (${m.a.x},${m.a.y})→(${m.b.x},${m.b.y}) längd ${Math.round(Math.hypot(m.b.x - m.a.x, m.b.y - m.a.y))} tj ${m.thickness} i ${m.sources.length} av ${ids.length} ritningar (${m.sources.join(', ')}) säkerhet ${m.confidence}, ${Math.round(m.covered * 100)} % ligger vid en befintlig vägg`)
+      const head = `${found.length} kandidater för väggar som minst ${need} av ${ids.length} ritningar visar men planen saknar, inom planens yttre gräns (ritningar: ${ids.join(', ')}). Starkast först. Granska i bilden: handstil och inredning ger också långa streck. Lägg till en riktig med plan_scan_snap_walls.`
+      const content: Content = [text(`${head}\n${lines.join('\n') || '–'}`)]
+      if (cands.length) content.push(image((await scanView(planId, { ...plan, walls: [...plan.walls, ...cands], openings: [] }, read[0].r, area, { overlay: true, view: 'efter' })).png))
+      return { content }
     }
 
     const r = resolveSource(plan, typeof args.source_id === 'string' ? args.source_id : undefined)
