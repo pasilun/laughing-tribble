@@ -507,8 +507,10 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
         const shift = (drawn.a.x - wall.a.x) * (wall.b.x - wall.a.x) / wallLength(wall) + (drawn.a.y - wall.a.y) * (wall.b.y - wall.a.y) / wallLength(wall)
         const rd = readDoor(g, r, drawn, { ...o, offset: o.offset - shift, kind: 'door' }, threshold)
         const item: typeof o = edge(wall)
-          ? { ...o, kind: 'window' }
-          : rd.best && rd.confident
+          ? { ...o, kind: 'window', hinge: undefined, swing: undefined }
+          : o.kind === 'door'
+            ? o
+            : rd.best && rd.confident
             ? { ...o, kind: 'door', hinge: rd.best.hinge, swing: rd.best.swing, evidence: (o.evidence ?? []).map((e) => ({ ...e, method: `${e.method}+dörrbåge` })) }
             : o
         const accepted = !Array.isArray(args.accept) || args.accept.map(String).includes(item.id)

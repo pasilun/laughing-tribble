@@ -7,7 +7,7 @@ import { calibrate } from '@/lib/plan/scan/calibrate'
 import { detectWalls } from '@/lib/plan/scan/detect'
 import { profile } from '@/lib/plan/scan/profile'
 import type { Gray, Raster } from '@/lib/plan/scan/raster'
-import { readDoor, readDoors } from '@/lib/plan/scan/doors'
+import { findDoorSymbols, readDoor, readDoors } from '@/lib/plan/scan/doors'
 import { findDashed, newOpenings } from '@/lib/plan/scan/openings'
 import { findWindows, windowsOnWall } from '@/lib/plan/scan/elevation'
 import { register } from '@/lib/plan/scan/register'
@@ -331,4 +331,16 @@ test('openings: a drawing that shows an existing opening confirms it (evidence),
   expect(Math.abs(c!.evidence.offset - door.offset)).toBeLessThanOrEqual(60)
   expect(res.confirms.some((x) => x.id === 'bred')).toBe(false)
   expect(res.openings.some((o) => o.wallId === 'a-hall')).toBe(false)
+})
+
+test('door symbols: found along the plan line even with the drawing 150 mm off', async () => {
+  const truth = demoPlan()
+  const { g, r } = await doorScan(truth, 5, 60, { x: 0, y: 150 })
+  for (const o of truth.openings.filter((x) => x.kind === 'door')) {
+    const wall = truth.walls.find((w) => w.id === o.wallId)!
+    const found = findDoorSymbols(g, r, wall)
+    const hit = found.find((f) => Math.abs(f.offset - o.offset) <= 80 && Math.abs(f.width - o.width) <= 100)
+    expect(hit, `${o.id}: ${JSON.stringify(found)}`).toBeTruthy()
+    expect(`${hit!.hinge}/${hit!.swing}`, o.id).toBe(`${o.hinge ?? 'a'}/${o.swing ?? 'left'}`)
+  }
 })

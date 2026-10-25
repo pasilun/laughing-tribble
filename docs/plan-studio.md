@@ -105,6 +105,12 @@ handlers against the local store:
   height and two anchors that link facade x to plan points (e.g. the
   building's corners); this also handles a mirrored facade. The tool marks
   the wall `exterior` and records evidence on each window.
+- Door symbols: `plan_scan_openings` also scans each wall's line for door
+  symbols (a swing arc and a straight leaf) at 600–1000 mm widths, on both
+  sides and with either hinge end, allowing ±0.2 m sideways. A cheap arc
+  test picks candidates and the leaf+arc test decides. This finds doors in
+  walls that can't be located in the drawing (mostly door, or drawn more
+  than 0.15 m off), and gives their width and swing.
 - `plan_openings_report`: every opening with its evidence (which drawing,
   which method, which position), the spread between the drawings, and
   conflicts. A conflict is an opening that a current survey (source role

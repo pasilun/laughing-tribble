@@ -1,4 +1,4 @@
-import { along, leftNormal, wallDir } from '../geometry'
+import { along, leftNormal, wallDir, wallLength } from '../geometry'
 import type { Op } from '../ops'
 import type { Opening, Plan, Pt, Wall } from '../types'
 import { dark, toPx, type Gray, type Raster } from './raster'
@@ -19,7 +19,7 @@ export type DoorReading = {
   changed: boolean
 }
 
-const ray = (closedDir: Pt, openDir: Pt, deg: number): Pt => {
+export const ray = (closedDir: Pt, openDir: Pt, deg: number): Pt => {
   const t = (deg * Math.PI) / 180
   return { x: closedDir.x * Math.cos(t) + openDir.x * Math.sin(t), y: closedDir.y * Math.cos(t) + openDir.y * Math.sin(t) }
 }
@@ -118,7 +118,7 @@ function arcFit(g: Gray, r: Raster, hinge: Pt, closedDir: Pt, openDir: Pt, psi: 
   return (ts.length / n) * shapeFactor(rms)
 }
 
-function hingeScore(g: Gray, r: Raster, hinge: Pt, closedDir: Pt, openDir: Pt, w: number, threshold: number) {
+export function hingeScore(g: Gray, r: Raster, hinge: Pt, closedDir: Pt, openDir: Pt, w: number, threshold: number) {
   let leaf = 0
   let psi = 0
   for (let deg = 25; deg <= 92; deg += 2) {
@@ -214,4 +214,57 @@ export function describeDoor(wall: Wall, o: Opening): string {
     nordost: 'nordöstra', nordväst: 'nordvästra', sydost: 'sydöstra', sydväst: 'sydvästra',
   }
   return `gångjärn vid ${jambWord[compass(towardsHinge)]} karmen (${Math.round(jamb.x)},${Math.round(jamb.y)}), öppnar mot ${compass(opens)}`
+}
+
+// Door symbols along a wall, found without knowing where the openings are:
+// for each position, width, side and hinge end, a cheap arc test (points on
+// the swing arc are ink) picks candidates, and the full leaf+arc test
+// decides. The symbol may sit up to `slide` mm off the wall line sideways,
+// so this works where the wall itself can't be located in the drawing.
+export type FoundDoor = { offset: number; width: number; hinge: 'a' | 'b'; swing: 'left' | 'right'; score: number }
+
+export function findDoorSymbols(g: Gray, r: Raster, wall: Wall, opts: { widths?: number[]; slide?: number; threshold?: number } = {}): FoundDoor[] {
+  const th = opts.threshold ?? 128
+  const widths = opts.widths ?? [600, 700, 800, 900, 1000]
+  const slide = opts.slide ?? 200
+  const len = wallLength(wall)
+  const d = wallDir(wall)
+  const n = leftNormal(d)
+  const half = wall.thickness / 2
+  const inkNear = (p: Pt) => {
+    const q = toPx(r, p)
+    return dark(g, q.x, q.y, th) || dark(g, q.x + 1, q.y, th) || dark(g, q.x - 1, q.y, th) || dark(g, q.x, q.y + 1, th) || dark(g, q.x, q.y - 1, th)
+  }
+  const cands: FoundDoor[] = []
+  const step = Math.max(25, r.mmPerPx * 3)
+  for (const w of widths) {
+    for (const side of [1, -1] as const) {
+      for (const hinge of ['a', 'b'] as const) {
+        const closed = hinge === 'a' ? d : { x: -d.x, y: -d.y }
+        const open = { x: n.x * side, y: n.y * side }
+        for (let t = 0; t <= len; t += step) {
+          // The opening must fit on the wall.
+          const s0 = hinge === 'a' ? t : t - w
+          if (s0 < -50 || s0 + w > len + 50) continue
+          for (let lat = -slide; lat <= slide + 1e-6; lat += 50) {
+            const base = along(wall, t)
+            const h = { x: base.x + n.x * (side * half + lat), y: base.y + n.y * (side * half + lat) }
+            let hits = 0
+            for (const deg of [8, 16, 24, 32, 40, 48]) {
+              const u = ray(closed, open, deg)
+              if (inkNear({ x: h.x + u.x * w, y: h.y + u.y * w })) hits++
+            }
+            if (hits < 5) continue
+            const sc = hingeScore(g, r, h, closed, open, w, th)
+            if (sc.score >= 0.75) cands.push({ offset: Math.round(Math.max(0, s0)), width: w, hinge, swing: side === 1 ? 'left' : 'right', score: Math.round(sc.score * 100) / 100 })
+          }
+        }
+      }
+    }
+  }
+  // One door per place: the best-scoring among overlapping candidates.
+  cands.sort((x, y) => y.score - x.score || y.width - x.width)
+  const out: FoundDoor[] = []
+  for (const c of cands) if (!out.some((o) => Math.min(o.offset + o.width, c.offset + c.width) - Math.max(o.offset, c.offset) > 0.3 * Math.min(o.width, c.width))) out.push(c)
+  return out.sort((x, y) => x.offset - y.offset)
 }

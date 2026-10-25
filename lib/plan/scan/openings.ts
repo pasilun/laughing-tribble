@@ -1,6 +1,7 @@
 import { along, leftNormal, wallDir, wallLength } from '../geometry'
 import type { Evidence, Opening, Plan, Wall } from '../types'
 import { dark, toPx, type Gray, type Raster } from './raster'
+import { findDoorSymbols } from './doors'
 import { snapWall } from './snap'
 
 // Finds openings in walls from the source drawing: where both of a wall's
@@ -215,6 +216,7 @@ function junctionsOn(w: Wall, plan: Plan): Array<[number, number]> {
 }
 
 // Openings the source shows, against the plan: new ones (with evidence),
+// found as gaps, dashed faces or door symbols,
 // and confirmations of existing ones (evidence to add to them). The source
 // may draw a wall a little off the plan's line (another drawing, measured
 // differently): each wall is first located in the source with the snap fit,
@@ -233,20 +235,30 @@ export function newOpenings(
   const located = new Map<Wall, Wall>()
   for (const w of plan.walls) {
     if (ids && !ids.includes(w.id)) continue
-    const fit = snapWall(g, r, w, [], { threshold, square: true })
-    if (!fit.wall || !fit.report.ok) {
-      skipped.push(w.id)
-      continue
-    }
-    const drawn = fit.wall
-    located.set(w, drawn)
-    // Offsets on the drawn line → offsets on the plan's wall.
-    const shift = shiftOf(w, drawn)
     const existing = plan.openings.filter((o) => o.wallId === w.id)
-    // Junction positions on the drawn line (it may start a little off the plan's).
-    const junctions = junctionsOn(w, plan).map(([t, rad]) => [t - shift, rad] as [number, number])
-    for (const gp of mergeGaps([...findGaps(g, r, drawn, { threshold }), ...findDashed(g, r, drawn, { threshold, junctions })])) {
-      const offset = Math.round(gp.offset + shift)
+    // Gaps and dashes along the wall as drawn in the source (when it can be
+    // located), in plan offsets.
+    const finds: Array<Gap & { hinge?: 'a' | 'b'; swing?: 'left' | 'right' }> = []
+    const fit = snapWall(g, r, w, [], { threshold, square: true })
+    if (!fit.wall || !fit.report.ok) skipped.push(w.id)
+    else {
+      const drawn = fit.wall
+      located.set(w, drawn)
+      const shift = shiftOf(w, drawn)
+      const junctions = junctionsOn(w, plan).map(([t, rad]) => [t - shift, rad] as [number, number])
+      for (const gp of mergeGaps([...findGaps(g, r, drawn, { threshold }), ...findDashed(g, r, drawn, { threshold, junctions })]))
+        finds.push({ ...gp, offset: Math.round(gp.offset + shift) })
+    }
+    // Door symbols along the plan's line, whether or not the wall was
+    // located: a door found there gives the opening's extent and swing.
+    for (const dr of findDoorSymbols(g, r, w, { threshold })) {
+      const same = finds.findIndex((f) => Math.min(f.offset + f.width, dr.offset + dr.width) - Math.max(f.offset, dr.offset) > 0.3 * dr.width)
+      const door = { wallId: w.id, offset: dr.offset, width: dr.width, hinge: dr.hinge, swing: dr.swing }
+      if (same >= 0) finds[same] = { ...door, method: `${finds[same].method}+dörrbåge` }
+      else finds.push({ ...door, method: 'dörrbåge' })
+    }
+    for (const gp of finds) {
+      const offset = gp.offset
       if (offset < 0 || offset + gp.width > wallLength(w)) continue
       const evidence: Evidence = { source: r.id, method: gp.method ?? 'mellanrum', offset, width: gp.width }
       const ov = (o: Opening) => Math.min(o.offset + o.width, offset + gp.width) - Math.max(o.offset, offset)
@@ -258,7 +270,17 @@ export function newOpenings(
         if (same && !hit.evidence?.some((e) => e.source === r.id)) confirms.push({ id: hit.id, evidence })
         continue
       }
-      out.push({ id: `o-${w.id}-${out.filter((o) => o.wallId === w.id).length + 1}`, wallId: w.id, kind: 'opening', offset, width: gp.width, phase: 'existing', evidence: [evidence] })
+      const kind = gp.hinge ? 'door' : 'opening'
+      out.push({
+        id: `o-${w.id}-${out.filter((o) => o.wallId === w.id).length + 1}`,
+        wallId: w.id,
+        kind,
+        offset,
+        width: gp.width,
+        phase: 'existing',
+        ...(gp.hinge ? { hinge: gp.hinge, swing: gp.swing } : {}),
+        evidence: [evidence],
+      })
     }
   }
   return { openings: out, confirms, skipped, located }
