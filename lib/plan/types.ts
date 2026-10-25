@@ -18,6 +18,7 @@ export type Wall = {
   fireRating?: string        // e.g. "EI60" for a fire-cell boundary
   fireRatingAfter?: string   // boundary in "efter" if it changes; "" = no longer a boundary
   apartmentBoundary?: boolean
+  exterior?: boolean         // outer wall of the building (facade): its openings are windows
 }
 
 export type OpeningKind = 'door' | 'window' | 'opening'
@@ -32,7 +33,12 @@ export type Opening = {
   phase: Phase
   hinge?: 'a' | 'b'          // door hinge at the end nearest wall.a or wall.b
   swing?: 'left' | 'right'   // side of the wall the leaf swings to, seen from a → b
+  evidence?: Evidence[]      // the drawings that show it, and how it was read
 }
+
+// One drawing's reading of an opening: which source, by what method, and
+// where that drawing puts it (offset/width along the same wall).
+export type Evidence = { source: string; method: string; offset: number; width: number }
 
 export type FixtureKind =
   | 'kitchen'
@@ -130,6 +136,8 @@ export type Source = {
   y: number
   rotation: number           // degrees; scan tools require 0
   calibration?: string       // how mmPerPx was set, e.g. "pdf 1:50" or "3 mått, ±0,8 %"
+  year?: number              // when the drawing was made: older ones show the building as it was
+  view?: 'plan' | 'elevation' // elevation: a facade, x along the facade, y up the building
 }
 
 export type Plan = {

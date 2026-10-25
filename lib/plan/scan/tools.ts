@@ -7,6 +7,7 @@ import { calibrate, rescaleAround, type Measurement } from './calibrate'
 import { detectWalls } from './detect'
 import { scanDiff } from './diff'
 import { describeDoor, readDoor, readDoors } from './doors'
+import { findWindows, windowsOnWall, type Anchor } from './elevation'
 import { newOpenings } from './openings'
 import { profile, roundRun } from './profile'
 import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Raster } from './raster'
@@ -47,6 +48,8 @@ export const SCAN_TOOLS = [
         mm_per_px: { type: 'number', description: 'Overrides scale/dpi' },
         x: { type: 'number', description: 'Plan mm of the image top-left (default 0)' },
         y: { type: 'number' },
+        year: { type: 'number', description: 'When the drawing was made (older drawings show the building as it was then)' },
+        view: { type: 'string', enum: ['plan', 'elevation'], description: 'elevation = a facade drawing (read with plan_scan_elevation)' },
       },
       required: ['plan_id', 'base_revision', 'id', 'filename', 'data_base64'],
     },
@@ -132,7 +135,7 @@ export const SCAN_TOOLS = [
   {
     name: 'plan_scan_openings',
     description:
-      'Finds openings in the plan\'s walls from a source drawing: where both drawn faces of a wall stop, or one face is drawn dashed (older Stockholm drawings outline rooms and dash the outline across doorways; ends then ±1 dash ≈ 0.3 m), there is an opening. Each one is then read as a door (with hinge and swing, via the door reader) when a door symbol is clearly drawn there, otherwise as an open passage. Openings in walls on the outer edge of the plan are reported as windows – check them when the plan covers only part of a building (a party wall is on its edge too). apply=true adds them.',
+      'Finds openings in the plan\'s walls from a source drawing: where both drawn faces of a wall stop, or one face is drawn dashed (older Stockholm drawings outline rooms and dash the outline across doorways; ends then ±1 dash ≈ 0.3 m), there is an opening. Each one is then read as a door (with hinge and swing, via the door reader) when a door symbol is clearly drawn there, otherwise as an open passage. Openings in walls marked exterior (facades) are windows; plan_scan_elevation reads windows more reliably from facade drawings. apply=true adds them.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -144,6 +147,30 @@ export const SCAN_TOOLS = [
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
+    },
+  },
+  {
+    name: 'plan_scan_elevation',
+    description:
+      'Reads windows from a facade drawing (a source added with view="elevation") onto a facade wall of the plan. Give the floor\'s window row as a height band in the drawing (band.y0–y1, drawing mm: use plan_scan_view on the source to read it), and two anchors linking drawing x to plan points — e.g. the building\'s two corners. A facade drawn as seen from outside is mirrored; the anchors handle that. Returns the windows found (with heights) and an image; apply=true adds them as windows with evidence and marks the wall exterior.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        base_revision: { type: 'number' },
+        source_id: { type: 'string' },
+        wall_id: { type: 'string', description: 'The facade wall in the plan' },
+        band: { type: 'object', properties: { y0: { type: 'number' }, y1: { type: 'number' } }, required: ['y0', 'y1'] },
+        anchors: {
+          type: 'array',
+          description: 'Two points: [{facade_x, plan:{x,y}}, …]',
+          items: { type: 'object', properties: { facade_x: { type: 'number' }, plan: PT }, required: ['facade_x', 'plan'] },
+        },
+        apply: { type: 'boolean' },
+        min_width_mm: { type: 'number', description: 'default 350' },
+        threshold: { type: 'number' },
+      },
+      required: ['plan_id', 'source_id', 'wall_id', 'band', 'anchors'],
     },
   },
   {
@@ -266,6 +293,8 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
         x: typeof args.x === 'number' ? args.x : 0,
         y: typeof args.y === 'number' ? args.y : 0,
         rotation: 0,
+        ...(typeof args.year === 'number' ? { year: args.year } : {}),
+        ...(args.view === 'elevation' ? { view: 'elevation' as const } : {}),
       }
       const saved = await save(planId, args.base_revision, [{ op: 'add', kind: 'source', item: source }], `Källritning ${source.name}`)
       if (typeof saved === 'string') return err(saved)
@@ -372,20 +401,58 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
       return { content: [text(`${head}\n${lines.join('\n')}\nResultat:\n${summary.join('\n')}`), image(v.png)] }
     }
 
+    if (name === 'plan_scan_elevation') {
+      const wall = plan.walls.find((w) => w.id === String(args.wall_id))
+      if (!wall) return err(`väggen ${String(args.wall_id)} finns inte`)
+      const band = args.band as { y0: number; y1: number }
+      const raw = (Array.isArray(args.anchors) ? args.anchors : []) as Array<{ facade_x: number; plan: Pt }>
+      if (raw.length !== 2 || raw[0].facade_x === raw[1].facade_x) return err('två ankare med olika facade_x krävs')
+      const anchors = raw.map((a) => ({ facadeX: a.facade_x, plan: a.plan })) as [Anchor, Anchor]
+      const xs = { x0: Math.min(raw[0].facade_x, raw[1].facade_x), x1: Math.max(raw[0].facade_x, raw[1].facade_x) }
+      const wins = findWindows(g, r, band, xs, { minWidth: typeof args.min_width_mm === 'number' ? args.min_width_mm : undefined, threshold })
+      const on = windowsOnWall(wins, wall, anchors)
+      const existing = plan.openings.filter((o) => o.wallId === wall.id)
+      const ops: Op[] = []
+      const ids = new Set(plan.openings.map((o) => o.id))
+      const freeId = () => {
+        let k = 1
+        while (ids.has(`f-${wall.id}-${k}`)) k++
+        ids.add(`f-${wall.id}-${k}`)
+        return `f-${wall.id}-${k}`
+      }
+      const lines = on.map((w, i) => {
+        const clash = existing.find((o) => Math.min(o.offset + o.width, w.offset + w.width) - Math.max(o.offset, w.offset) > 0)
+        const ev = { source: r.id, method: 'fasad', offset: w.offset, width: w.width }
+        const known = clash?.evidence?.some((e) => e.source === ev.source && e.method === ev.method)
+        if (clash && !known) ops.push({ op: 'update', kind: 'opening', id: clash.id, patch: { evidence: [...(clash.evidence ?? []), ev] } })
+        else if (!clash) ops.push({ op: 'add', kind: 'opening', item: { id: freeId(), wallId: wall.id, kind: 'window', offset: w.offset, width: w.width, height: w.height, phase: 'existing', evidence: [ev] } })
+        const note = !clash ? '' : known ? ` – finns redan som ${clash.id}, belägg från ${r.id} finns redan` : ` – finns redan som ${clash.id} (${clash.kind} offset ${clash.offset} bredd ${clash.width}), lägger till belägg`
+        return `- ${i + 1}: offset ${w.offset}, bredd ${w.width}, höjd ${w.height}${note}`
+      })
+      if (!wall.exterior) ops.push({ op: 'update', kind: 'wall', id: wall.id, patch: { exterior: true } })
+      let head = `${wins.length} fönster i raden, ${on.length} på väggen ${wall.id}.`
+      if (args.apply && ops.length) {
+        const saved = await save(planId, args.base_revision, ops, `Fönster i ${wall.id} från fasadritning ${r.id}`)
+        if (typeof saved === 'string') return err(`${head}\n${lines.join('\n')}\n\n${saved}`)
+        head += ` Sparad som revision ${saved.n}.`
+      }
+      // The row with each found window boxed and numbered (in drawing mm).
+      const boxes: Wall[] = wins.map((w, i) => {
+        const y = (w.y0 + w.y1) / 2
+        // Numbered as listed when on the wall, "–" when outside it.
+        const n = on.findIndex((o) => o.win === w) + 1
+        return { id: n ? String(n) : `–${i}`, a: { x: w.x0, y }, b: { x: w.x1, y }, thickness: Math.max(50, w.y1 - w.y0), phase: 'new' }
+      })
+      const pad = 600
+      const view = await scanView(planId, { ...plan, walls: boxes, openings: [] }, r, { x: xs.x0 - pad, y: band.y0 - pad, w: xs.x1 - xs.x0 + 2 * pad, h: band.y1 - band.y0 + 2 * pad }, { overlay: true, maxPx: 2000 })
+      return { content: [text(`${head}\n${lines.join('\n') || '–'}`), image(view.png)] }
+    }
+
     if (name === 'plan_scan_openings') {
       const ids = Array.isArray(args.wall_ids) ? args.wall_ids.map(String) : undefined
       const { openings: found, skipped, located } = newOpenings(g, r, plan, ids, threshold)
-      // Facade walls (on the plan's outline) have windows, not passages.
-      const xs = plan.walls.flatMap((w) => [w.a.x, w.b.x])
-      const ys = plan.walls.flatMap((w) => [w.a.y, w.b.y])
-      const edge = (w: (typeof plan.walls)[number]) => {
-        const near = (v: number, e: number) => Math.abs(v - e) <= w.thickness
-        const minX = Math.min(...xs)
-        const maxX = Math.max(...xs)
-        const minY = Math.min(...ys)
-        const maxY = Math.max(...ys)
-        return (near(w.a.x, minX) && near(w.b.x, minX)) || (near(w.a.x, maxX) && near(w.b.x, maxX)) || (near(w.a.y, minY) && near(w.b.y, minY)) || (near(w.a.y, maxY) && near(w.b.y, maxY))
-      }
+      // Openings in facade walls are windows.
+      const edge = (w: (typeof plan.walls)[number]) => !!w.exterior
       const lines: string[] = []
       const ops: Op[] = []
       for (const o of found) {

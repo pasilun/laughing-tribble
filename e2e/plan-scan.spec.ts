@@ -9,6 +9,7 @@ import { profile } from '@/lib/plan/scan/profile'
 import type { Gray, Raster } from '@/lib/plan/scan/raster'
 import { readDoor, readDoors } from '@/lib/plan/scan/doors'
 import { findDashed, newOpenings } from '@/lib/plan/scan/openings'
+import { findWindows, windowsOnWall } from '@/lib/plan/scan/elevation'
 import { register } from '@/lib/plan/scan/register'
 import { snapWalls } from '@/lib/plan/scan/snap'
 
@@ -280,4 +281,39 @@ test('openings: a doorway drawn as a dashed face is found, a junction break is n
   // good to about one dash (300 mm here).
   expect(Math.abs(found[0].offset - 500)).toBeLessThanOrEqual(150)
   expect(Math.abs(found[0].offset + found[0].width - 1400)).toBeLessThanOrEqual(150)
+})
+
+test('elevation: windows read off a speckled facade and mapped (mirrored) onto a wall', async () => {
+  // A 20 m facade at 1:100/300 dpi: three windows (1.2 m wide, 1.5 m high,
+  // double frame and a transom) on one floor, a pilaster line, and speckle.
+  const mmPerPx = 8.467
+  const P = (mm: number) => (mm / mmPerPx).toFixed(2)
+  const wins = [3000, 9000, 15000]
+  const parts: string[] = []
+  for (const x of wins) {
+    parts.push(`<rect x="${P(x)}" y="${P(2000)}" width="${P(1200)}" height="${P(1500)}" fill="none" stroke="#000" stroke-width="2.5"/>`)
+    parts.push(`<rect x="${P(x + 60)}" y="${P(2060)}" width="${P(1080)}" height="${P(1380)}" fill="none" stroke="#000" stroke-width="1.5"/>`)
+    parts.push(`<line x1="${P(x)}" y1="${P(2600)}" x2="${P(x + 1200)}" y2="${P(2600)}" stroke="#000" stroke-width="1.5"/>`)
+    parts.push(`<line x1="${P(x + 600)}" y1="${P(2000)}" x2="${P(x + 600)}" y2="${P(3500)}" stroke="#000" stroke-width="1.5"/>`)
+  }
+  parts.push(`<line x1="${P(12000)}" y1="${P(500)}" x2="${P(12000)}" y2="${P(5000)}" stroke="#000" stroke-width="2"/>`)
+  // Speckle: deterministic pseudo-random dots.
+  let seed = 7
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  for (let i = 0; i < 1500; i++) parts.push(`<rect x="${(rnd() * 20000 / mmPerPx).toFixed(1)}" y="${((1500 + rnd() * 2500) / mmPerPx).toFixed(1)}" width="1.5" height="1.5" fill="#000"/>`)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${P(20000)}" height="${P(5000)}"><rect width="100%" height="100%" fill="#fff"/>${parts.join('')}</svg>`
+  const { data, info } = await sharp(Buffer.from(svg)).grayscale().raw().toBuffer({ resolveWithObject: true })
+  const g: Gray = { data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), w: info.width, h: info.height }
+  const r: Raster = { id: 'f', mmPerPx, x: 0, y: 0, widthPx: info.width, heightPx: info.height, src: '', rotation: 0 }
+  const found = findWindows(g, r, { y0: 1700, y1: 3800 })
+  expect(found).toHaveLength(3)
+  for (const [i, x] of wins.entries()) {
+    expect(Math.abs(found[i].x0 - x), `x0 ${i}`).toBeLessThanOrEqual(30)
+    expect(Math.abs(found[i].x1 - found[i].x0 - 1200), `width ${i}`).toBeLessThanOrEqual(40)
+    expect(Math.abs(found[i].y1 - found[i].y0 - 1500), `height ${i}`).toBeLessThanOrEqual(60)
+  }
+  // Seen from outside: facade x 0 is the wall's b-end, facade x 20000 its a-end.
+  const wall: Wall = { id: 'yt', a: { x: 100000, y: 0 }, b: { x: 120000, y: 0 }, thickness: 400, phase: 'existing', exterior: true }
+  const on = windowsOnWall(found, wall, [{ facadeX: 0, plan: { x: 120000, y: 0 } }, { facadeX: 20000, plan: { x: 100000, y: 0 } }])
+  expect(on.map((w) => Math.round(w.offset / 100) * 100)).toEqual([3800, 9800, 15800])
 })

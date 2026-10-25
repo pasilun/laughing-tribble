@@ -98,6 +98,13 @@ handlers against the local store:
   stop, and reads each one as a door (with its swing) or an open passage.
   It doesn't detect windows. It also can't read drawings that mark doorways
   only by dashing one face (e.g. Stockholm's 1999 informationsritningar).
+- `plan_scan_elevation`: reads windows from a facade drawing (a source added
+  with `view: "elevation"`) onto a facade wall. A window is a group of
+  long horizontal lines with the same ends, stacked: sill, head and
+  transom. Speckle never forms long runs. You give the floor's band of
+  height and two anchors that link facade x to plan points (e.g. the
+  building's corners); this also handles a mirrored facade. The tool marks
+  the wall `exterior` and records evidence on each window.
 - `plan_scan_doors`: reads door hinges and swings off a source. It scores all
   four options per door: a straight leaf from the hinge (line-centre fit) plus
   an arc of constant radius around it. It lets the symbol slide up to about
