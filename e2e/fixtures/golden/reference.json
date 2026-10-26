@@ -177,8 +177,7 @@
    "kind": "opening",
    "offset": 700,
    "width": 1000,
-   "phase": "existing",
-   "through": true
+   "phase": "existing"
   },
   {
    "id": "f-1",

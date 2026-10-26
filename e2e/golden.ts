@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { comparePlans } from '@/lib/plan/compare'
 import { pointSegmentDistance } from '@/lib/plan/geometry'
+import { roomAreas } from '@/lib/plan/rooms'
 import type { Plan, Pt, Wall } from '@/lib/plan/types'
 
 // The golden case: build a plan from one known drawing with the scan tools,
@@ -15,6 +16,7 @@ export type GetPlan = (id: string) => Promise<{ plan: Plan; revision: number }>
 
 type Case = {
   drawing: { file: string; mm_per_px: number; x: number; y: number; rect: { x: number; y: number; w: number; h: number } }
+  rooms: Plan['rooms']
   exterior: Pt[]
   facade: { file: string; mm_per_px: number; x: number; y: number; band: { y0: number; y1: number }; anchors: Array<{ facade_x: number; plan: Pt }> }
 }
@@ -88,12 +90,14 @@ export async function generate(call: Call, getPlan: GetPlan): Promise<{ id: stri
 
   await step('plan_scan_openings', { plan_id: id, base_revision: await rev(), source_id: 'plan', apply: true, methods: ['mellanrum', 'dörrbåge'] })
   await step('plan_scan_doors', { plan_id: id, base_revision: await rev(), source_id: 'plan', apply: true })
+  await step('plan_edit', { plan_id: id, base_revision: await rev(), message: 'Rum', ops: kase.rooms.map((item) => ({ op: 'add', kind: 'room', item })) })
   return { id, log }
 }
 
 export type Score = {
   walls: { matched: number; total: number; extra: number; maxPosMm: number; maxThicknessMm: number }
   openings: { matched: number; total: number; extra: number; wrongKind: string[]; wrongSwing: string[]; maxCentreMm: number; maxWidthMm: number }
+  rooms: { wrong: string[]; maxAreaM2: number }
   report: string
 }
 
@@ -138,7 +142,20 @@ export function judge(plan: Plan, ref: Plan): Score {
       maxCentreMm: max(c.openings.matched.map((m) => m.centreDiffMm)),
       maxWidthMm: max(c.openings.matched.map((m) => m.widthDiffMm)),
     },
+    rooms: { wrong: [], maxAreaM2: 0 },
     report: '',
+  }
+  // Room areas from the walls: the same rooms, each within its area.
+  const got = roomAreas(named, 'fore')
+  const want = roomAreas(ref, 'fore')
+  const m2 = (a?: number) => (a === undefined ? '–' : (a / 1e6).toFixed(2))
+  const roomLines: string[] = []
+  for (const r of ref.rooms) {
+    const a = got.get(r.id)
+    const b = want.get(r.id)
+    if ((a === undefined) !== (b === undefined)) score.rooms.wrong.push(r.id)
+    else if (a !== undefined && b !== undefined) score.rooms.maxAreaM2 = Math.max(score.rooms.maxAreaM2, Math.abs(a - b) / 1e6)
+    roomLines.push(`  ${r.id}: ${m2(a)} m² mot ${m2(b)}`)
   }
   score.report = [
     `Väggar ${score.walls.matched}/${score.walls.total}, extra ${score.walls.extra} (${c.wallsOnlyInPlan.join(', ') || '–'}), saknas: ${c.wallsOnlyInRef.join(', ') || '–'}`,
@@ -149,6 +166,8 @@ export function judge(plan: Plan, ref: Plan): Score {
     ...c.openings.extra.map((m) => `  + ${m.id} (${m.kind} i ${m.wallId})`),
     ...wrongKind.map((x) => `  fel typ ${x}`),
     ...wrongSwing.map((x) => `  fel slag ${x}`),
+    `Rum (area, plan mot referens)${score.rooms.wrong.length ? `, fel: ${score.rooms.wrong.join(', ')}` : ''}`,
+    ...roomLines,
   ].join('\n')
   return score
 }

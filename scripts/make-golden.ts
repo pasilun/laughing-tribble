@@ -40,7 +40,7 @@ const reference: Plan = {
     { id: 'd-vardag', wallId: 'hall-n', kind: 'door', offset: 1300, width: 800, phase: 'existing', hinge: 'a', swing: 'left' },
     { id: 'd-sovrum', wallId: 'hall-n', kind: 'door', offset: 6600, width: 800, phase: 'existing', hinge: 'b', swing: 'left' },
     { id: 'd-bad', wallId: 'bad-v', kind: 'door', offset: 1000, width: 700, phase: 'existing', hinge: 'a', swing: 'left' },
-    { id: 'o-kok', wallId: 'kok-v', kind: 'opening', offset: 700, width: 1000, phase: 'existing', through: true },
+    { id: 'o-kok', wallId: 'kok-v', kind: 'opening', offset: 700, width: 1000, phase: 'existing' },
     { id: 'f-1', wallId: 'yt-n', kind: 'window', offset: 1000, width: 1200, phase: 'existing' },
     { id: 'f-2', wallId: 'yt-n', kind: 'window', offset: 2800, width: 1200, phase: 'existing' },
     { id: 'f-3', wallId: 'yt-n', kind: 'window', offset: 6100, width: 1200, phase: 'existing' },
@@ -57,6 +57,8 @@ const reference: Plan = {
   dimensions: [],
   notes: [],
 } as unknown as Plan
+
+const LEAF_60 = ['d-vardag', 'd-bad']
 
 // Heavy walls run on past their centreline end to the outer face of the wall they meet.
 const HEAVY: Record<string, number> = { 'yt-n': 150, 'yt-s': 150, trapp: 225, gavel: 225 }
@@ -99,14 +101,18 @@ function drawing(plan: Plan): string {
       continue
     }
     if (o.kind !== 'door') continue
-    // Leaf open 90° on the swing side, arc back to the free jamb.
+    // Leaf open on the swing side (90° as in archive drawings, 60° as
+    // SketchUp exports draw it), arc back to the free jamb.
+    const deg = LEAF_60.includes(o.id) ? 60 : 90
     const side = o.swing === 'right' ? -1 : 1
     const t = (w.thickness / 2) * side
     const hingeU = o.hinge === 'b' ? o.offset + o.width : o.offset
     const freeU = o.hinge === 'b' ? o.offset : o.offset + o.width
     const h = at(hingeU, t)
     const f = at(freeU, t)
-    const tip = { x: h.x + n.x * side * o.width, y: h.y + n.y * side * o.width }
+    const cl = o.hinge === 'b' ? { x: -d.x, y: -d.y } : d
+    const k = (deg * Math.PI) / 180
+    const tip = { x: h.x + (cl.x * Math.cos(k) + n.x * side * Math.sin(k)) * o.width, y: h.y + (cl.y * Math.cos(k) + n.y * side * Math.sin(k)) * o.width }
     const r = px(o.width)
     const cross = (tip.x - h.x) * (f.y - h.y) - (tip.y - h.y) * (f.x - h.x)
     out.push(line(h, tip))
@@ -158,6 +164,8 @@ async function main() {
   const kase = {
     // The flat, as Claude would mark it off the drawing: dimensions and the scale bar outside.
     drawing: { file: 'drawing.png', mm_per_px: MM_PER_PX, x: ORIGIN.x, y: ORIGIN.y, rect: { x: -500, y: -500, w: 10000, h: 7500 } },
+    // Room labels where the drawing has its text.
+    rooms: reference.rooms,
     // Facades (street and yard): points on those walls. Their openings are windows.
     exterior: [{ x: 4500, y: 0 }, { x: 4500, y: 6500 }],
     facade: { file: 'facade-n.png', mm_per_px: MM_PER_PX, x: -500, y: -500, band: f.band, anchors: f.anchors },

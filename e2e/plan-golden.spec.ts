@@ -36,4 +36,7 @@ test('golden: a plan generated from the known drawing scores within limits', asy
   expect(score.openings.wrongSwing, why).toEqual([])
   expect(score.openings.maxCentreMm, why).toBeLessThanOrEqual(40)
   expect(score.openings.maxWidthMm, why).toBeLessThanOrEqual(100)
+
+  expect(score.rooms.wrong, why).toEqual([])
+  expect(score.rooms.maxAreaM2, why).toBeLessThanOrEqual(0.2)
 })
