@@ -48,6 +48,7 @@ const DEFAULT_SIZE: Record<FixtureKind, [number, number]> = {
   bath: [1700, 700],
   plug: [250, 250],
   box: [600, 600],
+  balcony: [2100, 1400],
 }
 
 type Drag =
@@ -654,6 +655,7 @@ const FIXTURE_SHORT: Record<FixtureKind, string> = {
   bath: 'Bad',
   plug: 'P',
   box: '',
+  balcony: 'Balkong',
 }
 
 const SNAP_COLOR: Record<Snap['kind'], string> = { endpoint: '#16a34a', onwall: '#0891b2', axis: '#dc2626', align: '#d946ef', grid: '#6b7280' }

@@ -26,6 +26,7 @@ export const FIXTURE_LABEL: Record<FixtureKind, string> = {
   bath: 'Badkar',
   plug: 'Proppad anslutning',
   box: 'Övrigt',
+  balcony: 'Balkong',
 }
 
 const input = 'w-full rounded border border-zinc-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none'

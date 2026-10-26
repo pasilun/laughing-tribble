@@ -284,6 +284,7 @@ const FIXTURE_LABEL: Record<Fixture['kind'], string> = {
   bath: 'Bad',
   plug: 'P',
   box: '',
+  balcony: 'Balkong',
 }
 
 function renderFixture(fx: Fixture, view: View, L: SheetLayout): string {

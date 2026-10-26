@@ -53,6 +53,7 @@ export type FixtureKind =
   | 'bath'
   | 'plug'
   | 'box'
+  | 'balcony'                // slab outside the facade, w along it, d out from it
 
 export type Fixture = {
   id: string
