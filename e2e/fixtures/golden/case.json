@@ -1,6 +1,5 @@
 {
  "drawing": {
-  "file": "drawing.png",
   "mm_per_px": 8.467,
   "x": -1000,
   "y": -1000,
@@ -10,6 +9,10 @@
    "w": 10000,
    "h": 7500
   }
+ },
+ "styles": {
+  "1936": "drawing-1936.png",
+  "arkiv": "drawing.png"
  },
  "rooms": [
   {

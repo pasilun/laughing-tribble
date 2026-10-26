@@ -1,7 +1,8 @@
 // Generates the golden "known drawing" in e2e/fixtures/golden/: a made-up
 // three-room flat (reference.json) drawn the way archive plans are drawn –
 // heavy walls filled, partitions outlined, doors as leaf and arc, windows as
-// glass lines, plus dimensions, labels and fixtures as clutter – and its
+// glass lines, plus dimensions, labels and fixtures as clutter; again in the
+// 1936 style, doorways as dashes and marks – and its
 // north facade seen from outside. e2e/plan-golden.spec.ts builds a plan
 // from these with the scan tools and scores it against reference.json.
 // Run: npx tsx scripts/make-golden.ts
@@ -60,6 +61,12 @@ const reference: Plan = {
 
 const LEAF_60 = ['d-vardag', 'd-bad']
 
+// The 1936 style: rooms outlined, no door symbols. A doorway in a partition
+// is one face drawn dashed across it, or a mark across the wall at its
+// centre (both sides, or one side only); the entrance and windows are gaps.
+type Mark = 'dashed' | 'mark' | 'mark-one-side'
+const STYLE_1936: Record<string, Mark> = { 'd-vardag': 'dashed', 'o-kok': 'dashed', 'd-sovrum': 'mark', 'd-bad': 'mark-one-side' }
+
 // Heavy walls run on past their centreline end to the outer face of the wall they meet.
 const HEAVY: Record<string, number> = { 'yt-n': 150, 'yt-s': 150, trapp: 225, gavel: 225 }
 
@@ -78,29 +85,58 @@ function quad(w: Wall, s: number, e: number, inset = 0): Pt[] {
 const poly = (q: Pt[], style: string) => `<polygon points="${q.map(P).join(' ')}" ${style}/>`
 const line = (a: Pt, b: Pt, w = LW) => `<line x1="${px(a.x - ORIGIN.x)}" y1="${px(a.y - ORIGIN.y)}" x2="${px(b.x - ORIGIN.x)}" y2="${px(b.y - ORIGIN.y)}" stroke="#000" stroke-width="${w}"/>`
 
-function drawing(plan: Plan): string {
+function drawing(plan: Plan, style: 'arkiv' | '1936'): string {
   const out: string[] = []
   const len = (w: Wall) => Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y)
+  const marked = (id: string) => (style === '1936' ? STYLE_1936[id] : undefined)
   const segs = (w: Wall) => {
     const ext = HEAVY[w.id] ?? 0
-    return wallSegments(w, plan.openings.filter((o) => o.wallId === w.id)).map(([s, e]) => [s === 0 ? -ext : s, e >= len(w) ? e + ext : e] as [number, number])
+    const gaps = plan.openings.filter((o) => o.wallId === w.id && !marked(o.id))
+    return wallSegments(w, gaps).map(([s, e]) => [s === 0 ? -ext : s, e >= len(w) ? e + ext : e] as [number, number])
+  }
+  const onWall = (w: Wall) => {
+    const d = wallDir(w)
+    const n = leftNormal(d)
+    return (u: number, k: number) => ({ x: w.a.x + d.x * u + n.x * k, y: w.a.y + d.y * u + n.y * k })
   }
   const light = plan.walls.filter((w) => !(w.id in HEAVY))
-  // Partitions: outlines, then their insides blanked so joins stay open.
-  for (const w of light) for (const [s, e] of segs(w)) out.push(poly(quad(w, s, e), `fill="none" stroke="#000" stroke-width="${LW}"`))
+  if (style === 'arkiv') {
+    // Partitions: outlines, then their insides blanked so joins stay open.
+    for (const w of light) for (const [s, e] of segs(w)) out.push(poly(quad(w, s, e), `fill="none" stroke="#000" stroke-width="${LW}"`))
+  } else {
+    // Face lines only; the right-hand face is left out where it is dashed.
+    for (const w of light) {
+      const at = onWall(w)
+      const dashed = plan.openings.filter((o) => o.wallId === w.id && marked(o.id) === 'dashed')
+      for (const [s, e] of segs(w)) {
+        out.push(line(at(s, w.thickness / 2), at(e, w.thickness / 2)))
+        let u = s
+        for (const o of dashed.filter((x) => x.offset >= s && x.offset + x.width <= e).sort((p, q) => p.offset - q.offset)) {
+          out.push(line(at(u, -w.thickness / 2), at(o.offset, -w.thickness / 2)))
+          u = o.offset + o.width
+        }
+        out.push(line(at(u, -w.thickness / 2), at(e, -w.thickness / 2)))
+      }
+    }
+  }
   for (const w of light) for (const [s, e] of segs(w)) out.push(poly(quad(w, s + (s > 0 ? 15 : -60), e - (e < len(w) ? 15 : -60), 15), 'fill="#fff"'))
   for (const w of plan.walls.filter((w) => w.id in HEAVY)) for (const [s, e] of segs(w)) out.push(poly(quad(w, s, e), 'fill="#000"'))
   for (const o of plan.openings) {
     const w = plan.walls.find((x) => x.id === o.wallId)!
     const d = wallDir(w)
     const n = leftNormal(d)
-    const at = (u: number, k: number) => ({ x: w.a.x + d.x * u + n.x * k, y: w.a.y + d.y * u + n.y * k })
+    const at = onWall(w)
     if (o.kind === 'window') {
       // Glass lines and the reveal ends.
       for (const k of [-40, 40]) out.push(line(at(o.offset, k), at(o.offset + o.width, k), THIN))
       continue
     }
-    if (o.kind !== 'door') continue
+    const mark = marked(o.id)
+    const half = w.thickness / 2
+    if (mark === 'dashed') out.push(line(at(o.offset, -half), at(o.offset + o.width, -half)).replace('/>', ` stroke-dasharray="${px(300)} ${px(60)}"/>`))
+    if (mark === 'mark') out.push(line(at(o.offset + o.width / 2, half + 300), at(o.offset + o.width / 2, -half - 300)))
+    if (mark === 'mark-one-side') out.push(line(at(o.offset + o.width / 2, half), at(o.offset + o.width / 2, half + 230)))
+    if (o.kind !== 'door' || mark) continue
     // Leaf open on the swing side (90° as in archive drawings, 60° as
     // SketchUp exports draw it), arc back to the free jamb.
     const deg = LEAF_60.includes(o.id) ? 60 : 90
@@ -158,12 +194,15 @@ function facade(plan: Plan): { svg: string; band: { y0: number; y1: number }; an
 
 async function main() {
   writeFileSync(`${DIR}/reference.json`, JSON.stringify(reference, null, 1) + '\n')
-  await sharp(Buffer.from(drawing(reference))).grayscale().png({ palette: true, colours: 2 }).toFile(`${DIR}/drawing.png`)
+  await sharp(Buffer.from(drawing(reference, 'arkiv'))).grayscale().png({ palette: true, colours: 2 }).toFile(`${DIR}/drawing.png`)
+  await sharp(Buffer.from(drawing(reference, '1936'))).grayscale().png({ palette: true, colours: 2 }).toFile(`${DIR}/drawing-1936.png`)
   const f = facade(reference)
   await sharp(Buffer.from(f.svg)).grayscale().png({ palette: true, colours: 2 }).toFile(`${DIR}/facade-n.png`)
   const kase = {
     // The flat, as Claude would mark it off the drawing: dimensions and the scale bar outside.
-    drawing: { file: 'drawing.png', mm_per_px: MM_PER_PX, x: ORIGIN.x, y: ORIGIN.y, rect: { x: -500, y: -500, w: 10000, h: 7500 } },
+    drawing: { mm_per_px: MM_PER_PX, x: ORIGIN.x, y: ORIGIN.y, rect: { x: -500, y: -500, w: 10000, h: 7500 } },
+    // The same flat in two drawing styles: door symbols, and 1936 (dashes and marks).
+    styles: { arkiv: 'drawing.png', 1936: 'drawing-1936.png' },
     // Room labels where the drawing has its text.
     rooms: reference.rooms,
     // Facades (street and yard): points on those walls. Their openings are windows.

@@ -11,11 +11,16 @@ import type { Plan, Pt, Wall } from '@/lib/plan/types'
 
 export const GOLDEN = 'e2e/fixtures/golden'
 
+// The same flat drawn with door symbols, and in the 1936 style (doorways as
+// a dashed face or a centre mark: kind and swing can't be read).
+export type Style = 'arkiv' | '1936'
+
 export type Call = (name: string, args: Record<string, unknown>) => Promise<{ text: string; isError?: boolean }>
 export type GetPlan = (id: string) => Promise<{ plan: Plan; revision: number }>
 
 type Case = {
-  drawing: { file: string; mm_per_px: number; x: number; y: number; rect: { x: number; y: number; w: number; h: number } }
+  styles: Record<Style, string>
+  drawing: { mm_per_px: number; x: number; y: number; rect: { x: number; y: number; w: number; h: number } }
   rooms: Plan['rooms']
   exterior: Pt[]
   facade: { file: string; mm_per_px: number; x: number; y: number; band: { y0: number; y1: number }; anchors: Array<{ facade_x: number; plan: Pt }> }
@@ -57,7 +62,7 @@ function nearestWall(plan: Plan, pts: Pt[]): Wall {
 }
 
 // Builds the plan; returns its id and a log of each step's reply.
-export async function generate(call: Call, getPlan: GetPlan): Promise<{ id: string; log: string[] }> {
+export async function generate(call: Call, getPlan: GetPlan, opts: { style: Style; methods: string[] | 'auto' }): Promise<{ id: string; log: string[] }> {
   const kase = JSON.parse(readFileSync(`${GOLDEN}/case.json`, 'utf8')) as Case
   const log: string[] = []
   const step = async (name: string, args: Record<string, unknown>) => {
@@ -71,7 +76,7 @@ export async function generate(call: Call, getPlan: GetPlan): Promise<{ id: stri
   const rev = async () => (await getPlan(id)).revision
   const file = (f: string) => readFileSync(`${GOLDEN}/${f}`).toString('base64')
 
-  await step('plan_source_add', { plan_id: id, base_revision: await rev(), id: 'plan', role: 'archive', filename: kase.drawing.file, data_base64: file(kase.drawing.file), mm_per_px: kase.drawing.mm_per_px, x: kase.drawing.x, y: kase.drawing.y })
+  await step('plan_source_add', { plan_id: id, base_revision: await rev(), id: 'plan', role: 'archive', filename: kase.styles[opts.style], data_base64: file(kase.styles[opts.style]), mm_per_px: kase.drawing.mm_per_px, x: kase.drawing.x, y: kase.drawing.y })
   await step('plan_source_add', { plan_id: id, base_revision: await rev(), id: 'fasad-n', role: 'archive', view: 'elevation', filename: kase.facade.file, data_base64: file(kase.facade.file), mm_per_px: kase.facade.mm_per_px, x: kase.facade.x, y: kase.facade.y })
 
   // Walls: detect, join the pieces, snap.
@@ -88,7 +93,7 @@ export async function generate(call: Call, getPlan: GetPlan): Promise<{ id: stri
   const facadeWall = nearestWall((await getPlan(id)).plan, kase.facade.anchors.map((x) => x.plan))
   await step('plan_scan_elevation', { plan_id: id, base_revision: await rev(), source_id: 'fasad-n', wall_id: facadeWall.id, band: kase.facade.band, anchors: kase.facade.anchors, apply: true })
 
-  await step('plan_scan_openings', { plan_id: id, base_revision: await rev(), source_id: 'plan', apply: true, methods: ['mellanrum', 'dörrbåge'] })
+  await step('plan_scan_openings', { plan_id: id, base_revision: await rev(), source_id: 'plan', apply: true, ...(opts.methods === 'auto' ? {} : { methods: opts.methods }) })
   await step('plan_scan_doors', { plan_id: id, base_revision: await rev(), source_id: 'plan', apply: true })
   await step('plan_edit', { plan_id: id, base_revision: await rev(), message: 'Rum', ops: kase.rooms.map((item) => ({ op: 'add', kind: 'room', item })) })
   return { id, log }
@@ -104,7 +109,9 @@ export type Score = {
 // Generated walls get the id of the reference wall on the same line (same
 // direction, centre lines within 200 mm, overlapping by half the shorter),
 // then the plans are compared with plan_compare's comparison.
-export function judge(plan: Plan, ref: Plan): Score {
+// symbols=false: the drawing has no door symbols, so a door read as an
+// opening (no swing) is right.
+export function judge(plan: Plan, ref: Plan, opts: { symbols: boolean } = { symbols: true }): Score {
   const vert = (w: Wall) => Math.abs(w.b.x - w.a.x) < Math.abs(w.b.y - w.a.y)
   const line = (w: Wall) => (vert(w) ? { c: (w.a.x + w.b.x) / 2, t0: Math.min(w.a.y, w.b.y), t1: Math.max(w.a.y, w.b.y) } : { c: (w.a.y + w.b.y) / 2, t0: Math.min(w.a.x, w.b.x), t1: Math.max(w.a.x, w.b.x) })
   const rename = new Map<string, string>()
@@ -127,8 +134,9 @@ export function judge(plan: Plan, ref: Plan): Score {
   for (const m of c.openings.matched) {
     const r = refOp.get(m.refId)!
     const p = planOp.get(m.id)!
-    if (r.kind !== p.kind) wrongKind.push(`${r.id}: ${p.kind}, ska vara ${r.kind}`)
-    else if (r.kind === 'door' && (r.hinge !== p.hinge || r.swing !== p.swing)) wrongSwing.push(`${r.id}: ${p.hinge}/${p.swing}, ska vara ${r.hinge}/${r.swing}`)
+    const plain = !opts.symbols && r.kind !== 'window' && p.kind !== 'window'
+    if (r.kind !== p.kind && !plain) wrongKind.push(`${r.id}: ${p.kind}, ska vara ${r.kind}`)
+    else if (r.kind === 'door' && p.kind === 'door' && (r.hinge !== p.hinge || r.swing !== p.swing)) wrongSwing.push(`${r.id}: ${p.hinge}/${p.swing}, ska vara ${r.hinge}/${r.swing}`)
   }
   const max = (xs: number[]) => xs.reduce((a, x) => Math.max(a, Math.abs(x)), 0)
   const score: Score = {

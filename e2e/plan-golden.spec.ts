@@ -19,7 +19,7 @@ test('golden: a plan generated from the known drawing scores within limits', asy
     const body = await (await request.get(`/api/plans/${id}`)).json()
     return { plan: body.plan, revision: body.revision.n }
   }
-  const { id, log } = await generate(call, getPlan)
+  const { id, log } = await generate(call, getPlan, { style: 'arkiv', methods: ['mellanrum', 'dörrbåge'] })
   const score = judge((await getPlan(id)).plan, reference())
   await test.info().attach('score', { body: score.report, contentType: 'text/plain' })
   await test.info().attach('steps', { body: log.join('\n\n'), contentType: 'text/plain' })
