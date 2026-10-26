@@ -43,6 +43,9 @@ test.describe('plan ops', () => {
   test('an opening outside its wall is rejected', () => {
     const res = applyOps(demoPlan(), [{ op: 'update', kind: 'opening', id: 'ny-oppning', patch: { offset: 6500 } }])
     expect(res.errors[0]).toContain('utanför väggen')
+    // A missing offset (e.g. a failed computation) is rejected, not saved.
+    const none = applyOps(demoPlan(), [{ op: 'update', kind: 'opening', id: 'ny-oppning', patch: { offset: null } }])
+    expect(none.errors[0]).toContain('måste vara tal')
   })
 
   test('values are rounded to whole millimetres', () => {

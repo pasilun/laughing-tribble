@@ -108,7 +108,8 @@ export function validatePlan(plan: Plan): string[] {
       continue
     }
     const len = dist(w.a, w.b)
-    if (o.offset < 0 || o.offset + o.width > len + 0.5)
+    if (!Number.isFinite(o.offset) || !(o.width > 0)) errors.push(`öppning ${o.id}: offset och bredd måste vara tal (bredd > 0)`)
+    else if (o.offset < 0 || o.offset + o.width > len + 0.5)
       errors.push(`öppning ${o.id}: ligger utanför väggen ${w.id} (${o.offset}+${o.width} > ${Math.round(len)} mm)`)
   }
   return errors
