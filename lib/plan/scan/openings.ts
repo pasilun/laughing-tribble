@@ -469,11 +469,17 @@ export function newOpenings(
     // A centre mark only where nothing better shows the opening.
     for (const m of isUsed('mittstreck') ? per.mittstreck : [])
       if (!finds.some((f) => Math.min(f.offset + f.width, m.offset + m.width) - Math.max(f.offset, m.offset) > 0)) finds.push(m)
-    // A door symbol gives the opening's extent and swing.
+    // A door symbol gives the swing; its width is read in 100 mm steps, so a
+    // gap of about that width keeps its own, measured extent.
     for (const dr of isUsed('dörrbåge') ? per.dörrbåge : []) {
       const same = finds.findIndex((f) => Math.min(f.offset + f.width, dr.offset + dr.width) - Math.max(f.offset, dr.offset) > 0.3 * dr.width)
-      if (same >= 0) finds[same] = { ...dr, method: `${finds[same].method}+dörrbåge` }
-      else finds.push(dr)
+      if (same < 0) {
+        finds.push(dr)
+        continue
+      }
+      const f = finds[same]
+      const extent = Math.abs(f.width - dr.width) <= 150 ? { offset: f.offset, width: f.width } : {}
+      finds[same] = { ...dr, ...extent, method: `${f.method}+dörrbåge` }
     }
     for (const gp of finds) {
       const offset = gp.offset

@@ -35,11 +35,16 @@ function bands(g: Gray, x0: number, x1: number, y0: number, y1: number, minRun: 
     }
     const next: Band[] = []
     for (const [a, b] of runs) {
-      const m = active.find((k) => Math.min(k.x1, b) - Math.max(k.x0, a) >= 0.7 * Math.min(k.x1 - k.x0, b - a))
-      if (m) {
-        active = active.filter((k) => k !== m)
-        next.push({ y0: m.y0, y1: y + 1, x0: Math.min(m.x0, a), x1: Math.max(m.x1, b), rows: m.rows + 1 })
-      } else next.push({ y0: y, y1: y + 1, x0: a, x1: b, rows: 1 })
+      const ov = (k: Band) => Math.min(k.x1, b) - Math.max(k.x0, a)
+      const hits = active.filter((k) => ov(k) >= 0.7 * Math.min(k.x1 - k.x0, b - a))
+      if (!hits.length) next.push({ y0: y, y1: y + 1, x0: a, x1: b, rows: 1 })
+      active = active.filter((k) => !hits.includes(k))
+      // A run much longer than a band (a window's glass lines joining the
+      // wall pieces either side) carries each band on without widening it.
+      for (const m of hits) {
+        const grow = ov(m) >= 0.7 * Math.max(m.x1 - m.x0, b - a)
+        next.push({ y0: m.y0, y1: y + 1, x0: grow ? Math.min(m.x0, a) : m.x0, x1: grow ? Math.max(m.x1, b) : m.x1, rows: m.rows + 1 })
+      }
     }
     done.push(...active)
     active = next

@@ -255,6 +255,16 @@ export function findDoorSymbols(g: Gray, r: Raster, wall: Wall, opts: { widths?:
               if (inkNear({ x: h.x + u.x * w, y: h.y + u.y * w })) hits++
             }
             if (hits < 5) continue
+            // An arc is a line with open floor either side: an "arc" through
+            // solid ink (a filled wall at a corner) is no door.
+            let inside = 0
+            let outside = 0
+            for (const deg of [20, 32, 44, 56]) {
+              const u = ray(closed, open, deg)
+              if (inkNear({ x: h.x + u.x * w * 0.55, y: h.y + u.y * w * 0.55 })) inside++
+              if (inkNear({ x: h.x + u.x * w * 1.2, y: h.y + u.y * w * 1.2 })) outside++
+            }
+            if (inside >= 3 || outside >= 3) continue
             const sc = hingeScore(g, r, h, closed, open, w, th)
             if (sc.score >= 0.75) cands.push({ offset: Math.round(Math.max(0, s0)), width: w, hinge, swing: side === 1 ? 'left' : 'right', score: Math.round(sc.score * 100) / 100 })
           }
