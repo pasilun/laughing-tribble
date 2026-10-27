@@ -217,3 +217,16 @@ test('a mass is a convex solid: drawn hatched like a load-bearing wall, solid in
   // A door in the north wall running into the mass is reported.
   expect(clashes(plan, walls[0], 500, 800)).toContain('m')
 })
+
+test('room labels fit the room: a closet at 1:200 keeps its name but drops the area', () => {
+  const wall = (id: string, ax: number, ay: number, bx: number, by: number): Wall => ({ id, a: { x: ax, y: ay }, b: { x: bx, y: by }, thickness: 100, phase: 'existing' })
+  // A 4 m room and a 0.6 m closet beside it.
+  const walls = [wall('n', 0, 0, 4700, 0), wall('s', 0, 2000, 4700, 2000), wall('w', 0, 0, 0, 2000), wall('m', 4000, 0, 4000, 2000), wall('e', 4700, 0, 4700, 2000)]
+  const rooms = [{ id: 'rum', name: 'Rum', at: { x: 2000, y: 1000 } }, { id: 'g', name: 'Garderob', at: { x: 4350, y: 1000 } }]
+  const at = (scale: 50 | 200) => renderSheet({ ...demoPlan(), walls, openings: [], fixtures: [], dimensions: [], rooms, sheet: { ...demoPlan().sheet, scale } }, 'fore')
+  const group = (svg: string, id: string) => new RegExp(`<g data-room="${id}">(.*?)</g>`).exec(svg)![1]
+  expect(group(at(50), 'g')).toContain('m²')
+  expect(group(at(200), 'g')).toContain('Garderob')
+  expect(group(at(200), 'g')).not.toContain('m²')
+  expect(group(at(200), 'rum')).toContain('m²')
+})

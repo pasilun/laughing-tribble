@@ -432,18 +432,29 @@ function renderDimensions(plan: Plan, L: SheetLayout): string {
     .join('')
 }
 
+// Room labels fit the room at small scales: the name shrinks to the clear
+// width (not below TEXT), and the area line is left out when it doesn't fit.
+const NAME = 3
+const ROOM_PAD = 1 // mm on paper between label and wall
+
 function renderRooms(plan: Plan, view: View, L: SheetLayout): string {
-  const { areas, includes } = roomSpaces(plan, view)
+  const { areas, includes, clear } = roomSpaces(plan, view)
   return plan.rooms
     .filter((r) => !(view === 'efter' && r.goneAfter))
     .map((r) => {
       const p = L.toPaper(r.at)
-      let s = text(p, view === 'efter' && r.renamed ? r.renamed : r.name, 3, { weight: 'bold' })
+      const name = view === 'efter' && r.renamed ? r.renamed : r.name
+      const room = clear.get(r.id)
+      const w = room ? room.w * L.k - ROOM_PAD : Infinity
+      const h = room ? room.h * L.k - ROOM_PAD : Infinity
+      const size = Math.max(TEXT, Math.min(NAME, w / (name.length * 0.6)))
       const area = areas.get(r.id)
-      if (area !== undefined) {
-        const more = includes.get(r.id)
-        s += text({ x: p.x, y: p.y + 3.6 }, more ? `${fmtArea(area)} inkl. ${more.join(', ')}` : fmtArea(area), TEXT)
-      }
+      const more = includes.get(r.id)
+      const labels = area === undefined ? [] : more ? [`${fmtArea(area)} inkl. ${more.join(', ')}`, fmtArea(area)] : [fmtArea(area)]
+      const label = size + 0.6 + TEXT <= h ? labels.find((l) => l.length * TEXT * 0.55 <= w) : undefined
+      // a name on its own is centred on the label point
+      let s = text(label ? p : { x: p.x, y: p.y + size * 0.35 }, name, size, { weight: 'bold' })
+      if (label) s += text({ x: p.x, y: p.y + size + 0.6 }, label, TEXT)
       return `<g data-room="${esc(r.id)}">${s}</g>`
     })
     .join('')

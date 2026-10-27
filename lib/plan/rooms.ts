@@ -29,14 +29,18 @@ export function roomAreas(plan: Plan, view: View): Map<string, number> {
 
 // Areas per room label, plus — for a space holding several labels (open
 // plan, or rooms merged by demolition) — the other names it includes, so
-// the one area shown can say what it covers.
-export function roomSpaces(plan: Plan, view: View): { areas: Map<string, number>; includes: Map<string, string[]> } {
+// the one area shown can say what it covers, and the clear width and height
+// through each label (wall to wall) with their midpoints, so the label can be
+// fitted and centred.
+export type Clear = { w: number; h: number; mid: Pt }
+export function roomSpaces(plan: Plan, view: View): { areas: Map<string, number>; includes: Map<string, string[]>; clear: Map<string, Clear> } {
   const includes = new Map<string, string[]>()
-  const areas = spaces(plan, view, includes)
-  return { areas, includes }
+  const clear = new Map<string, Clear>()
+  const areas = spaces(plan, view, includes, clear)
+  return { areas, includes, clear }
 }
 
-function spaces(plan: Plan, view: View, includes: Map<string, string[]>): Map<string, number> {
+function spaces(plan: Plan, view: View, includes: Map<string, string[]>, clear: Map<string, Clear>): Map<string, number> {
   const out = new Map<string, number>()
   const rooms = plan.rooms.filter((r) => !r.polygon && !(view === 'efter' && r.goneAfter))
   for (const r of plan.rooms) if (r.polygon && r.polygon.length >= 3) out.set(r.id, polygonArea(r.polygon))
@@ -92,6 +96,17 @@ function spaces(plan: Plan, view: View, includes: Map<string, string[]>): Map<st
     const sj = Math.floor((r.at.y - y0) / CELL)
     if (si < 0 || sj < 0 || si >= nx || sj >= ny || solid[sj * nx + si]) return
     const start = sj * nx + si
+    const run = (step: number, n: number) => {
+      let c = 0
+      while (c < n && !solid[start + (c + 1) * step]) c++
+      return c
+    }
+    const [l, rt, up, dn] = [run(-1, si), run(1, nx - 1 - si), run(-nx, sj), run(nx, ny - 1 - sj)]
+    clear.set(r.id, {
+      w: (l + rt + 1) * CELL,
+      h: (up + dn + 1) * CELL,
+      mid: { x: x0 + (si + (rt - l) / 2 + 0.5) * CELL, y: y0 + (sj + (dn - up) / 2 + 0.5) * CELL },
+    })
     // Same space as an earlier label (e.g. rooms merged by demolition): the
     // area is shown once, under the first label, which lists the others.
     if (seen[start] >= 0) {
