@@ -131,6 +131,29 @@ The sheet draws fixtures as these symbols (WC tank against the nearest
 wall, stove with four plates, drain as a small circle) and adds text only at
 1:50.
 
+## Reading a K-ritning (structural drawing)
+
+A K-ritning (konstruktionsritning) of the floor slabs says what carries, so
+read it before calling any wall load-bearing:
+
+- **Beams show the span.** Dash-dot lines labelled e.g. "INP 24" are steel
+  I-beams; diagonals across a panel with "Pl. C" mark slab panels by type.
+  The walls the beams end on carry; walls parallel to the beams don't. In
+  Gnejsen the beams run north–south, so the façades, both spine walls, the
+  stairwell and the party wall carry, and no cross wall does.
+- **Gaps mean more than in a plan.** The K-ritning draws walls continuous
+  through ordinary doors (a lintel rail goes over them, per its notes), so
+  a gap in a load-bearing wall there is a real interruption, e.g. a tambur
+  running through the spine wall.
+- **Holes in the slab** (a framed rectangle, hatched blocks) are ducts,
+  flues, chutes and stair openings, the same on every floor.
+- **Mind what the sheet covers.** One sheet may draw different slabs side by
+  side ("över vån 1 o 2" | "över vån 3", symmetric about the centreline);
+  its edge in the middle is not a gap in the building.
+- **Fit it like any source** (gable, party wall, both façades); an earlier
+  fit made for one part of the building can be off by half a metre
+  elsewhere.
+
 ## Sources and their weight
 
 - The newest official document for a part wins over older ones for that
