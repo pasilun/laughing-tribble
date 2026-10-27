@@ -90,7 +90,7 @@ The buildings here are Stockholm blocks of flats from the 1930s
 Automated: a wall end stopping short of the wall it meets [`joint-gap`] or
 running past its far face [`sticks-out`], a thickness change where two walls
 continue each other [`thickness-step`], short free-standing stubs
-[`free-stub`], door-sized holes only in load-bearing walls [`wide-hole`],
+[`free-stub`], door-sized holes only in load-bearing walls unless a beam is documented (`beam` on the opening, drawn dash-dot) [`wide-hole`],
 and walls between two flats thinner than 120 mm [`thin-split`].
 
 ## Fixtures and symbols

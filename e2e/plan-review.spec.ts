@@ -107,6 +107,8 @@ test('the engineering pass: joints, holes in load-bearing walls, walls between f
   expect(step).toContain('thickness-step')
   // a hole wider than a door in a load-bearing wall
   expect(codes(edit((p) => { p.walls.find((w) => w.id === 'mitt')!.loadBearing = true; p.openings.find((o) => o.id === 'rum')!.width = 1500 }))).toContain('wide-hole')
+  // …unless the beam over it is documented
+  expect(codes(edit((p) => { p.walls.find((w) => w.id === 'mitt')!.loadBearing = true; Object.assign(p.openings.find((o) => o.id === 'rum')!, { width: 1500, beam: 'INP 22' }) }))).not.toContain('wide-hole')
   // a 100 mm partition between two flats
   expect(codes(edit((p) => (p.rooms.find((r) => r.id === 'kok')!.apartment = 'B')))).toContain('thin-split')
 })

@@ -308,6 +308,8 @@ function renderOpening(plan: Plan, o: Opening, view: View, L: SheetLayout): stri
     out.push(line(P(add(s, scale(n, half))), P(add(e, scale(n, half))), 0.13, DASH))
     out.push(line(P(add(s, scale(n, -half))), P(add(e, scale(n, -half))), 0.13, DASH))
   }
+  // A beam over the opening: dash-dot along the wall's centre line, as on a K-ritning.
+  if (o.beam) out.push(line(P(s), P(e), 0.25, DASHDOT))
   return `<g data-opening="${esc(o.id)}" data-phase="${st}">${out.join('')}</g>`
 }
 

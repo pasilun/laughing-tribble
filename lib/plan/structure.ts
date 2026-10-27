@@ -108,7 +108,7 @@ export function structureFindings(plan: Plan, view: View, grid: SpaceGrid | null
   for (const o of plan.openings.filter(shown)) {
     const w = walls.find((x) => x.id === o.wallId)
     if (!w?.loadBearing || o.kind === 'window') continue
-    if (o.width > WIDE_HOLE)
+    if (o.width > WIDE_HOLE && !o.beam)
       out.push({ level: 'warning', code: 'wide-hole', ref: o.id, message: `Öppningen ${o.id} i bärande vägg ${w.id} är ${o.width} mm – bredare än en dörr; kräver balk/avväxling som ska framgå av underlaget` })
   }
 
