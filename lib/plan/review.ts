@@ -122,7 +122,7 @@ export function reviewPlan(plan: Plan, view: View = 'fore'): Review {
         findings.push({ level: 'info', code: 'sealed', message: `Instängt utrymme utan dörr och namn vid (${Math.round(sp.at.x)}, ${Math.round(sp.at.y)}), ${m2(sp.area)} – schakt, rökkanal eller ett rum som saknar dörr?` })
       return
     }
-    if (sp.rooms.length && !links.length && !ks.has('common'))
+    if (sp.rooms.length && !links.length)
       findings.push({ level: 'error', code: 'no-door', ref: sp.rooms[0], message: `${name(k)} har ingen dörr eller öppning` })
     if (ks.has('wet')) {
       const doors = links.filter((l) => l.a !== l.b)

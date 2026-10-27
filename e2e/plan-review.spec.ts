@@ -57,6 +57,8 @@ test('the walk through a flat finds what is wrong with it', () => {
   expect(codes(edit((p) => p.openings.push(door('entre2', 'lgh', 4000, 900))))).toEqual(expect.arrayContaining(['entrances', 'entrance-room']))
   // the kitchen belongs to another flat: a door between flats, and that flat has no entrance
   expect(codes(edit((p) => (p.rooms.find((r) => r.id === 'kok')!.apartment = 'B')))).toEqual(expect.arrayContaining(['between-flats', 'no-entrance']))
+  // a stairwell walled off from the stair hall (the spine wall drawn across the foot of the stair)
+  expect(codes(edit((p) => { p.walls.push(wall('trapp', 0, 4500, 2000, 4500)); p.rooms.push(room('tr', 'Trapphus', 1000, 5300)) }))).toContain('no-door')
   // a room with no door
   expect(codes(edit((p) => (p.openings = p.openings.filter((o) => o.id !== 'kok'))))).toContain('no-door')
   // the WC also opens into the kitchen
