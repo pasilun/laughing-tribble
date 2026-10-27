@@ -26,7 +26,7 @@ const OPS_DOC = `Operations (all lengths in whole millimetres; x to the right, y
 - {"op":"moveVertex","from":{x,y},"to":{x,y}}  (moves every wall end at that point — joined walls follow)
 - {"op":"moveWall","id":"v1","dx":100,"dy":0}  (walls joined at its ends stretch)
 - {"op":"setWallLength","id":"v1","length":3500,"fixed":"a"|"b"}
-- {"op":"setSheet","patch":{"paper":"A3"|"A4","orientation":"landscape"|"portrait","scale":50|100,"northAngle":0}}
+- {"op":"setSheet","patch":{"paper":"A3"|"A4","orientation":"landscape"|"portrait","scale":50|100|150|200,"northAngle":0}}
 - {"op":"setTitleBlock","patch":{"project","property","address","apartments","floor","drawingNumber","author","date"}}
 Phases: "existing" = stays, "demolish" = exists today and is removed, "new" = added. Före shows today; efter marks rivs/ny.
 All ops in one call succeed together or none are applied.`

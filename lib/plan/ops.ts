@@ -113,6 +113,7 @@ export function validatePlan(plan: Plan): string[] {
       ids.add(item.id)
     }
   }
+  if (![50, 100, 150, 200].includes(plan.sheet.scale)) errors.push(`skala 1:${plan.sheet.scale} stöds inte (1:50, 1:100, 1:150, 1:200)`)
   const walls = new Map(plan.walls.map((w) => [w.id, w]))
   for (const w of plan.walls) {
     if (dist(w.a, w.b) < 1) errors.push(`vägg ${w.id}: har ingen längd`)

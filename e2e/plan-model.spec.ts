@@ -112,9 +112,13 @@ test.describe('checks', () => {
     expect(checkPlan(plan).some((f) => f.code === 'property-name')).toBe(true)
   })
 
-  test('a plan too large for the sheet is an error', () => {
+  test('a plan too large for the sheet is an error that names a scale that fits', () => {
     const { plan } = applyOps(demoPlan(), [{ op: 'setSheet', patch: { paper: 'A4' } }])
-    expect(checkPlan(plan).some((f) => f.code === 'fit')).toBe(true)
+    const fit = checkPlan(plan).find((f) => f.code === 'fit')!
+    expect(fit.message).toContain('byt till 1:100')
+    const smaller = applyOps(plan, [{ op: 'setSheet', patch: { scale: 100 } }]).plan
+    expect(checkPlan(smaller).some((f) => f.code === 'fit')).toBe(false)
+    expect(applyOps(plan, [{ op: 'setSheet', patch: { scale: 75 as never } }]).errors[0]).toContain('stöds inte')
   })
 })
 

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { dist, polygonArea, wallLength } from '@/lib/plan/geometry'
 import type { Op } from '@/lib/plan/ops'
-import type { FixtureKind, Phase, Plan, TitleBlock } from '@/lib/plan/types'
+import type { FixtureKind, Phase, Plan, SheetScale, TitleBlock } from '@/lib/plan/types'
 import type { Selection } from './Canvas'
 
 type Props = {
@@ -260,10 +260,10 @@ function SheetPanel({ plan, onOps }: { plan: Plan; onOps: Props['onOps'] }) {
         <Choice label="Papper" value={plan.sheet.paper} options={[['A3', 'A3'], ['A4', 'A4']]} testid="sheet-paper" onChange={(v) => onOps([{ op: 'setSheet', patch: { paper: v } }], 'sheet:paper', `Papper ${v}`)} />
         <Choice
           label="Skala"
-          value={String(plan.sheet.scale) as '50' | '100'}
-          options={[['50', '1:50'], ['100', '1:100']]}
+          value={String(plan.sheet.scale) as '50' | '100' | '150' | '200'}
+          options={[['50', '1:50'], ['100', '1:100'], ['150', '1:150'], ['200', '1:200']]}
           testid="sheet-scale"
-          onChange={(v) => onOps([{ op: 'setSheet', patch: { scale: Number(v) as 50 | 100 } }], 'sheet:scale', `Skala 1:${v}`)}
+          onChange={(v) => onOps([{ op: 'setSheet', patch: { scale: Number(v) as SheetScale } }], 'sheet:scale', `Skala 1:${v}`)}
         />
         <Choice label="Orientering" value={plan.sheet.orientation} options={[['landscape', 'Liggande'], ['portrait', 'Stående']]} onChange={(v) => onOps([{ op: 'setSheet', patch: { orientation: v } }], 'sheet:orient', 'Orientering')} />
         <Num label="Norrpil (grader)" value={plan.sheet.northAngle} onChange={(v) => onOps([{ op: 'setSheet', patch: { northAngle: v } }], 'sheet:north', 'Norrpil')} />

@@ -112,10 +112,13 @@ export type TitleBlock = {
   revision: string           // "", "A", "B", ...
 }
 
+// 1:50 and 1:100 for permit drawings; 1:150 and 1:200 fit a whole floor on one sheet.
+export type SheetScale = 50 | 100 | 150 | 200
+
 export type Sheet = {
   paper: 'A4' | 'A3'
   orientation: 'landscape' | 'portrait'
-  scale: 50 | 100
+  scale: SheetScale
   northAngle: number         // degrees clockwise from sheet up
   titleBlock: TitleBlock
 }

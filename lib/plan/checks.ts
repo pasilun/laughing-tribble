@@ -1,6 +1,6 @@
 import { clashes } from './clear'
 import { validatePlan } from './ops'
-import { layoutSheet } from './sheet'
+import { fittingScale, layoutSheet } from './sheet'
 import type { Plan } from './types'
 
 // Checks a plan against what an anmälan for interior work needs to show.
@@ -35,8 +35,11 @@ export function checkPlan(plan: Plan): Finding[] {
     out.push({ level: 'warning', code: 'property-name', message: `"${tb.property}" ser ut som föreningens namn – fastighetsbeteckningen (t.ex. "Stockholm Gnejsen 6") ska stå i ritningshuvudet` })
 
   const L = layoutSheet(plan)
-  if (!L.fits)
-    out.push({ level: 'error', code: 'fit', message: `Planen får inte plats på ${plan.sheet.paper} i skala 1:${plan.sheet.scale} – byt till större papper eller 1:100` })
+  if (!L.fits) {
+    const s = fittingScale(plan)
+    const hint = s ? `byt till 1:${s}` : 'byt till större papper eller annan orientering'
+    out.push({ level: 'error', code: 'fit', message: `Planen får inte plats på ${plan.sheet.paper} i skala 1:${plan.sheet.scale} – ${hint}` })
+  }
 
   if (plan.walls.length === 0) out.push({ level: 'error', code: 'empty', message: 'Planen har inga väggar' })
 

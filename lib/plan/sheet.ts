@@ -1,6 +1,6 @@
 import { add, along, bounds, dist, leftNormal, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
 import { roomSpaces } from './rooms'
-import type { Fixture, Mass, Opening, Phase, Plan, Pt, View, Wall } from './types'
+import type { Fixture, Mass, Opening, Phase, Plan, Pt, SheetScale, View, Wall } from './types'
 
 // Renders a plan as a printable drawing sheet. All output coordinates are
 // paper millimetres, so the SVG prints at true scale at 100%.
@@ -44,6 +44,13 @@ export function layoutSheet(plan: Plan): SheetLayout {
   const ox = drawing.x + (drawing.w - (b.maxX - b.minX) * k) / 2 - b.minX * k
   const oy = drawing.y + (drawing.h - (b.maxY - b.minY) * k) / 2 - b.minY * k
   return { paperW, paperH, frame, drawing, fits, k, toPaper: (p) => ({ x: ox + p.x * k, y: oy + p.y * k }) }
+}
+
+export const SCALES: SheetScale[] = [50, 100, 150, 200]
+
+// The largest scale at which the plan fits the sheet's paper and orientation (null if none).
+export function fittingScale(plan: Plan): SheetScale | null {
+  return SCALES.find((scale) => layoutSheet({ ...plan, sheet: { ...plan.sheet, scale } }).fits) ?? null
 }
 
 // ── small SVG helpers (paper mm) ───────────────────────────────────────────
