@@ -1,6 +1,6 @@
 import { add, along, bounds, dist, leftNormal, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
 import { roomSpaces } from './rooms'
-import type { Fixture, Opening, Phase, Plan, Pt, View, Wall } from './types'
+import type { Fixture, Mass, Opening, Phase, Plan, Pt, View, Wall } from './types'
 
 // Renders a plan as a printable drawing sheet. All output coordinates are
 // paper millimetres, so the SVG prints at true scale at 100%.
@@ -177,12 +177,20 @@ export function wallPieces(plan: Plan, view: View): WallPiece[] {
   return out
 }
 
+export type MassPiece = { mass: Mass; poly: Pt[]; style: Phase }
+
+export function massPieces(plan: Plan, view: View): MassPiece[] {
+  return (plan.masses ?? []).filter((m) => visibleIn(m.phase, view)).map((m) => ({ mass: m, poly: m.points, style: styleOf(m.phase, view) }))
+}
+
 // Drawn in passes so walls that overlap at joints merge into one outline:
 // a wide outline of every solid piece first, then the fills on top.
 function renderWalls(plan: Plan, view: View, L: SheetLayout): string {
   const pieces = wallPieces(plan, view).map((p) => ({ ...p, q: p.quad.map(L.toPaper) }))
   const solid = pieces.filter((p) => p.style !== 'demolish')
-  const outline = solid.map((p) => poly(p.q, `fill="${INK}" stroke="${INK}" stroke-width="0.7" stroke-linejoin="miter"`)).join('')
+  const masses = massPieces(plan, view).map((m) => ({ ...m, q: m.poly.map(L.toPaper) }))
+  const solidMasses = masses.filter((m) => m.style !== 'demolish')
+  const outline = [...solid, ...solidMasses].map((p) => poly(p.q, `fill="${INK}" stroke="${INK}" stroke-width="0.7" stroke-linejoin="miter"`)).join('')
   const byWall = new Map<string, string[]>()
   const push = (id: string, svg: string) => byWall.set(id, [...(byWall.get(id) ?? []), svg])
   for (const p of solid) push(p.wall.id, poly(p.q, `fill="${p.style === 'new' ? INK : EXISTING_FILL}" stroke="none"`))
@@ -195,7 +203,15 @@ function renderWalls(plan: Plan, view: View, L: SheetLayout): string {
     const w = plan.walls.find((x) => x.id === id)!
     return `<g data-wall="${esc(id)}" data-phase="${styleOf(w.phase, view)}">${parts.join('')}</g>`
   })
-  return `<g class="wall-outline">${outline}</g>${groups.join('')}`
+  // Masses last: walls running into them disappear under them, as under a thicker wall.
+  const massGroups = masses.map((m) => {
+    const body =
+      m.style === 'demolish'
+        ? poly(m.q, `fill="none" stroke="${INK}" stroke-width="0.25" ${DASH}`)
+        : poly(m.q, `fill="${m.style === 'new' ? INK : EXISTING_FILL}" stroke="none"`) + (m.style === 'existing' && m.mass.loadBearing ? hatchConvex(m.q, 0.8) : '')
+    return `<g data-mass="${esc(m.mass.id)}" data-phase="${m.style}">${body}</g>`
+  })
+  return `<g class="wall-outline">${outline}</g>${groups.join('')}${massGroups.join('')}`
 }
 
 export function fireRatingIn(w: Wall, view: View): string {
@@ -462,7 +478,7 @@ function legend(view: View, L: SheetLayout, plan: Plan): string {
     `<rect x="${f(px)}" y="${f(py - 2)}" width="8" height="2.4" fill="${fill}" stroke="${INK}" stroke-width="0.25" ${extra}/>`
   const rows: Array<[(px: number, py: number) => string, string]> = [[sw(EXISTING_FILL), 'Befintlig vägg']]
   const fixtures = plan.fixtures.filter((fx) => visibleIn(fx.phase, view))
-  if (plan.walls.some((w) => w.loadBearing))
+  if (plan.walls.some((w) => w.loadBearing) || (plan.masses ?? []).some((m) => m.loadBearing))
     rows.push([(px, py) => sw(EXISTING_FILL)(px, py) + hatchConvex([{ x: px, y: py - 2 }, { x: px + 8, y: py - 2 }, { x: px + 8, y: py + 0.4 }, { x: px, y: py + 0.4 }], 0.8), 'Bärande vägg'])
   if (view === 'efter') {
     const has = (ph: Phase) => plan.walls.some((w) => w.phase === ph) || plan.openings.some((o) => o.phase === ph) || plan.fixtures.some((fx) => fx.phase === ph)

@@ -7,16 +7,18 @@ import type { Plan, Wall } from './types'
 
 export const CLEAR_MM = 100
 
-// Other walls whose outline lies inside this wall's band, as spans along it.
-// Outlines are sampled, so oblique walls work too.
+// Other walls (and masses) whose outline lies inside this wall's band, as
+// spans along it. Outlines are sampled, so oblique walls work too.
 export function blockers(plan: Plan, wall: Wall): Array<{ id: string; a: number; b: number }> {
   const d = wallDir(wall)
   const n = leftNormal(d)
   const h = wall.thickness / 2
   const out: Array<{ id: string; a: number; b: number }> = []
-  for (const o of plan.walls) {
-    if (o.id === wall.id) continue
-    const q = wallQuad(o)
+  const others = [
+    ...plan.walls.filter((o) => o.id !== wall.id).map((o) => ({ id: o.id, q: wallQuad(o) })),
+    ...(plan.masses ?? []).map((m) => ({ id: m.id, q: m.points })),
+  ]
+  for (const { id, q } of others) {
     let lo = Infinity
     let hi = -Infinity
     for (let i = 0; i < q.length; i++) {
@@ -32,7 +34,7 @@ export function blockers(plan: Plan, wall: Wall): Array<{ id: string; a: number;
         hi = Math.max(hi, t)
       }
     }
-    if (hi >= lo) out.push({ id: o.id, a: lo, b: hi })
+    if (hi >= lo) out.push({ id, a: lo, b: hi })
   }
   return out
 }

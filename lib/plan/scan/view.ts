@@ -104,6 +104,14 @@ function overlaySvg(plan: Plan, rect: Rect, k: number, w: number, h: number, opt
       const mid = P({ x: (wall.a.x + wall.b.x) / 2, y: (wall.a.y + wall.b.y) / 2 })
       parts.push(`<text x="${mid.x + 3}" y="${mid.y - 3}" font-size="11" fill="${color}">${wall.id}</text>`)
     }
+    for (const m of plan.masses ?? []) {
+      if (view === 'fore' && m.phase === 'new') continue
+      const q = m.points.map(P)
+      const color = m.phase === 'demolish' ? '#f59e0b' : m.phase === 'new' ? '#2563eb' : '#dc2626'
+      parts.push(`<polygon points="${q.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="${color}" fill-opacity="0.25" stroke="${color}" stroke-width="1.5"/>`)
+      const c = q.reduce((s, p) => ({ x: s.x + p.x / q.length, y: s.y + p.y / q.length }), { x: 0, y: 0 })
+      parts.push(`<text x="${c.x + 3}" y="${c.y - 3}" font-size="11" fill="${color}">${m.id}</text>`)
+    }
     for (const o of plan.openings) {
       const wall = plan.walls.find((x) => x.id === o.wallId)
       if (!wall) continue

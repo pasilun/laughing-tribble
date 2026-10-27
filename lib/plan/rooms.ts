@@ -75,6 +75,17 @@ function spaces(plan: Plan, view: View, includes: Map<string, string[]>): Map<st
     }
   }
 
+  // Masses are solid like walls.
+  for (const m of (plan.masses ?? []).filter((x) => (view === 'fore' ? x.phase !== 'new' : x.phase !== 'demolish'))) {
+    const q = m.points
+    const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
+    const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
+    const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
+    const j1 = Math.min(ny - 1, Math.ceil((Math.max(...q.map((p) => p.y)) - y0) / CELL))
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) if (insideConvex({ x: x0 + (i + 0.5) * CELL, y: y0 + (j + 0.5) * CELL }, q)) solid[j * nx + i] = 1
+  }
+
   const seen = new Int32Array(nx * ny).fill(-1)
   rooms.forEach((r: Room, k) => {
     const si = Math.floor((r.at.x - x0) / CELL)

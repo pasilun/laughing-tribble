@@ -3,7 +3,7 @@ import PDFDocument from 'pdfkit'
 import SVGtoPDF from 'svg-to-pdfkit'
 import path from 'path'
 import { add, along, leftNormal, scale, wallDir } from './geometry'
-import { fireRatingIn, layoutSheet, renderSheet, visibleIn, wallPieces, VIEW_TITLE } from './sheet'
+import { fireRatingIn, layoutSheet, massPieces, renderSheet, visibleIn, wallPieces, VIEW_TITLE } from './sheet'
 import type { Plan, Pt, View } from './types'
 
 const FONT_DIR = path.join(process.cwd(), 'lib/plan/fonts')
@@ -105,6 +105,10 @@ export function planDxf(plan: Plan, view: View): Buffer {
   for (const piece of wallPieces(plan, view)) {
     const layer = piece.style === 'demolish' ? 'A-VAGG-RIV' : piece.style === 'new' ? 'A-VAGG-NY' : piece.wall.loadBearing ? 'A-VAGG-BARANDE' : 'A-VAGG-BEF'
     polyE(layer, piece.quad)
+  }
+  for (const m of massPieces(plan, view)) {
+    const layer = m.style === 'demolish' ? 'A-VAGG-RIV' : m.style === 'new' ? 'A-VAGG-NY' : m.mass.loadBearing ? 'A-VAGG-BARANDE' : 'A-VAGG-BEF'
+    polyE(layer, m.poly)
   }
   for (const o of plan.openings) {
     if ((view === 'fore' && o.phase === 'new') || (view === 'efter' && o.phase === 'demolish')) continue

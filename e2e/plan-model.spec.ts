@@ -194,3 +194,22 @@ test('openings clear of the walls they meet: a window through a corner is cut ba
   expect(checkPlan(bad).some((f) => f.code === 'opening-in-wall' && f.ref === 'win')).toBe(true)
   expect(checkPlan({ ...plan, openings: [{ id: 'win', kind: 'window', wallId: 'W', offset: 1300, width: 1000, phase: 'existing' }] }).some((f) => f.code === 'opening-in-wall')).toBe(false)
 })
+
+test('a mass is a convex solid: drawn hatched like a load-bearing wall, solid in room areas, in the way of openings', async () => {
+  const { roomAreas } = await import('@/lib/plan/rooms')
+  const wall = (id: string, ax: number, ay: number, bx: number, by: number): Wall => ({ id, a: { x: ax, y: ay }, b: { x: bx, y: by }, thickness: 100, phase: 'existing' })
+  const walls = [wall('n', 0, 0, 4000, 0), wall('s', 0, 2000, 4000, 2000), wall('w', 0, 0, 0, 2000), wall('e', 4000, 0, 4000, 2000)]
+  const base: Plan = { ...demoPlan(), walls, openings: [], fixtures: [], rooms: [{ id: 'r', name: 'Rum', at: { x: 2000, y: 1000 } }] }
+  // A dented outline is refused; a triangle is fine.
+  const bad = applyOps(base, [{ op: 'add', kind: 'mass', item: { id: 'm', points: [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 300, y: 300 }, { x: 0, y: 1000 }], phase: 'existing' } }])
+  expect(bad.errors[0]).toContain('konvex')
+  const { plan, errors } = applyOps(base, [{ op: 'add', kind: 'mass', item: { id: 'm', points: [{ x: 50, y: 50 }, { x: 1050, y: 50 }, { x: 50, y: 1050 }], phase: 'existing', loadBearing: true } }])
+  expect(errors).toEqual([])
+  const svg = renderSheet(plan, 'fore')
+  const group = /<g data-mass="m" data-phase="existing">(.*?)<\/g>/.exec(svg)![1]
+  expect(group).toContain('<line') // hatch
+  // 3900 × 1900 inside the faces, less the 1000 × 1000 / 2 triangle.
+  expect(Math.abs(roomAreas(plan, 'fore').get('r')! / 1e6 - (7.41 - 0.5))).toBeLessThan(0.05)
+  // A door in the north wall running into the mass is reported.
+  expect(clashes(plan, walls[0], 500, 800)).toContain('m')
+})

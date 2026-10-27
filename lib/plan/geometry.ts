@@ -75,6 +75,7 @@ export function wallSegments(w: Wall, openings: Opening[]): Array<[number, numbe
 export function bounds(plan: Plan): { minX: number; minY: number; maxX: number; maxY: number } {
   const pts: Pt[] = []
   for (const w of plan.walls) pts.push(...wallQuad(w))
+  for (const m of plan.masses ?? []) pts.push(...m.points)
   for (const f of plan.fixtures) pts.push({ x: f.x - f.w / 2, y: f.y - f.d / 2 }, { x: f.x + f.w / 2, y: f.y + f.d / 2 })
   for (const r of plan.rooms) pts.push(r.at)
   if (pts.length === 0) return { minX: 0, minY: 0, maxX: 1000, maxY: 1000 }

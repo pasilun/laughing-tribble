@@ -1,11 +1,12 @@
 import { dist, wallDir, wallLength } from './geometry'
-import type { Dimension, Fixture, Note, Opening, Plan, Pt, Room, Sheet, Source, TitleBlock, Underlay, Wall } from './types'
+import type { Dimension, Fixture, Mass, Note, Opening, Plan, Pt, Room, Sheet, Source, TitleBlock, Underlay, Wall } from './types'
 
 // Small, targeted edits. Claude and the editor both change a plan only
 // through these, so an edit never regenerates parts it doesn't touch.
 
 type Kinds = {
   wall: Wall
+  mass: Mass
   opening: Opening
   fixture: Fixture
   room: Room
@@ -15,8 +16,9 @@ type Kinds = {
 }
 export type Kind = keyof Kinds
 
-const COLLECTION: { [K in Kind]: 'walls' | 'openings' | 'fixtures' | 'rooms' | 'dimensions' | 'notes' | 'sources' } = {
+const COLLECTION: { [K in Kind]: 'walls' | 'masses' | 'openings' | 'fixtures' | 'rooms' | 'dimensions' | 'notes' | 'sources' } = {
   wall: 'walls',
+  mass: 'masses',
   opening: 'openings',
   fixture: 'fixtures',
   room: 'rooms',
@@ -86,6 +88,21 @@ function moveVertex(plan: Plan, from: Pt, to: Pt): Plan {
   return plan.walls.reduce((next, before, i) => (before.a === walls[i].a ? next : followA(next, before, walls[i])), { ...plan, walls })
 }
 
+// True for a convex polygon with area, corners in either winding order.
+function convex(pts: Pt[]): boolean {
+  let sign = 0
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]
+    const b = pts[(i + 1) % pts.length]
+    const c = pts[(i + 2) % pts.length]
+    const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
+    if (Math.abs(cross) < 1) continue
+    if (sign === 0) sign = Math.sign(cross)
+    else if (Math.sign(cross) !== sign) return false
+  }
+  return sign !== 0
+}
+
 export function validatePlan(plan: Plan): string[] {
   const errors: string[] = []
   for (const kind of KINDS) {
@@ -100,6 +117,10 @@ export function validatePlan(plan: Plan): string[] {
   for (const w of plan.walls) {
     if (dist(w.a, w.b) < 1) errors.push(`vägg ${w.id}: har ingen längd`)
     if (!(w.thickness > 0)) errors.push(`vägg ${w.id}: tjocklek måste vara > 0`)
+  }
+  for (const m of plan.masses ?? []) {
+    if (!Array.isArray(m.points) || m.points.length < 3) errors.push(`massa ${m.id}: behöver minst tre hörn`)
+    else if (!convex(m.points)) errors.push(`massa ${m.id}: hörnen måste bilda en konvex form i ordning runt om – dela upp en annan form i flera`)
   }
   for (const o of plan.openings) {
     const w = walls.get(o.wallId)

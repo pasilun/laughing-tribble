@@ -15,12 +15,13 @@ import type { Plan, View } from './types'
 
 const OPS_DOC = `Operations (all lengths in whole millimetres; x to the right, y DOWN; ids are stable strings):
 - {"op":"add","kind":"wall","item":{"id":"v1","a":{"x":0,"y":0},"b":{"x":4000,"y":0},"thickness":100,"phase":"existing"|"demolish"|"new","loadBearing"?:true,"fireRating"?:"EI60","fireRatingAfter"?:""|"EI60","apartmentBoundary"?:true}}
+- {"op":"add","kind":"mass","item":{"id":"m1","points":[{"x":..,"y":..},…],"phase":"existing","loadBearing"?:true}}  (a solid with a sloping outline a straight wall can't draw, e.g. tapered masonry beside a stairwell: convex, corners in order; split other shapes into several. Drawn and counted like walls; walls running into it disappear under it)
 - {"op":"add","kind":"opening","item":{"id":"o1","wallId":"v1","kind":"door"|"opening"|"window","offset":1200,"width":900,"height"?:2100,"phase":"new","hinge"?:"a"|"b","swing"?:"left"|"right"}}  (offset = distance from the wall's a-end to the opening's near edge). "through":true marks an open passage with no wall, door or frame in the stretch between two walls: the rooms either side count as one space (one label, one area). hinge/swing: don't set them by eye — with a source drawing run plan_scan_doors; plan_get lists each door in words ("gångjärn vid västra karmen, öppnar mot norr") to check.
 - {"op":"add","kind":"fixture","item":{"id":"i1","kind":"kitchen"|"stove"|"sink"|"radiator"|"exhaust"|"shaft"|"wc"|"shower"|"bath"|"plug"|"box"|"balcony","x":..,"y":..,"w":..,"d":..,"rotation"?:0,"phase":"existing","label"?:"..."}}  (x,y = centre; a balcony: w along the facade, d out from its outer face)
 - {"op":"add","kind":"room","item":{"id":"r1","name":"Kök","renamed"?:"Rum","goneAfter"?:true,"at":{"x":..,"y":..},"polygon"?:[{x,y},...]}}
 - {"op":"add","kind":"dimension","item":{"id":"m1","a":{..},"b":{..},"offset":500}}
 - {"op":"add","kind":"note","item":{"id":"n1","at":{..},"text":"..."}}
-- {"op":"update","kind":"wall|opening|fixture|room|dimension|note","id":"…","patch":{…fields to change…}}
+- {"op":"update","kind":"wall|mass|opening|fixture|room|dimension|note","id":"…","patch":{…fields to change…}}
 - {"op":"delete","kind":"…","id":"…"}  (deleting a wall deletes its openings)
 - {"op":"moveVertex","from":{x,y},"to":{x,y}}  (moves every wall end at that point — joined walls follow)
 - {"op":"moveWall","id":"v1","dx":100,"dy":0}  (walls joined at its ends stretch)
@@ -147,6 +148,10 @@ export function summarisePlan(plan: Plan): string {
       .filter(Boolean)
       .join(', ')
     lines.push(`- ${w.id}: (${w.a.x},${w.a.y})→(${w.b.x},${w.b.y}) längd ${Math.round(wallLength(w))} tj ${w.thickness} ${w.phase}${flags ? ` [${flags}]` : ''}`)
+  }
+  if (plan.masses?.length) {
+    lines.push(`Massor (${plan.masses.length}):`)
+    for (const m of plan.masses) lines.push(`- ${m.id}: ${m.points.map((p) => `(${p.x},${p.y})`).join(' ')} ${m.phase}${m.loadBearing ? ' [bärande]' : ''}`)
   }
   lines.push(`Öppningar (${plan.openings.length}):`)
   for (const o of plan.openings) {

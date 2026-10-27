@@ -493,6 +493,17 @@ export function Canvas(props: Props) {
             style={{ pointerEvents: 'none' }}
           />
         )}
+        {(plan.masses ?? []).map((m) => {
+          if (!visible(m.phase)) return null
+          const style = view === 'fore' ? 'existing' : m.phase
+          const pts = m.points.map((p) => `${p.x},${p.y}`).join(' ')
+          return (
+            <g key={`mass-${m.id}`} data-testid={`mass-${m.id}`} pointerEvents="none">
+              <polygon points={pts} fill={PHASE_FILL[style]} fillOpacity={plan.underlay ? 0.75 : 1} stroke={style === 'demolish' ? '#dc2626' : '#111827'} strokeWidth={px(1)} strokeDasharray={style === 'demolish' ? `${px(6)} ${px(4)}` : undefined} />
+              {m.loadBearing && style !== 'demolish' && <polygon points={pts} fill="url(#pe-hatch)" opacity={0.5} />}
+            </g>
+          )
+        })}
         {pieces.map(({ wall: w, quad: q, style }, i) => {
           const sel = isSel('wall', w.id)
           const pts = q.map((p) => `${p.x},${p.y}`).join(' ')

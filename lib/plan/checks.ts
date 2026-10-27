@@ -62,6 +62,10 @@ export function checkPlan(plan: Plan): Finding[] {
     if (w.phase === 'demolish' && (w.fireRating || w.apartmentBoundary))
       out.push({ level: 'warning', code: 'fire', ref: w.id, message: `Vägg ${w.id} är brandcellsgräns och rivs – brandskyddsbeskrivning krävs` })
   }
+  for (const m of plan.masses ?? []) {
+    if (m.phase === 'demolish' && m.loadBearing)
+      out.push({ level: 'warning', code: 'load-bearing', ref: m.id, message: `Bärande murmassa ${m.id} rivs – kräver konstruktionshandling och beräkning` })
+  }
   for (const o of plan.openings) {
     const w = walls.get(o.wallId)
     if (!w || o.phase !== 'new') continue

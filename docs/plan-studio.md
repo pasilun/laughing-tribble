@@ -30,8 +30,11 @@ carry a 64-bit random suffix.
 
 Integer millimetres, x right / y down. Walls are centre lines with a
 thickness and a phase (`existing | demolish | new`), optional load-bearing,
-fire rating before/after and apartment-boundary flags. Openings sit on a
-wall at an offset from its `a` end. Före and efter are **one model**: före
+fire rating before/after and apartment-boundary flags. Masses are convex
+outlines (same phase and load-bearing flags) for solids a straight wall
+can't draw, such as the tapered masonry beside a stairwell; they are drawn,
+exported and counted in room areas like walls (editor shows them only).
+Openings sit on a wall at an offset from its `a` end. Före and efter are **one model**: före
 shows today (new work hidden), efter marks demolition (dashed) and new
 work (black).
 

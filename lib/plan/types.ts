@@ -21,6 +21,15 @@ export type Wall = {
   exterior?: boolean         // outer wall of the building (facade): its openings are windows
 }
 
+// A solid with a sloping outline that a straight wall can't draw, e.g. the
+// tapered masonry beside a stairwell. Convex, corners in order around it.
+export type Mass = {
+  id: string
+  points: Pt[]
+  phase: Phase
+  loadBearing?: boolean
+}
+
 export type OpeningKind = 'door' | 'window' | 'opening'
 
 export type Opening = {
@@ -147,6 +156,7 @@ export type Plan = {
   name: string
   sheet: Sheet
   walls: Wall[]
+  masses?: Mass[]
   openings: Opening[]
   fixtures: Fixture[]
   rooms: Room[]
