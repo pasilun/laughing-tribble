@@ -94,3 +94,38 @@ test('a plan that stops at the stair hall takes the outside of the drawing as th
   expect(r.flats[0].entrances).toEqual(['entre'])
   expect(r.findings.filter((f) => f.level !== 'info')).toEqual([])
 })
+
+test('the engineering pass: joints, holes in load-bearing walls, walls between flats', () => {
+  // a wall that runs through the wall it meets, and one that stops short of it
+  expect(codes(edit((p) => p.walls.push(wall('x', 6000, 4000, 6000, 1880))))).toContain('sticks-out')
+  expect(codes(edit((p) => p.walls.push(wall('x', 6000, 4000, 6000, 2200))))).toContain('joint-gap')
+  // a wall that changes thickness where it continues
+  const step = reviewPlan(edit((p) => {
+    p.walls = p.walls.filter((w) => w.id !== 'wc-kok')
+    p.walls.push(wall('wc-kok', 5500, 0, 5500, 1000), wall('wc-kok2', 5500, 1000, 5500, 2000, { thickness: 160 }))
+  })).findings.map((f) => f.code)
+  expect(step).toContain('thickness-step')
+  // a hole wider than a door in a load-bearing wall
+  expect(codes(edit((p) => { p.walls.find((w) => w.id === 'mitt')!.loadBearing = true; p.openings.find((o) => o.id === 'rum')!.width = 1500 }))).toContain('wide-hole')
+  // a 100 mm partition between two flats
+  expect(codes(edit((p) => (p.rooms.find((r) => r.id === 'kok')!.apartment = 'B')))).toContain('thin-split')
+})
+
+test('fixtures tell what a room is: a stove behind a "wall" is a kitchen counter, a WC belongs in a wet room', () => {
+  const withFixtures = (f: (p: Plan) => void) => edit((p) => {
+    p.fixtures.push({ id: 'wc1', kind: 'wc', x: 4750, y: 400, w: 400, d: 650, phase: 'existing' }, { id: 'spis', kind: 'stove', x: 7600, y: 400, w: 600, d: 600, phase: 'existing' })
+    f(p)
+  })
+  expect(codes(withFixtures(() => {}))).toEqual([])
+  // the stove sits in a closed strip: the line in front of it was traced as a wall
+  const sealed = withFixtures((p) => {
+    p.walls.push(wall('bank', 5500, 800, 8000, 800))
+    p.fixtures.find((x) => x.id === 'spis')!.y = 400
+  })
+  expect(codes(sealed)).toContain('fixture-sealed')
+  // a WC in the living room
+  expect(codes(withFixtures((p) => (p.fixtures.find((x) => x.id === 'wc1')!.y = 4000)))).toContain('fixture-room')
+  // once fixtures are recorded, a kitchen without any is noted
+  const bare = reviewPlan(withFixtures((p) => (p.fixtures = p.fixtures.filter((x) => x.id !== 'spis')))).findings.map((f) => f.code)
+  expect(bare).toContain('kitchen-fixtures')
+})

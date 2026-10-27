@@ -1,6 +1,7 @@
 import { add, along, leftNormal, scale, wallDir } from './geometry'
 import type { Finding } from './checks'
 import { spaceGrid, type Space } from './rooms'
+import { structureFindings } from './structure'
 import type { Opening, Plan, Room, View, Wall } from './types'
 
 // Reads a plan the way an architect walks it: who enters where, which room
@@ -196,6 +197,7 @@ export function reviewPlan(plan: Plan, view: View = 'fore'): Review {
   if (apartments.length)
     for (const r of plan.rooms) if (!r.apartment && roomKind(r) !== 'common') findings.push({ level: 'info', code: 'no-apartment', ref: r.id, message: `${r.name} (${r.id}) hör inte till någon lägenhet` })
 
+  findings.push(...structureFindings(plan, view, grid, (id) => roomKind(rooms.get(id)!), flatOf, name))
   return { findings: dedupe(findings), flats, links, spaces }
 }
 

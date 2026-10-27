@@ -61,7 +61,7 @@ wet, Kök/Kokvrå/Kv = kitchen, G/Garderob/Klk = closet, Rum/Matvrå/Sov… =
 habitable, Trapphus/Trapphall = common. Rooms need `apartment` set for the
 flat checks.
 
-## Structure (reasoning; automation to come)
+## Structure (partly automated)
 
 The buildings here are Stockholm blocks of flats from the 1930s
 (lamellhus): brick or lightweight-concrete walls, concrete floor slabs.
@@ -86,6 +86,50 @@ The buildings here are Stockholm blocks of flats from the 1930s
   from its stack (typbadrum lists) is wrong or a documented relocation.
 - **Masonry masses** (stairwell walls, chimney breasts) are solid, not
   rooms; doors don't open into them.
+
+Automated: a wall end stopping short of the wall it meets [`joint-gap`] or
+running past its far face [`sticks-out`], a thickness change where two walls
+continue each other [`thickness-step`], short free-standing stubs
+[`free-stub`], door-sized holes only in load-bearing walls [`wide-hole`],
+and walls between two flats thinner than 120 mm [`thin-split`].
+
+## Fixtures and symbols
+
+A room's use and shape are read from what is drawn in it, not from its walls
+alone. A kitchen nook traced from lines only loses its counter: the line in
+front of the stove and sink becomes a "wall" and the nook a sealed cell.
+Read every room's symbols on every source and record them as fixtures; the
+review then checks them:
+
+- a stove, sink or WC standing in an unnamed or sealed space is an error:
+  the line in front of it is a counter edge, not a wall [`fixture-sealed`];
+- a WC or shower outside a wet room, a stove outside a kitchen
+  [`fixture-room`]; a fixture inside a wall [`fixture-in-wall`];
+- kitchens without stove/sink, wet rooms without WC/shower, once the plan
+  records fixtures [`kitchen-fixtures`, `wet-fixtures`].
+
+Symbols on the Gnejsen drawings (1936 plan, 1999 survey A00:24, 2010
+bygglov redraw, 2000 typbadrum):
+
+| symbol | means |
+| --- | --- |
+| box with one diagonal, in a kitchen beside the sink | stove (spis) |
+| semicircle, flat side on a wall or counter line | sink (kitchen) or washbasin (bathroom, "TS") |
+| rectangle along a kitchen wall | counter/bench; the line in front is its edge |
+| projecting box with an inner rectangle, opposite the stove | built-in cupboard/larder |
+| circle with a dot, oval with a tank (1999, 2000) | WC |
+| hatched circle with grid, triangle with arrow (2000) | floor drain with shower |
+| small box with a diagonal inside a wall | flue or vent duct |
+| box with both diagonals | shaft |
+| dotted line across a room | floor/use boundary (kök/matplats), no wall |
+| dashed lines along a room | beam or soffit above, no wall |
+| short stroke across a wall (1936) | door |
+| circled number (1999) | exhaust vent: only kitchens and WCs have one |
+| "102 vent", "102" (1999) | stack pipe Ø102 nearby |
+
+The sheet draws fixtures as these symbols (WC tank against the nearest
+wall, stove with four plates, drain as a small circle) and adds text only at
+1:50.
 
 ## Sources and their weight
 
@@ -115,6 +159,7 @@ Each of these was caught by the user and is now a check or a test:
 | toilets must open out | `wc-door-inward` |
 | a scan gap imported as a door, rooms joined across flats | `too-narrow`, `between-flats` |
 | flats with no front door, two front doors | `no-entrance`, `entrances` |
-| notch by the G, corner sticking out, wall-thickness step | structure: walls meet flush (to automate) |
+| notch by the G, corner sticking out, wall-thickness step | `joint-gap`, `sticks-out`, `thickness-step` |
+| kitchen nooks traced with the counter edge as a wall | `fixture-sealed`; read the symbols |
 | funnel-shaped stair wall overlapping the stair | structure: masses are solid, walls don't overlap them |
 | a new opening from the owner's "after" drawing imported as existing | sources: phase from the document's date |

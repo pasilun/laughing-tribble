@@ -316,7 +316,65 @@ const FIXTURE_LABEL: Record<Fixture['kind'], string> = {
   balcony: 'Balkong',
 }
 
-function renderFixture(fx: Fixture, view: View, L: SheetLayout): string {
+// The side of a fixture that stands against a wall: the one whose middle is
+// nearest a wall face. A WC's tank and a basin's back go there.
+function backSide(plan: Plan, fx: Fixture): 'n' | 's' | 'w' | 'e' {
+  const sides = { n: { x: fx.x, y: fx.y - fx.d / 2 }, s: { x: fx.x, y: fx.y + fx.d / 2 }, w: { x: fx.x - fx.w / 2, y: fx.y }, e: { x: fx.x + fx.w / 2, y: fx.y } }
+  let best: ['n' | 's' | 'w' | 'e', number] = ['n', Infinity]
+  for (const [k, p] of Object.entries(sides) as Array<['n' | 's' | 'w' | 'e', Pt]>)
+    for (const w of plan.walls) {
+      const len = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1
+      const t = Math.max(0, Math.min(len, ((p.x - w.a.x) * (w.b.x - w.a.x) + (p.y - w.a.y) * (w.b.y - w.a.y)) / len))
+      const d = Math.max(0, Math.hypot(p.x - w.a.x - ((w.b.x - w.a.x) * t) / len, p.y - w.a.y - ((w.b.y - w.a.y) * t) / len) - w.thickness / 2)
+      if (d < best[1]) best = [k, d]
+    }
+  return best[0]
+}
+
+// Kitchen and bathroom fixtures are drawn as their usual symbols; at 1:100 and
+// smaller they carry no text, which only crowds the plan.
+const SYMBOL_KINDS = new Set<Fixture['kind']>(['wc', 'sink', 'stove', 'shower', 'bath', 'kitchen', 'box'])
+
+function fixtureSymbol(plan: Plan, fx: Fixture, x0: number, y0: number, w: number, d: number, lw: number, dash: string): string[] {
+  const out: string[] = []
+  const c = { x: x0 + w / 2, y: y0 + d / 2 }
+  const thin = Math.min(lw, 0.18)
+  if (fx.kind === 'wc' || fx.kind === 'sink' || fx.kind === 'bath') {
+    // back to the wall; tank or rim along it, bowl towards the room
+    const side = backSide(plan, fx)
+    const ns = side === 'n' || side === 's'
+    const depth = ns ? d : w
+    const span = ns ? w : d
+    const sgn = side === 'n' || side === 'w' ? -1 : 1
+    const back = (t: number) => (ns ? { x: c.x, y: c.y + sgn * (depth / 2 - t / 2) } : { x: c.x + sgn * (depth / 2 - t / 2), y: c.y })
+    if (fx.kind === 'wc') {
+      const tank = depth * 0.28
+      const tc = back(tank)
+      out.push(`<rect x="${f(tc.x - (ns ? span : tank) / 2)}" y="${f(tc.y - (ns ? tank : span) / 2)}" width="${f(ns ? span : tank)}" height="${f(ns ? tank : span)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
+      const bowl = depth - tank
+      const bc = ns ? { x: c.x, y: c.y - sgn * (tank / 2) } : { x: c.x - sgn * (tank / 2), y: c.y }
+      out.push(`<ellipse cx="${f(bc.x)}" cy="${f(bc.y)}" rx="${f((ns ? span * 0.8 : bowl) / 2)}" ry="${f((ns ? bowl : span * 0.8) / 2)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
+    } else {
+      out.push(`<rect x="${f(x0)}" y="${f(y0)}" width="${f(w)}" height="${f(d)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
+      const inset = Math.min(w, d) * (fx.kind === 'bath' ? 0.12 : 0.18)
+      out.push(`<rect x="${f(x0 + inset)}" y="${f(y0 + inset)}" width="${f(w - 2 * inset)}" height="${f(d - 2 * inset)}" rx="${f(Math.min(w, d) / 3)}" fill="none" stroke="${INK}" stroke-width="${thin}" ${dash}/>`)
+    }
+  } else if (fx.kind === 'stove') {
+    out.push(`<rect x="${f(x0)}" y="${f(y0)}" width="${f(w)}" height="${f(d)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
+    const r = Math.min(w, d) / 6
+    for (const [u, v] of [[0.28, 0.28], [0.72, 0.28], [0.28, 0.72], [0.72, 0.72]])
+      out.push(`<circle cx="${f(x0 + u * w)}" cy="${f(y0 + v * d)}" r="${f(r)}" fill="none" stroke="${INK}" stroke-width="${thin}" ${dash}/>`)
+  } else if (fx.kind === 'shower') {
+    // a floor drain in the shower area
+    out.push(`<rect x="${f(x0)}" y="${f(y0)}" width="${f(w)}" height="${f(d)}" fill="#fff" stroke="${INK}" stroke-width="${thin}" stroke-dasharray="0.8 0.6"/>`)
+    out.push(`<circle cx="${f(c.x)}" cy="${f(c.y)}" r="${f(Math.min(w, d) / 6)}" fill="none" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
+  } else {
+    out.push(`<rect x="${f(x0)}" y="${f(y0)}" width="${f(w)}" height="${f(d)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
+  }
+  return out
+}
+
+function renderFixture(plan: Plan, fx: Fixture, view: View, L: SheetLayout): string {
   if (!visibleIn(fx.phase, view)) return ''
   const st = styleOf(fx.phase, view)
   const c = L.toPaper({ x: fx.x, y: fx.y })
@@ -333,14 +391,16 @@ function renderFixture(fx: Fixture, view: View, L: SheetLayout): string {
     out.push(`<circle cx="${f(c.x)}" cy="${f(c.y)}" r="${f(r)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
     out.push(text({ x: c.x, y: c.y + TEXT * 0.35 }, fx.label ?? FIXTURE_LABEL[fx.kind], TEXT * 0.9))
   } else {
-    out.push(`<rect x="${f(x0)}" y="${f(y0)}" width="${f(w)}" height="${f(d)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
+    if (SYMBOL_KINDS.has(fx.kind)) out.push(...fixtureSymbol(plan, fx, x0, y0, w, d, lw, dash))
+    else out.push(`<rect x="${f(x0)}" y="${f(y0)}" width="${f(w)}" height="${f(d)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
     if (fx.kind === 'shaft') {
       out.push(line({ x: x0, y: y0 }, { x: x0 + w, y: y0 + d }, 0.18, dash))
       out.push(line({ x: x0 + w, y: y0 }, { x: x0, y: y0 + d }, 0.18, dash))
     }
     const base = fx.label ?? FIXTURE_LABEL[fx.kind]
     const label = base && st === 'demolish' ? `${base} (rivs)` : base
-    if (label && fx.kind !== 'shaft') {
+    const small = plan.sheet.scale > 50 && SYMBOL_KINDS.has(fx.kind) && st !== 'demolish'
+    if (label && fx.kind !== 'shaft' && !small) {
       // Labels that don't fit inside the symbol go just outside it.
       const len = label.length * TEXT * 0.55
       if (len <= w - 1 && d >= TEXT + 0.6) out.push(text({ x: c.x, y: c.y + TEXT * 0.35 }, label, TEXT))
@@ -577,7 +637,7 @@ export function renderSheet(plan: Plan, view: View, opts: RenderOptions = {}): s
   }
   body.push(`<g data-testid="plan-walls">${renderWalls(plan, view, L)}</g>`)
   body.push(`<g data-testid="plan-openings">${plan.openings.map((o) => renderOpening(plan, o, view, L)).join('')}</g>`)
-  body.push(`<g data-testid="plan-fixtures">${plan.fixtures.map((fx) => renderFixture(fx, view, L)).join('')}</g>`)
+  body.push(`<g data-testid="plan-fixtures">${plan.fixtures.map((fx) => renderFixture(plan, fx, view, L)).join('')}</g>`)
   body.push(renderFireLines(plan, view, L))
   body.push(`<g data-testid="plan-rooms">${renderRooms(plan, view, L)}</g>`)
   body.push(`<g data-testid="dims">${renderDimensions(plan, L)}${autoDimensions(plan, view, L)}</g>`)
