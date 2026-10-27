@@ -9,7 +9,7 @@ between them, a kitchen removed, a radiator moved, ventilation adjusted.
 - `/plans` — list and create plans (empty or the made-up example).
 - `/plans/<id>` — the editor (desktop). Phones get a read-only sheet + PDF.
 - Claude, via MCP (`/api/mcp`): `plan_list`, `plan_create`, `plan_get`,
-  `plan_edit`, `plan_check`, `plan_revisions`.
+  `plan_edit`, `plan_check`, `plan_review` (walks the plan like an architect; see docs/plan-review.md), `plan_revisions`.
 
 Typical flow: create a plan → *Underlag* tab → load the archive scan from
 Bygg- och plantjänsten (TIF works) → *Kalibrera*: click both ends of the

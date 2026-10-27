@@ -1,4 +1,5 @@
 import { checkPlan } from './checks'
+import { describeReview, reviewPlan } from './review'
 import { comparePlans } from './compare'
 import { sheetPng } from './export'
 import { wallLength } from './geometry'
@@ -85,6 +86,11 @@ export const PLAN_TOOLS = [
     name: 'plan_check',
     description: 'Checks a floor plan against what an anmälan for interior work needs to show (title block, scale fits, demolition of load-bearing walls, fire-cell boundaries, plugged connections, ventilation). Flags only — not a legal judgment.',
     inputSchema: { type: 'object', properties: { plan_id: { type: 'string' } }, required: ['plan_id'] },
+  },
+  {
+    name: 'plan_review',
+    description: 'Reviews a floor plan like an architect walking it: which rooms each door and opening joins, one entrance per flat (rooms need apartment set), every room reachable, no doors between flats or into walls, WC not off a kitchen and opening outward, doors not slamming into closets, habitable rooms with windows. Facts and flags to judge against the sources, not verdicts — see docs/plan-review.md.',
+    inputSchema: { type: 'object', properties: { plan_id: { type: 'string' }, view: { type: 'string', enum: ['fore', 'efter'] } }, required: ['plan_id'] },
   },
   {
     name: 'plan_revisions',
@@ -275,6 +281,13 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     if (!rev) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
     const findings = checkPlan(rev.plan)
     return { content: [text(`Revision ${rev.meta.n}:\n${findings.map((f) => `- [${f.level}] ${f.message}`).join('\n') || '- inga anmärkningar'}\n\nKontrollen visar vad ritningen behöver visa; den gör ingen juridisk bedömning.`)] }
+  }
+
+  if (name === 'plan_review') {
+    const rev = await loadPlan(planId)
+    if (!rev) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
+    const v = args.view === 'efter' ? 'efter' : 'fore'
+    return { content: [text(`Revision ${rev.meta.n}, ${v === 'fore' ? 'före' : 'efter'}:\n${describeReview(reviewPlan(rev.plan, v), rev.plan.rooms)}`)] }
   }
 
   // plan_revisions

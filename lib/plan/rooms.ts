@@ -47,48 +47,9 @@ function spaces(plan: Plan, view: View, includes: Map<string, string[]>, clear: 
   const walls = plan.walls.filter((w) => (view === 'fore' ? w.phase !== 'new' : w.phase !== 'demolish'))
   if (rooms.length === 0 || walls.length === 0) return out
 
-  const b = bounds({ ...plan, walls, fixtures: [], rooms: [] })
-  const x0 = b.minX - 2 * CELL
-  const y0 = b.minY - 2 * CELL
-  const nx = Math.ceil((b.maxX - x0) / CELL) + 3
-  const ny = Math.ceil((b.maxY - y0) / CELL) + 3
-  if (nx * ny > 8_000_000) return out // unreasonably large plan; skip
-
-  const solid = new Uint8Array(nx * ny)
-  // A passage marked through leaves its stretch of the wall open.
-  const through = plan.openings.filter((o) => o.through && o.phase !== (view === 'fore' ? 'new' : 'demolish'))
-  for (const w of walls) {
-    const len = wallLength(w) || 1
-    const dx = (w.b.x - w.a.x) / len
-    const dy = (w.b.y - w.a.y) / len
-    for (const [s, e] of wallSegments(w, through)) {
-      // Ends of the wall itself are stretched a little so hairline gaps at joints
-      // (a traced wall stopping a few mm short of the one it meets) don't let
-      // rooms merge; the ends beside a passage are left as they are.
-      const ua = s <= 0.5 ? JOIN_SLACK : 0
-      const ub = e >= len - 0.5 ? JOIN_SLACK : 0
-      const a = along(w, s)
-      const b = along(w, e)
-      const q = wallQuad({ ...w, a: { x: a.x - dx * ua, y: a.y - dy * ua }, b: { x: b.x + dx * ub, y: b.y + dy * ub } })
-      const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
-      const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
-      const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
-      const j1 = Math.min(ny - 1, Math.ceil((Math.max(...q.map((p) => p.y)) - y0) / CELL))
-      for (let j = j0; j <= j1; j++)
-        for (let i = i0; i <= i1; i++) if (insideConvex({ x: x0 + (i + 0.5) * CELL, y: y0 + (j + 0.5) * CELL }, q)) solid[j * nx + i] = 1
-    }
-  }
-
-  // Masses are solid like walls.
-  for (const m of (plan.masses ?? []).filter((x) => (view === 'fore' ? x.phase !== 'new' : x.phase !== 'demolish'))) {
-    const q = m.points
-    const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
-    const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
-    const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
-    const j1 = Math.min(ny - 1, Math.ceil((Math.max(...q.map((p) => p.y)) - y0) / CELL))
-    for (let j = j0; j <= j1; j++)
-      for (let i = i0; i <= i1; i++) if (insideConvex({ x: x0 + (i + 0.5) * CELL, y: y0 + (j + 0.5) * CELL }, q)) solid[j * nx + i] = 1
-  }
+  const g = rasterise(plan, view, walls)
+  if (!g) return out
+  const { solid, x0, y0, nx, ny } = g
 
   const seen = new Int32Array(nx * ny).fill(-1)
   rooms.forEach((r: Room, k) => {
@@ -137,4 +98,98 @@ function spaces(plan: Plan, view: View, includes: Map<string, string[]>, clear: 
     if (!open) out.set(r.id, count * CELL * CELL)
   })
   return out
+}
+
+type Raster = { solid: Uint8Array; x0: number; y0: number; nx: number; ny: number }
+
+// Walls (less passages marked through) and masses shown in a view, as solid cells.
+function rasterise(plan: Plan, view: View, walls: Plan['walls']): Raster | null {
+  const b = bounds({ ...plan, walls, fixtures: [], rooms: [] })
+  const x0 = b.minX - 2 * CELL
+  const y0 = b.minY - 2 * CELL
+  const nx = Math.ceil((b.maxX - x0) / CELL) + 3
+  const ny = Math.ceil((b.maxY - y0) / CELL) + 3
+  if (nx * ny > 8_000_000) return null // unreasonably large plan; skip
+
+  const solid = new Uint8Array(nx * ny)
+  // A passage marked through leaves its stretch of the wall open.
+  const through = plan.openings.filter((o) => o.through && o.phase !== (view === 'fore' ? 'new' : 'demolish'))
+  for (const w of walls) {
+    const len = wallLength(w) || 1
+    const dx = (w.b.x - w.a.x) / len
+    const dy = (w.b.y - w.a.y) / len
+    for (const [s, e] of wallSegments(w, through)) {
+      // Ends of the wall itself are stretched a little so hairline gaps at joints
+      // (a traced wall stopping a few mm short of the one it meets) don't let
+      // rooms merge; the ends beside a passage are left as they are.
+      const ua = s <= 0.5 ? JOIN_SLACK : 0
+      const ub = e >= len - 0.5 ? JOIN_SLACK : 0
+      const a = along(w, s)
+      const b = along(w, e)
+      const q = wallQuad({ ...w, a: { x: a.x - dx * ua, y: a.y - dy * ua }, b: { x: b.x + dx * ub, y: b.y + dy * ub } })
+      const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
+      const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
+      const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
+      const j1 = Math.min(ny - 1, Math.ceil((Math.max(...q.map((p) => p.y)) - y0) / CELL))
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++) if (insideConvex({ x: x0 + (i + 0.5) * CELL, y: y0 + (j + 0.5) * CELL }, q)) solid[j * nx + i] = 1
+    }
+  }
+
+  // Masses are solid like walls.
+  for (const m of (plan.masses ?? []).filter((x) => (view === 'fore' ? x.phase !== 'new' : x.phase !== 'demolish'))) {
+    const q = m.points
+    const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
+    const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
+    const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
+    const j1 = Math.min(ny - 1, Math.ceil((Math.max(...q.map((p) => p.y)) - y0) / CELL))
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) if (insideConvex({ x: x0 + (i + 0.5) * CELL, y: y0 + (j + 0.5) * CELL }, q)) solid[j * nx + i] = 1
+  }
+
+  return { solid, x0, y0, nx, ny }
+}
+
+// Every connected free area of the plan, named or not: which space a point is
+// in, and per space its room labels, area and whether it is open to the outside.
+export type Space = { rooms: string[]; area: number; open: boolean }
+export type SpaceGrid = { spaces: Space[]; at: (p: Pt) => number }
+
+export function spaceGrid(plan: Plan, view: View): SpaceGrid | null {
+  const walls = plan.walls.filter((w) => (view === 'fore' ? w.phase !== 'new' : w.phase !== 'demolish'))
+  const g = walls.length ? rasterise(plan, view, walls) : null
+  if (!g) return null
+  const { solid, x0, y0, nx, ny } = g
+  const id = new Int32Array(nx * ny).fill(-1)
+  const spaces: Space[] = []
+  for (let c0 = 0; c0 < nx * ny; c0++) {
+    if (solid[c0] || id[c0] >= 0) continue
+    const k = spaces.length
+    const sp: Space = { rooms: [], area: 0, open: false }
+    spaces.push(sp)
+    const stack = [c0]
+    id[c0] = k
+    while (stack.length) {
+      const c = stack.pop()!
+      sp.area += CELL * CELL
+      const i = c % nx
+      const j = (c - i) / nx
+      if (i === 0 || j === 0 || i === nx - 1 || j === ny - 1) {
+        sp.open = true
+        continue
+      }
+      for (const n of [c - 1, c + 1, c - nx, c + nx]) if (!solid[n] && id[n] < 0) { id[n] = k; stack.push(n) }
+    }
+  }
+  const at = (p: Pt) => {
+    const i = Math.floor((p.x - x0) / CELL)
+    const j = Math.floor((p.y - y0) / CELL)
+    // past the edge of the grid is outside: the space of the (always free) corner cell
+    return i < 0 || j < 0 || i >= nx || j >= ny ? id[0] : id[j * nx + i]
+  }
+  for (const r of plan.rooms.filter((r) => !(view === 'efter' && r.goneAfter))) {
+    const k = at(r.at)
+    if (k >= 0) spaces[k].rooms.push(r.id)
+  }
+  return { spaces, at }
 }
