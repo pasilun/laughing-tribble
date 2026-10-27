@@ -203,15 +203,21 @@ function renderWalls(plan: Plan, view: View, L: SheetLayout): string {
     const w = plan.walls.find((x) => x.id === id)!
     return `<g data-wall="${esc(id)}" data-phase="${styleOf(w.phase, view)}">${parts.join('')}</g>`
   })
-  // Masses last: walls running into them disappear under them, as under a thicker wall.
+  // Mass fills go under the walls and their hatch over them, so walls running
+  // into a mass disappear in it and neighbouring pieces show no seam. The
+  // hairline in the fill colour closes the anti-aliasing gap between fills.
+  const fillOf = (style: Phase) => (style === 'new' ? INK : EXISTING_FILL)
+  const massFills = solidMasses.map((m) => poly(m.q, `fill="${fillOf(m.style)}" stroke="${fillOf(m.style)}" stroke-width="0.15"`)).join('')
   const massGroups = masses.map((m) => {
     const body =
       m.style === 'demolish'
         ? poly(m.q, `fill="none" stroke="${INK}" stroke-width="0.25" ${DASH}`)
-        : poly(m.q, `fill="${m.style === 'new' ? INK : EXISTING_FILL}" stroke="none"`) + (m.style === 'existing' && m.mass.loadBearing ? hatchConvex(m.q, 0.8) : '')
+        : m.style === 'existing' && m.mass.loadBearing
+          ? hatchConvex(m.q, 0.8)
+          : ''
     return `<g data-mass="${esc(m.mass.id)}" data-phase="${m.style}">${body}</g>`
   })
-  return `<g class="wall-outline">${outline}</g>${groups.join('')}${massGroups.join('')}`
+  return `<g class="wall-outline">${outline}</g>${massFills}${groups.join('')}${massGroups.join('')}`
 }
 
 export function fireRatingIn(w: Wall, view: View): string {
