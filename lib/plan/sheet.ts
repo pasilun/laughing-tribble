@@ -14,6 +14,16 @@ const MARGIN = 10
 const TITLE_H = 44
 const FONT = 'Helvetica, Arial, sans-serif'
 const TEXT = 2.5 // minimum readable text height on paper
+
+// Text inside the drawing (room names, areas, fixture labels) shrinks with the
+// scale, so a whole floor at 1:150 isn't buried under its labels; the title
+// block, legend and notes keep TEXT.
+export function planText(scale: number): { name: number; text: number } {
+  if (scale <= 50) return { name: 3, text: 2.5 }
+  if (scale <= 100) return { name: 2.5, text: 2 }
+  if (scale <= 150) return { name: 1.8, text: 1.4 }
+  return { name: 1.6, text: 1.2 }
+}
 const INK = '#000'
 const EXISTING_FILL = '#b8b8b8'
 
@@ -375,6 +385,7 @@ function fixtureSymbol(plan: Plan, fx: Fixture, x0: number, y0: number, w: numbe
 }
 
 function renderFixture(plan: Plan, fx: Fixture, view: View, L: SheetLayout): string {
+  const T = planText(plan.sheet.scale).text
   if (!visibleIn(fx.phase, view)) return ''
   const st = styleOf(fx.phase, view)
   const c = L.toPaper({ x: fx.x, y: fx.y })
@@ -389,7 +400,7 @@ function renderFixture(plan: Plan, fx: Fixture, view: View, L: SheetLayout): str
   if (fx.kind === 'exhaust' || fx.kind === 'plug') {
     const r = Math.max(w, d) / 2
     out.push(`<circle cx="${f(c.x)}" cy="${f(c.y)}" r="${f(r)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
-    out.push(text({ x: c.x, y: c.y + TEXT * 0.35 }, fx.label ?? FIXTURE_LABEL[fx.kind], TEXT * 0.9))
+    out.push(text({ x: c.x, y: c.y + T * 0.35 }, fx.label ?? FIXTURE_LABEL[fx.kind], T * 0.9))
   } else {
     if (SYMBOL_KINDS.has(fx.kind)) out.push(...fixtureSymbol(plan, fx, x0, y0, w, d, lw, dash))
     else out.push(`<rect x="${f(x0)}" y="${f(y0)}" width="${f(w)}" height="${f(d)}" fill="#fff" stroke="${INK}" stroke-width="${lw}" ${dash}/>`)
@@ -402,11 +413,11 @@ function renderFixture(plan: Plan, fx: Fixture, view: View, L: SheetLayout): str
     const small = plan.sheet.scale > 50 && SYMBOL_KINDS.has(fx.kind) && st !== 'demolish'
     if (label && fx.kind !== 'shaft' && !small) {
       // Labels that don't fit inside the symbol go just outside it.
-      const len = label.length * TEXT * 0.55
-      if (len <= w - 1 && d >= TEXT + 0.6) out.push(text({ x: c.x, y: c.y + TEXT * 0.35 }, label, TEXT))
+      const len = label.length * T * 0.55
+      if (len <= w - 1 && d >= T + 0.6) out.push(text({ x: c.x, y: c.y + T * 0.35 }, label, T))
       // Tall, narrow symbols (a kitchen run along a wall): along the long side.
-      else if (len <= d - 1 && w >= TEXT + 0.6) out.push(text({ x: c.x + TEXT * 0.35, y: c.y }, label, TEXT, { angle: -90 }))
-      else out.push(text({ x: c.x, y: y0 + d + TEXT + 0.6 }, label, TEXT))
+      else if (len <= d - 1 && w >= T + 0.6) out.push(text({ x: c.x + T * 0.35, y: c.y }, label, T, { angle: -90 }))
+      else out.push(text({ x: c.x, y: y0 + d + T + 0.6 }, label, T))
     }
   }
   return `<g data-fixture="${esc(fx.id)}" data-phase="${st}"${rot}>${out.join('')}</g>`
@@ -493,11 +504,11 @@ function renderDimensions(plan: Plan, L: SheetLayout): string {
 }
 
 // Room labels fit the room at small scales: the name shrinks to the clear
-// width (not below TEXT), and the area line is left out when it doesn't fit.
-const NAME = 3
+// width (not below the area text), and the area line is left out when it doesn't fit.
 const ROOM_PAD = 1 // mm on paper between label and wall
 
 function renderRooms(plan: Plan, view: View, L: SheetLayout): string {
+  const { name: NAME, text: T } = planText(plan.sheet.scale)
   const { areas, includes, clear } = roomSpaces(plan, view)
   return plan.rooms
     .filter((r) => !(view === 'efter' && r.goneAfter))
@@ -507,14 +518,14 @@ function renderRooms(plan: Plan, view: View, L: SheetLayout): string {
       const room = clear.get(r.id)
       const w = room ? room.w * L.k - ROOM_PAD : Infinity
       const h = room ? room.h * L.k - ROOM_PAD : Infinity
-      const size = Math.max(TEXT, Math.min(NAME, w / (name.length * 0.6)))
+      const size = Math.max(T, Math.min(NAME, w / (name.length * 0.6)))
       const area = areas.get(r.id)
       const more = includes.get(r.id)
       const labels = area === undefined ? [] : more ? [`${fmtArea(area)} inkl. ${more.join(', ')}`, fmtArea(area)] : [fmtArea(area)]
-      const label = size + 0.6 + TEXT <= h ? labels.find((l) => l.length * TEXT * 0.55 <= w) : undefined
+      const label = size + 0.6 + T <= h ? labels.find((l) => l.length * T * 0.55 <= w) : undefined
       // a name on its own is centred on the label point
       let s = text(label ? p : { x: p.x, y: p.y + size * 0.35 }, name, size, { weight: 'bold' })
-      if (label) s += text({ x: p.x, y: p.y + size + 0.6 }, label, TEXT)
+      if (label) s += text({ x: p.x, y: p.y + size + 0.6 }, label, T)
       return `<g data-room="${esc(r.id)}">${s}</g>`
     })
     .join('')
