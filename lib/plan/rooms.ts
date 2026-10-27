@@ -152,7 +152,7 @@ function rasterise(plan: Plan, view: View, walls: Plan['walls']): Raster | null 
 
 // Every connected free area of the plan, named or not: which space a point is
 // in, and per space its room labels, area and whether it is open to the outside.
-export type Space = { rooms: string[]; area: number; open: boolean }
+export type Space = { rooms: string[]; area: number; open: boolean; at: Pt } // at: a point inside it
 export type SpaceGrid = { spaces: Space[]; at: (p: Pt) => number }
 
 export function spaceGrid(plan: Plan, view: View): SpaceGrid | null {
@@ -165,7 +165,7 @@ export function spaceGrid(plan: Plan, view: View): SpaceGrid | null {
   for (let c0 = 0; c0 < nx * ny; c0++) {
     if (solid[c0] || id[c0] >= 0) continue
     const k = spaces.length
-    const sp: Space = { rooms: [], area: 0, open: false }
+    const sp: Space = { rooms: [], area: 0, open: false, at: { x: x0 + ((c0 % nx) + 0.5) * CELL, y: y0 + (Math.floor(c0 / nx) + 0.5) * CELL } }
     spaces.push(sp)
     const stack = [c0]
     id[c0] = k

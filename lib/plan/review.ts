@@ -32,7 +32,8 @@ const STEP = 60 // mm past the wall face where a side is sampled
 const MIN_PASSAGE = 500 // narrower than this is no door: a scan gap or a niche
 const MIN_CLOSET = 400 // old wardrobe doors can be this narrow
 const MIN_DOOR = 600
-const MIN_ENTRANCE = 800
+const MIN_ENTRANCE = 700 // an 8M door of the 1930s; new flats need more
+const TOLERANCE = 20 // drawing and tracing accuracy
 
 export function reviewPlan(plan: Plan, view: View = 'fore'): Review {
   const findings: Finding[] = []
@@ -89,7 +90,7 @@ export function reviewPlan(plan: Plan, view: View = 'fore'): Review {
       findings.push({ level: 'error', code: 'leads-nowhere', ref: o.id, message: `${what} ${o.id} i ${l.wall.id} leder in i en vägg eller massa (${name(l.a)} | ${name(l.b)})` })
       continue
     }
-    if (l.a === l.b) {
+    if (l.a === l.b && !o.through) {
       findings.push({ level: 'warning', code: 'same-space', ref: o.id, message: `${what} ${o.id} har samma utrymme (${name(l.a)}) på båda sidor – väggen är en fristående bit eller öppningen sitter fel` })
       continue
     }
@@ -117,7 +118,7 @@ export function reviewPlan(plan: Plan, view: View = 'fore'): Review {
     if (!sp.rooms.length) {
       // A sealed pocket is often a shaft or a chimney; worth a look when it is room-sized.
       if (!links.length && sp.area >= 0.5e6 && !plan.fixtures.some((f) => f.kind === 'shaft' && at(f) === k))
-        findings.push({ level: 'info', code: 'sealed', message: `Instängt utrymme utan dörr och namn, ${m2(sp.area)} – schakt, rökkanal eller ett rum som saknar dörr?` })
+        findings.push({ level: 'info', code: 'sealed', message: `Instängt utrymme utan dörr och namn vid (${Math.round(sp.at.x)}, ${Math.round(sp.at.y)}), ${m2(sp.area)} – schakt, rökkanal eller ett rum som saknar dörr?` })
       return
     }
     if (sp.rooms.length && !links.length && !ks.has('common'))
@@ -160,7 +161,7 @@ export function reviewPlan(plan: Plan, view: View = 'fore'): Review {
     for (const l of entrances) {
       const inner = ownSet.has(l.a) ? l.a : l.b
       if (!kinds(inner).has('entry')) findings.push({ level: 'warning', code: 'entrance-room', ref: l.opening.id, message: `Entrén ${l.opening.id} till lgh ${apt} leder direkt in i ${name(inner)} – normalt in i tambur/hall` })
-      if (l.opening.width < MIN_ENTRANCE) findings.push({ level: 'warning', code: 'entrance-width', ref: l.opening.id, message: `Entrédörren ${l.opening.id} till lgh ${apt} är ${l.opening.width} mm – minst ${MIN_ENTRANCE} mm` })
+      if (l.opening.width < MIN_ENTRANCE - TOLERANCE) findings.push({ level: 'warning', code: 'entrance-width', ref: l.opening.id, message: `Entrédörren ${l.opening.id} till lgh ${apt} är ${l.opening.width} mm – minst ${MIN_ENTRANCE} mm` })
     }
     // Walk the flat from its entrances; a room reached only through a wet room is noted.
     const reach = new Set<number>()

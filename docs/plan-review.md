@@ -31,7 +31,7 @@ same way every time.
 
 - One entrance per flat from the stair hall or another common space
   [`no-entrance`, `entrances`], into a tambur/hall, not straight into a room
-  [`entrance-room`], at least 800 mm [`entrance-width`].
+  [`entrance-room`], at least 700 mm clear, an 8M door of the period (new work needs more) [`entrance-width`].
 - No door between two flats [`between-flats`] unless they are known to be
   joined (then it is a real oddity: say which document shows it).
 - Every room reachable from the entrance [`unreachable`], not only through a
@@ -94,6 +94,12 @@ The buildings here are Stockholm blocks of flats from the 1930s
   older drawing explains what a newer one only shows schematically.
 - A clean redraw (e.g. the 2010 bygglov plan) is good for topology
   (which room is where, which walls are solid), poor for dimensions.
+- Reading old drawings: the 1936 plans mark a door with a short stroke
+  drawn across the wall (sometimes a leaf drawn open at 90°), not with a
+  gap; a gap or a dashed stretch may be a floor change or a beam. Lines in
+  a stair hall are usually the tiled floor. The 1999 survey draws walls
+  without doors. A rectangle at a stair's window is the half-landing or the
+  window niche, part of the stairwell.
 - A gap in a scanned line is evidence of an opening only when another
   source agrees, or the opening makes sense for the room (see above).
 - Owner measurements and photos describe today; archive-only plans must not
