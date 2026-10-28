@@ -121,6 +121,7 @@ export type Sheet = {
   orientation: 'landscape' | 'portrait'
   scale: SheetScale
   northAngle: number         // degrees clockwise from sheet up
+  doorSwings?: boolean       // false: doors drawn as a closed leaf, no swing arc (overview sheets); default true
   titleBlock: TitleBlock
 }
 

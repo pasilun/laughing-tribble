@@ -230,3 +230,13 @@ test('room labels fit the room: a closet at 1:200 keeps its name but drops the a
   expect(group(at(200), 'g')).not.toContain('m²')
   expect(group(at(200), 'rum')).toContain('m²')
 })
+
+test('a sheet can leave out door swings: the door stays a door, drawn closed', () => {
+  const plan = demoPlan()
+  const doorId = plan.openings.find((o) => o.kind === 'door')!.id
+  const group = (svg: string) => new RegExp(`<g data-opening="${doorId}"[^>]*>(.*?)</g>`).exec(svg)![1]
+  expect(group(renderSheet(plan, 'fore'))).toContain('<path') // the swing arc
+  const closed = group(renderSheet({ ...plan, sheet: { ...plan.sheet, doorSwings: false } }, 'fore'))
+  expect(closed).not.toContain('<path')
+  expect(closed).toContain('<line')
+})

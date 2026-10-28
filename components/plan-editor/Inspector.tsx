@@ -268,6 +268,7 @@ function SheetPanel({ plan, onOps }: { plan: Plan; onOps: Props['onOps'] }) {
         <Choice label="Orientering" value={plan.sheet.orientation} options={[['landscape', 'Liggande'], ['portrait', 'Stående']]} onChange={(v) => onOps([{ op: 'setSheet', patch: { orientation: v } }], 'sheet:orient', 'Orientering')} />
         <Num label="Norrpil (grader)" value={plan.sheet.northAngle} onChange={(v) => onOps([{ op: 'setSheet', patch: { northAngle: v } }], 'sheet:north', 'Norrpil')} />
       </div>
+      <Check label="Visa dörrarnas slagriktning" value={plan.sheet.doorSwings !== false} testid="sheet-door-swings" onChange={(v) => onOps([{ op: 'setSheet', patch: { doorSwings: v ? undefined : false } }], 'sheet:swings', v ? 'Dörrarnas slag visas' : 'Dörrarnas slag döljs')} />
       <h3 className="pt-2 font-semibold">Ritningshuvud</h3>
       {TB_FIELDS.map(([key, label, ph]) => (
         <Text key={key} label={label} value={tb[key]} placeholder={ph} testid={`tb-input-${key}`} onChange={(v) => onOps([{ op: 'setTitleBlock', patch: { [key]: v } }], `tb:${key}`, `Ritningshuvud: ${label.toLowerCase()}`)} />

@@ -289,6 +289,11 @@ function renderOpening(plan: Plan, o: Opening, view: View, L: SheetLayout): stri
     out.push(line(P(s), P(e), 0.25))
     out.push(line(P(add(s, scale(n, half))), P(add(s, scale(n, -half))), 0.25))
     out.push(line(P(add(e, scale(n, half))), P(add(e, scale(n, -half))), 0.25))
+  } else if (o.kind === 'door' && plan.sheet.doorSwings === false) {
+    // Overview sheets: the door as a closed leaf in the wall, no swing.
+    out.push(line(P(add(s, scale(n, half))), P(add(s, scale(n, -half))), 0.18))
+    out.push(line(P(add(e, scale(n, half))), P(add(e, scale(n, -half))), 0.18))
+    out.push(line(P(s), P(e), lw))
   } else if (o.kind === 'door') {
     const hingeAtA = (o.hinge ?? 'a') === 'a'
     const side = (o.swing ?? 'left') === 'left' ? 1 : -1
