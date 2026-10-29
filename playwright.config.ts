@@ -10,6 +10,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
+    // Use a preinstalled browser when the bundled one isn't available.
+    launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {},
   },
 
   // iPhone is the primary platform, so the loop verifies mobile-first:

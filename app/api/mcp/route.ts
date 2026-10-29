@@ -7,6 +7,8 @@ import type { BuildingModelV2 } from '@/types/building-v2'
 import { generateFloorPlanSVG } from '@/lib/floor-plan-svg'
 import { Resvg } from '@resvg/resvg-js'
 import { validateBuilding } from '@/lib/validate-building'
+import { PLAN_TOOLS, handlePlanTool } from '@/lib/plan/mcp-tools'
+import { hasAccess } from '@/lib/plan/access'
 
 function summariseModel(model: BuildingModelV2): string {
   const length = (model.walls[0]?.vertices[1]?.x ?? 0) - (model.walls[0]?.vertices[0]?.x ?? 0)
@@ -465,13 +467,25 @@ export async function POST(request: Request) {
   }
 
   if (method === 'tools/list') {
-    return mcpResp({ jsonrpc: '2.0', id, result: { tools: [TOOL_DEF, UPDATE_TOOL_DEF, TRIAGE_TOOL_DEF, PREVIEW_TOOL_DEF] } })
+    return mcpResp({ jsonrpc: '2.0', id, result: { tools: [TOOL_DEF, UPDATE_TOOL_DEF, TRIAGE_TOOL_DEF, PREVIEW_TOOL_DEF, ...PLAN_TOOLS] } })
   }
 
   if (method === 'tools/call') {
     const { name, arguments: args = {} } = params as {
       name?: string
       arguments?: Record<string, unknown>
+    }
+
+    if (name) {
+      try {
+        // Plan tools need the plan password (connector URL ?key=… or bearer token).
+        if (PLAN_TOOLS.some((t) => t.name === name) && !hasAccess(request))
+          return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'Planverktygen kräver lösenord: lägg till ?key=<PLAN_PASSWORD> i MCP-adressen.' }], isError: true } })
+        const planResult = await handlePlanTool(name, args)
+        if (planResult) return mcpResp({ jsonrpc: '2.0', id, result: planResult })
+      } catch (err) {
+        return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' } })
+      }
     }
 
     if (name === 'assess_permit_requirement') {

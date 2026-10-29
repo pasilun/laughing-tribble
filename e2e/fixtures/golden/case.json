@@ -1,0 +1,95 @@
+{
+ "drawing": {
+  "mm_per_px": 8.467,
+  "x": -1000,
+  "y": -1000,
+  "rect": {
+   "x": -500,
+   "y": -500,
+   "w": 10000,
+   "h": 7500
+  }
+ },
+ "styles": {
+  "1936": "drawing-1936.png",
+  "arkiv": "drawing.png"
+ },
+ "rooms": [
+  {
+   "id": "r-vardag",
+   "name": "Vardagsrum",
+   "at": {
+    "x": 2250,
+    "y": 1900
+   }
+  },
+  {
+   "id": "r-sovrum",
+   "name": "Sovrum",
+   "at": {
+    "x": 6750,
+    "y": 1900
+   }
+  },
+  {
+   "id": "r-hall",
+   "name": "Hall",
+   "at": {
+    "x": 1500,
+    "y": 5150
+   }
+  },
+  {
+   "id": "r-bad",
+   "name": "Bad",
+   "at": {
+    "x": 4000,
+    "y": 5150
+   }
+  },
+  {
+   "id": "r-kok",
+   "name": "Kök",
+   "at": {
+    "x": 7000,
+    "y": 5150
+   }
+  }
+ ],
+ "exterior": [
+  {
+   "x": 4500,
+   "y": 0
+  },
+  {
+   "x": 4500,
+   "y": 6500
+  }
+ ],
+ "facade": {
+  "file": "facade-n.png",
+  "mm_per_px": 8.467,
+  "x": -500,
+  "y": -500,
+  "band": {
+   "y0": 3700,
+   "y1": 5800
+  },
+  "anchors": [
+   {
+    "facade_x": 0,
+    "plan": {
+     "x": 9150,
+     "y": 0
+    }
+   },
+   {
+    "facade_x": 9300,
+    "plan": {
+     "x": -150,
+     "y": 0
+    }
+   }
+  ]
+ }
+}

@@ -1,0 +1,195 @@
+import { along, bounds, polygonArea, wallLength, wallQuad, wallSegments } from './geometry'
+import type { Plan, Pt, Room, View } from './types'
+
+// Room areas from the walls: rasterise the walls shown in a view (openings
+// count as closed, so rooms don't leak through doors, except a passage marked
+// through, which has no wall in it) and flood-fill from each room label. A
+// room open to the outside gets no area.
+
+const CELL = 10 // mm; error is about half a cell along the room's perimeter
+const JOIN_SLACK = 2 * CELL
+
+function insideConvex(p: Pt, q: Pt[]): boolean {
+  let sign = 0
+  for (let i = 0; i < q.length; i++) {
+    const a = q[i]
+    const b = q[(i + 1) % q.length]
+    const c = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
+    if (c !== 0) {
+      if (sign === 0) sign = Math.sign(c)
+      else if (Math.sign(c) !== sign) return false
+    }
+  }
+  return true
+}
+
+export function roomAreas(plan: Plan, view: View): Map<string, number> {
+  return roomSpaces(plan, view).areas
+}
+
+// Areas per room label, plus — for a space holding several labels (open
+// plan, or rooms merged by demolition) — the other names it includes, so
+// the one area shown can say what it covers, and the clear width and height
+// through each label (wall to wall) with their midpoints, so the label can be
+// fitted and centred.
+export type Clear = { w: number; h: number; mid: Pt }
+export function roomSpaces(plan: Plan, view: View): { areas: Map<string, number>; includes: Map<string, string[]>; clear: Map<string, Clear> } {
+  const includes = new Map<string, string[]>()
+  const clear = new Map<string, Clear>()
+  const areas = spaces(plan, view, includes, clear)
+  return { areas, includes, clear }
+}
+
+function spaces(plan: Plan, view: View, includes: Map<string, string[]>, clear: Map<string, Clear>): Map<string, number> {
+  const out = new Map<string, number>()
+  const rooms = plan.rooms.filter((r) => !r.polygon && !(view === 'efter' && r.goneAfter))
+  for (const r of plan.rooms) if (r.polygon && r.polygon.length >= 3) out.set(r.id, polygonArea(r.polygon))
+  const walls = plan.walls.filter((w) => (view === 'fore' ? w.phase !== 'new' : w.phase !== 'demolish'))
+  if (rooms.length === 0 || walls.length === 0) return out
+
+  const g = rasterise(plan, view, walls)
+  if (!g) return out
+  const { solid, x0, y0, nx, ny } = g
+
+  const seen = new Int32Array(nx * ny).fill(-1)
+  rooms.forEach((r: Room, k) => {
+    const si = Math.floor((r.at.x - x0) / CELL)
+    const sj = Math.floor((r.at.y - y0) / CELL)
+    if (si < 0 || sj < 0 || si >= nx || sj >= ny || solid[sj * nx + si]) return
+    const start = sj * nx + si
+    const run = (step: number, n: number) => {
+      let c = 0
+      while (c < n && !solid[start + (c + 1) * step]) c++
+      return c
+    }
+    const [l, rt, up, dn] = [run(-1, si), run(1, nx - 1 - si), run(-nx, sj), run(nx, ny - 1 - sj)]
+    clear.set(r.id, {
+      w: (l + rt + 1) * CELL,
+      h: (up + dn + 1) * CELL,
+      mid: { x: x0 + (si + (rt - l) / 2 + 0.5) * CELL, y: y0 + (sj + (dn - up) / 2 + 0.5) * CELL },
+    })
+    // Same space as an earlier label (e.g. rooms merged by demolition): the
+    // area is shown once, under the first label, which lists the others.
+    if (seen[start] >= 0) {
+      const first = rooms[seen[start]]
+      includes.set(first.id, [...(includes.get(first.id) ?? []), view === 'efter' && r.renamed ? r.renamed : r.name])
+      return
+    }
+    const stack = [start]
+    seen[start] = k
+    let count = 0
+    let open = false
+    while (stack.length) {
+      const c = stack.pop()!
+      count++
+      const i = c % nx
+      const j = (c - i) / nx
+      if (i === 0 || j === 0 || i === nx - 1 || j === ny - 1) {
+        open = true
+        continue
+      }
+      for (const n of [c - 1, c + 1, c - nx, c + nx]) {
+        if (!solid[n] && seen[n] < 0) {
+          seen[n] = k
+          stack.push(n)
+        }
+      }
+    }
+    if (!open) out.set(r.id, count * CELL * CELL)
+  })
+  return out
+}
+
+type Raster = { solid: Uint8Array; x0: number; y0: number; nx: number; ny: number }
+
+// Walls (less passages marked through) and masses shown in a view, as solid cells.
+function rasterise(plan: Plan, view: View, walls: Plan['walls']): Raster | null {
+  const b = bounds({ ...plan, walls, fixtures: [], rooms: [] })
+  const x0 = b.minX - 2 * CELL
+  const y0 = b.minY - 2 * CELL
+  const nx = Math.ceil((b.maxX - x0) / CELL) + 3
+  const ny = Math.ceil((b.maxY - y0) / CELL) + 3
+  if (nx * ny > 8_000_000) return null // unreasonably large plan; skip
+
+  const solid = new Uint8Array(nx * ny)
+  // A passage marked through leaves its stretch of the wall open.
+  const through = plan.openings.filter((o) => o.through && o.phase !== (view === 'fore' ? 'new' : 'demolish'))
+  for (const w of walls) {
+    const len = wallLength(w) || 1
+    const dx = (w.b.x - w.a.x) / len
+    const dy = (w.b.y - w.a.y) / len
+    for (const [s, e] of wallSegments(w, through)) {
+      // Ends of the wall itself are stretched a little so hairline gaps at joints
+      // (a traced wall stopping a few mm short of the one it meets) don't let
+      // rooms merge; the ends beside a passage are left as they are.
+      const ua = s <= 0.5 ? JOIN_SLACK : 0
+      const ub = e >= len - 0.5 ? JOIN_SLACK : 0
+      const a = along(w, s)
+      const b = along(w, e)
+      const q = wallQuad({ ...w, a: { x: a.x - dx * ua, y: a.y - dy * ua }, b: { x: b.x + dx * ub, y: b.y + dy * ub } })
+      const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
+      const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
+      const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
+      const j1 = Math.min(ny - 1, Math.ceil((Math.max(...q.map((p) => p.y)) - y0) / CELL))
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++) if (insideConvex({ x: x0 + (i + 0.5) * CELL, y: y0 + (j + 0.5) * CELL }, q)) solid[j * nx + i] = 1
+    }
+  }
+
+  // Masses are solid like walls.
+  for (const m of (plan.masses ?? []).filter((x) => (view === 'fore' ? x.phase !== 'new' : x.phase !== 'demolish'))) {
+    const q = m.points
+    const i0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.x)) - x0) / CELL))
+    const i1 = Math.min(nx - 1, Math.ceil((Math.max(...q.map((p) => p.x)) - x0) / CELL))
+    const j0 = Math.max(0, Math.floor((Math.min(...q.map((p) => p.y)) - y0) / CELL))
+    const j1 = Math.min(ny - 1, Math.ceil((Math.max(...q.map((p) => p.y)) - y0) / CELL))
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) if (insideConvex({ x: x0 + (i + 0.5) * CELL, y: y0 + (j + 0.5) * CELL }, q)) solid[j * nx + i] = 1
+  }
+
+  return { solid, x0, y0, nx, ny }
+}
+
+// Every connected free area of the plan, named or not: which space a point is
+// in, and per space its room labels, area and whether it is open to the outside.
+export type Space = { rooms: string[]; area: number; open: boolean; at: Pt } // at: a point inside it
+export type SpaceGrid = { spaces: Space[]; at: (p: Pt) => number }
+
+export function spaceGrid(plan: Plan, view: View): SpaceGrid | null {
+  const walls = plan.walls.filter((w) => (view === 'fore' ? w.phase !== 'new' : w.phase !== 'demolish'))
+  const g = walls.length ? rasterise(plan, view, walls) : null
+  if (!g) return null
+  const { solid, x0, y0, nx, ny } = g
+  const id = new Int32Array(nx * ny).fill(-1)
+  const spaces: Space[] = []
+  for (let c0 = 0; c0 < nx * ny; c0++) {
+    if (solid[c0] || id[c0] >= 0) continue
+    const k = spaces.length
+    const sp: Space = { rooms: [], area: 0, open: false, at: { x: x0 + ((c0 % nx) + 0.5) * CELL, y: y0 + (Math.floor(c0 / nx) + 0.5) * CELL } }
+    spaces.push(sp)
+    const stack = [c0]
+    id[c0] = k
+    while (stack.length) {
+      const c = stack.pop()!
+      sp.area += CELL * CELL
+      const i = c % nx
+      const j = (c - i) / nx
+      if (i === 0 || j === 0 || i === nx - 1 || j === ny - 1) {
+        sp.open = true
+        continue
+      }
+      for (const n of [c - 1, c + 1, c - nx, c + nx]) if (!solid[n] && id[n] < 0) { id[n] = k; stack.push(n) }
+    }
+  }
+  const at = (p: Pt) => {
+    const i = Math.floor((p.x - x0) / CELL)
+    const j = Math.floor((p.y - y0) / CELL)
+    // past the edge of the grid is outside: the space of the (always free) corner cell
+    return i < 0 || j < 0 || i >= nx || j >= ny ? id[0] : id[j * nx + i]
+  }
+  for (const r of plan.rooms.filter((r) => !(view === 'efter' && r.goneAfter))) {
+    const k = at(r.at)
+    if (k >= 0) spaces[k].rooms.push(r.id)
+  }
+  return { spaces, at }
+}

@@ -25,6 +25,16 @@ product. All user interaction happens in Claude.
 MCP server endpoint: `/api/mcp` (Streamable HTTP, JSON-RPC 2.0 over POST)
 Viewer URL format: `/view#<base64url-deflated-BuildingModelV2-json>`
 
+## Current focus: planritning före/efter
+
+The MVP has moved from komplementbyggnad to **interior changes that need an
+anmälan**, starting with joining two neighbouring apartments
+(bostadsrätter): a plan studio that draws scaled före/efter floor plans on
+top of scanned archive drawings, keeps every change as a revision, lets
+Claude make targeted edits, and exports PDF/SVG/DXF at true scale. Unlike
+the 3D viewer, it has its own web editor (`/plans`) because geometry is
+drawn by hand. See `docs/plan-studio.md`.
+
 ## Principles
 
 - Focus on simple flows. Not architect-grade commercial submissions.
