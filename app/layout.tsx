@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
-import { Footer } from "@/components/Footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -9,8 +8,8 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Bygglov-assistenten",
-  description: "Skapa din bygglovsansökan enkelt och snabbt",
+  title: "Planstudio",
+  description: "Planritningar för bygglov",
   viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
 };
 
@@ -29,7 +28,6 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <div className="flex-1">{children}</div>
-        <Footer />
       </body>
     </html>
   );

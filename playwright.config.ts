@@ -14,12 +14,9 @@ export default defineConfig({
     launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {},
   },
 
-  // iPhone is the primary platform, so the loop verifies mobile-first:
-  // every interactive verification and generated _verified-* regression
-  // test runs at an iPhone viewport. Chromium engine (keeps CI to a single
-  // browser install; webkit/Safari fidelity is a separate concern) with
-  // iPhone metrics + touch — this is what catches horizontal overflow /
-  // clipped-on-mobile layout bugs the old desktop project missed.
+  // iPhone is the primary platform, so tests run at an iPhone viewport.
+  // Chromium engine (keeps CI to a single browser install; webkit/Safari
+  // fidelity is a separate concern) with iPhone metrics + touch.
   projects: [
     {
       name: 'iphone',
