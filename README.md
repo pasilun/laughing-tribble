@@ -1,200 +1,116 @@
-# Laughing Tribble — Autonomous AI Dev Loop
+# Planstudio
 
-A full-stack bygglov assistant built by an autonomous AI development loop. The AI ships features end-to-end: from spec to implementation to verification to auto-merge.
+A web app for drawing interior floor plans (planritningar) for Swedish building
+permit applications: before and after drawings at true scale, printed as A3/A4
+sheets. Claude can draw and edit plans through MCP tools, including tracing
+walls from scanned archive drawings.
 
-## What This Is
+The app is in Swedish; this README is in English.
 
-This project demonstrates an autonomous AI development loop that:
-1. **Spec Agent** — Takes feature requests and writes detailed specs
-2. **Dev Agent** — Implements features based on specs
-3. **Verification Agent** — Tests implementations against specs (black-box)
-4. **Auto-Merge** — Merges when all checks pass
+## Features
 
-The product being built is a **Swedish bygglov assistant** that helps users create building permit applications for small structures (friggebod, attefall, etc.).
+- **Plan editor** (`/plans`): canvas with walls, openings, fixtures, rooms,
+  notes and dimensions. Undo/redo, a checks tab, and a revision history.
+  Every save is an immutable revision; stale edits are rejected (409).
+- **Scan tools**: calibrate a scanned drawing against known lengths, detect and
+  snap walls, read door swings and windows, register several drawings, and
+  flag walls that are drawn but missing from the plan.
+- **Checks and review**: required elements, scale fit, overlaps, room
+  connectivity, entrances, and structural checks (load-bearing walls, joints).
+- **Output**: A3/A4 sheets at 1:50, 1:100, 1:150 or 1:200 as PDF and PNG, and
+  DXF for CAD.
+- **MCP**: the same operations exposed as tools at `/api/mcp`.
 
-## Repo map — app vs flow
+See [`docs/plan-studio.md`](docs/plan-studio.md) for the editor and the model,
+and [`docs/plan-review.md`](docs/plan-review.md) for the review rules.
 
-Two things live in this repo. They separate cleanly by directory:
-
-| | Paths | What it is |
-|---|---|---|
-| **App** (the product — grows prompt by prompt) | `app/`, `components/`, `public/` | The Next.js web app |
-| App config | `next.config.ts`, `postcss.config.mjs`, `tsconfig.json`, `eslint.config.mjs`, `package.json`, `vercel.json`, `app/globals.css` | Build/deploy of the app |
-| **Flow** (the autonomous loop — defends itself) | `.github/workflows/`, `.github/actions/`, `agents/`, `specs/`, `CLAUDE.md`, `AGENTS.md`, `opencode.json`, `docs/` | The machinery + contracts that build the app |
-| Boundary | `e2e/*.spec.ts` (app behaviour) · `e2e/_verified-*.spec.ts` (flow-generated regression) | Tests bind the two |
-
-Rule of thumb: **`app/` + `components/` + `public/` is the app; everything that drives or checks it is flow.**
-
-```bash
-git ls-files | grep -E '^(app|components|public)/'                 # app
-git ls-files | grep -vE '^(app|components|public)/' | grep -v node_modules   # flow
-```
-
-Product domain lives only in `docs/product-context.md` (+ `docs/wiki/`); the
-flow is product-agnostic so the app can pivot without touching the machinery.
-
-## Quick Start
+## Quick start
 
 ```bash
-# Install dependencies
 npm install
-
-# Run development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Type checking
-npm run typecheck
-
-# Linting
-npm run lint
-
-# Tests
-npm test
+npx playwright install chromium   # first time, for tests
+npm run dev                       # http://localhost:3000/plans
 ```
 
-## Project Structure
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` / `npm start` | Production build and server |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint |
+| `npm test` | Playwright (starts the dev server unless `CI` is set) |
 
-```
-laughing-tribble/
-├── agents/              # System prompts for AI agents
-│   ├── spec/           # Spec agent prompt
-│   ├── dev/            # Dev agent prompt
-│   ├── verifier/       # Verification agent prompt
-│   └── tjansteman/     # Tjänsteman agent (product feature)
-├── specs/              # Feature specifications
-│   └── _template.md    # Spec template
-├── app/                # Next.js app directory
-├── fixtures/           # Golden cases for tjänsteman testing
-├── .github/workflows/  # GitHub Actions for the loop
-├── CLAUDE.md          # Dev agent instructions
-└── vercel.json        # Vercel configuration
-```
-
-## The Loop
-
-### 1. Feature Request
-Label an issue with `feature-request` to trigger the Spec Agent.
-
-### 2. Spec Creation
-The Spec Agent:
-- Reads the issue
-- Explores the repo
-- Writes a detailed spec in `/specs/`
-- Opens a draft PR
-
-### 3. Implementation
-The Dev Agent:
-- Reads the spec
-- Implements the feature
-- Writes tests
-- Pushes to the PR
-
-### 4. Verification
-The Verification Agent:
-- Reads the spec (not the code)
-- Tests the deployed preview
-- Returns pass/fail per acceptance criterion
-
-### 5. Auto-Merge
-If all checks pass:
-- Typecheck ✓
-- Lint ✓
-- Tests ✓
-- Verification ✓
-- Golden cases ✓ (if applicable)
-- Diff < 400 lines
-- No protected paths touched
-
-The PR is automatically merged.
-
-### 6. Daily Digest
-Each morning at 8 AM UTC, you receive:
-- List of yesterday's merges
-- Any events (reverts, failures)
-- Repository stats
-
-## Protected Paths
-
-These paths are NEVER edited by agents:
-- `/fixtures/bygglov-cases/**` — Golden cases
-- `/agents/tjansteman/corpus/**` — Legal corpus
-- `/agents/tjansteman/system-prompt.md` — Tjänsteman prompt
-- `CLAUDE.md` — Loop configuration
-- Auth, payments, migrations, CI config
-
-## Product: Bygglov Assistant
-
-The app helps Swedish users create bygglov/anmälan packets for:
-
-- **Friggebod** (15 m², bygglovsfri)
-- **Attefallshus** (30 m², anmälan)
-- **Attefallstillbyggnad** (15 m² BTA, anmälan)
-- **Komplementbyggnad** (bygglov)
-- **Liten tillbyggnad** (bygglov)
-
-### Three Phases
-
-1. **Design** — Parametric 3D modeling from Swedish text prompts
-2. **Documentation** — Generate PDFs, situationsplaner, teknisk beskrivning
-3. **Review** — Tjänsteman agent checks against PBL/BBR
-
-## Deployment
-
-This project is configured for Vercel with:
-- Automatic preview deployments for PRs
-- Production deployments on merge to main
-- Environment-specific configuration
-
-### Manual Deployment
+Scripts for working on plans from the command line (local file store):
 
 ```bash
-npm run build
-vercel --prod
+npx tsx scripts/plan-tool.ts <tool> '<json args>' [--out dir] [--file path]
+npx tsx scripts/render-plan.ts demo .visual/plan   # render example sheets to PNG
 ```
 
-## Environment Variables
+## Configuration
 
-Copy `.env.example` to `.env.local` and configure:
+| Variable | Purpose |
+| --- | --- |
+| `PLAN_PASSWORD` | Protects `/plans`, `/api/plans` and `/api/mcp`. Unset means everything is open, which is only for local development. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token. When set, plans are stored in a private Blob store. (`public_READ_WRITE_TOKEN` is also accepted.) |
+| `PLAN_STORE=fs` | Force filesystem storage even when a Blob token is set. |
+| `PLAN_DATA_DIR` | Filesystem root for plans (default `.data/`). |
 
-```bash
-cp .env.example .env.local
+Without a Blob token, plans are written to `.data/` on disk. On Vercel the disk
+is ephemeral, so connect a Blob store to the project.
+
+## MCP
+
+The endpoint is `/api/mcp` (streamable HTTP). Add it as a connector in Claude
+with the password in the URL:
+
+```
+https://<host>/api/mcp?key=<PLAN_PASSWORD>
 ```
 
-Required for full functionality:
-- `EMAIL_USERNAME` / `EMAIL_PASSWORD` — Daily digest
-- `SLACK_WEBHOOK_URL` — Optional Slack notifications
-- `DATABASE_URL` — For later phases
-- `ANTHROPIC_API_KEY` — For AI agents
-- `OPENAI_API_KEY` — Alternative AI provider
+The password can also be sent as `Authorization: Bearer <PLAN_PASSWORD>`.
 
-## Current Status
+Plan tools:
 
-**Phase 0 — Loop Infrastructure** ✅
+- Plans: `plan_list`, `plan_create`, `plan_get`, `plan_edit`, `plan_check`,
+  `plan_review`, `plan_revisions`, `plan_import`, `plan_compare`
+- Scanning: `plan_source_add`, `plan_scan_view`, `plan_scan_profile`,
+  `plan_scan_calibrate`, `plan_scan_detect_walls`, `plan_scan_missing_walls`,
+  `plan_scan_snap_walls`, `plan_scan_openings`, `plan_scan_elevation`,
+  `plan_openings_report`, `plan_scan_doors`, `plan_scan_register`,
+  `plan_scan_diff`
 
-- [x] Next.js skeleton
-- [x] Agent system prompts
-- [x] GitHub Actions workflows
-- [x] Trivial test feature (greeting)
-- [x] Vercel configuration
+`plan_edit` takes a `base_revision`; if the plan has changed since, the edit is
+rejected and the plan must be read again.
 
-**Phase 1 — Friggebod Flow** (Next)
-- [ ] Parametric 3D modeling
-- [ ] Situationsplan overlay
-- [ ] PDF exports
-- [ ] Tjänsteman checklist
-- [ ] Golden cases
+## Deploy
 
-## Contributing
+Pushes to `main` deploy to Vercel through `.github/workflows/deploy.yml`, then
+smoke-test `/plans/login` and `/api/mcp`.
 
-This project uses an autonomous AI loop. Humans:
-- Write feature requests (as GitHub issues)
-- Review and merge specs
-- Handle edge cases and escalations
-- Maintain legal correctness
+Required GitHub configuration:
 
-## License
+- Secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
+- Variable: `PROD_URL`
 
-See LICENSE file.
+In the Vercel project, set `PLAN_PASSWORD` and connect a Blob store. Region and
+security headers are in `vercel.json`.
+
+## Layout
+
+```
+app/plans/                 editor pages and login
+app/api/plans/             plan REST API (list, get, ops, checks, sheet, assets)
+app/api/mcp/               MCP endpoint
+lib/plan/                  model, ops, geometry, sheet, export, checks, review, store
+lib/plan/scan/             scan tools and MCP tool definitions
+components/plan-editor/    canvas, editor, inspector, snapping, history
+scripts/                   plan CLI, rendering, golden-file and test-scan generators
+e2e/                       Playwright tests (plan-*.spec.ts, golden fixtures)
+docs/                      plan-studio.md, plan-review.md
+```
+
+## History
+
+The earlier bygglov 3D/IFC app and its autonomous development loop were removed
+in this cleanup. The last commit with them is tagged `archive/bygglov-3d`.

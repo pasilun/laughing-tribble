@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "ifc": {
+    "plan-studio": {
       "url": "https://laughing-tribble-psi.vercel.app/api/mcp"
     }
   }

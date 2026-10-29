@@ -8,16 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "playwright test",
-    "test:golden-cases": "playwright test --grep @golden-case",
-    "visual": "node scripts/visual.mjs",
-    "new-case": "tsx scripts/new-case.ts"
+    "test": "playwright test"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",
     "@resvg/resvg-js": "^2.6.2",
     "@vercel/blob": "^2.4.0",
-    "ifc-converter": "0.6.1",
     "next": "16.2.5",
     "pdfjs-dist": "^4.10.38",
     "pdfkit": "^0.17.2",
@@ -25,7 +21,6 @@
     "react-dom": "19.2.4",
     "sharp": "^0.34.5",
     "svg-to-pdfkit": "^0.1.8",
-    "three": "^0.184.0",
     "utif": "^3.1.0"
   },
   "devDependencies": {
@@ -35,7 +30,6 @@
     "@types/pdfkit": "^0.17.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/three": "^0.184.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.5",
     "tailwindcss": "^4",
