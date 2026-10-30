@@ -5,13 +5,13 @@ export const INSTRUCTIONS = `Planstudio draws floor plans (planritningar) for bu
 1. Draw what the drawing shows (the existing state). Do not suggest or make changes, demolition or a new layout unless the user asks for one.
 2. If the user mentions or has attached a drawing or photo, the first step is plan_create and then plan_upload_link: you cannot pass a chat attachment to a tool, so the user opens the link and picks the file. Draw nothing until the source exists.
 3. Call plan_guide for the working order (calibrate against the dimensions printed on the drawing, trace walls, openings, fixtures and rooms with the scan tools, compare the render with the source, run plan_review and plan_check and fix every finding, fill in the title block, pick a scale that fills the sheet).
-4. Use only this connector's tools. Report what is measured and what is estimated.`
+4. If another connector also offers plan tools (an older copy of this one), draw with this connector's plan tools only; other tools such as email or documents are fine to use. Report what is measured and what is estimated.`
 
 export const GUIDE = `WORKING ORDER FOR A PLAN TRACED FROM A DRAWING
 
 0. What was asked
    - "Make a plan of this drawing" means: draw what the drawing shows, as it is today (före, phase "existing"). Do not suggest, plan or draw changes, demolition or a new layout unless the user asks. A change is a later, separate step (walls with phase "demolish" or "new" in the same plan) and only on request.
-   - Use only this connector's tools. If another plan connector is also available, do not use it.
+   - Draw with this connector's plan tools. If another plan connector with the same kind of tools is also available (an older copy), do not use it for the plan; other tools (email, documents, calendar…) are fine whenever they help.
 
 1. Get the drawing into the plan
    - plan_create (or plan_list to continue one), then plan_upload_link straight away, before drawing anything. Give the link to the user: they open it and pick the file (PNG, JPG, TIF or PDF; at most about 4 MB) – you cannot pass a chat attachment to a tool. Wait for them to say it is uploaded. Do not draw walls from the picture in the chat first: that gives positions that have to be redone.
