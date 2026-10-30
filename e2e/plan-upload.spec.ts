@@ -71,17 +71,13 @@ test('the upload route refuses what it cannot use', async ({ request }) => {
   expect(tif.status()).toBe(201)
 })
 
-test('the page: drop a file, it becomes a source, and the page says what to tell Claude', async ({ page, request }) => {
+test('the page: pick a file, it uploads at once and says what to tell Claude', async ({ page, request }) => {
   const id = await newPlan(request)
   await page.goto(`/plans/${id}/upload`)
   await page.getByTestId('upload-file').setInputFiles({ name: 'källare.png', mimeType: 'image/png', buffer: await png() })
-  await page.getByTestId('upload-name').fill('Källare 1:100')
-  await page.getByTestId('upload-scale').fill('100')
-  await page.getByTestId('upload-dpi').fill('300')
-  await page.getByTestId('upload-submit').click()
   const result = page.getByTestId('upload-result')
   await expect(result).toContainText('Klart')
-  await expect(result).toContainText('Säg till Claude')
+  await expect(result).toContainText('Ritningen är uppladdad som källa kallare-')
   const got = await call(request, 'plan_get', { plan_id: id })
-  expect(got.content[0].text).toContain('Källa kallare-1-100')
+  expect(got.content[0].text).toMatch(/Källa kallare-[a-z0-9]{4} \(archive\)/)
 })

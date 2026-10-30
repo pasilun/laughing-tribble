@@ -233,7 +233,7 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
   if (name === 'plan_create') {
     const res = await createPlan({ name: String(args.name ?? 'Planritning'), template: args.template === 'demo' ? 'demo' : 'empty', author: 'claude' })
     if ('errors' in res) return { content: [text(res.errors!.join('\n'))], isError: true }
-    return { content: [text(`Skapad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan.id, res.revision.n)}`), await preview(res.plan, 'efter', false)] }
+    return { content: [text(`Skapad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan.id, res.revision.n)}\n\nHar användaren en ritning eller bild att rita av? Anropa plan_upload_link nu och rita ingenting förrän ritningen är uppladdad. Rita det ritningen visar, inga ändringar om användaren inte ber om det.`), await preview(res.plan, 'efter', false)] }
   }
 
   if (name === 'plan_compare') {
