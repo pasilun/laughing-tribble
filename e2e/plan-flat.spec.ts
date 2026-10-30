@@ -121,15 +121,21 @@ test('openings and windows: what the readers find in the 1999 survey, against th
   const doorHits = doors.filter(hit)
   const winHits = wins.filter(hit)
   const report = [
+    `fönster extra: ${found.filter((f) => f.kind === 'fönster' && !wins.some((o) => o.wallId === f.wall && ov(f, o) > 0)).length}`,
     `dörrar och öppningar: ${doorHits.length}/${doors.length} funna, saknas: ${doors.filter((o) => !hit(o)).map((o) => o.id).join(', ')}`,
     `fönster: ${winHits.length}/${wins.length} funna, saknas: ${wins.filter((o) => !hit(o)).map((o) => o.id).join(', ')}`,
     `funna totalt ${found.length}`,
   ].join('\n')
   await attach(info, 'öppningar', report)
-  // Baseline today (the readers are tuned for clean and 1936-style drawings; this survey outlines
-  // each room and draws windows as thin lines): doors and openings 4 of 18, windows 1 of 7.
+  // Windows: the survey draws them as thin sill lines across the core of an outlined wall between
+  // chamfered reveals; fönsterlinjer reads that (7 of 7 on the exact walls, none extra).
+  expect(winHits.length).toBeGreaterThanOrEqual(6)
+  const winExtra = found.filter((f) => f.kind === 'fönster' && !wins.some((o) => o.wallId === f.wall && ov(f, o) > 0))
+  expect(winExtra.length).toBeLessThanOrEqual(1)
+  // Doors and openings: 18 laser-measured, but the survey shows only a few of them (doorways as a
+  // dashed face or a centre mark; the entrance doors in the stair wall and several WC and closet
+  // doors are not drawn as gaps at all). Baseline 4–5 of 18.
   expect(doorHits.length).toBeGreaterThanOrEqual(3)
-  expect(winHits.length).toBeGreaterThanOrEqual(1)
   // Not a flood of false finds.
   expect(found.length).toBeLessThanOrEqual(40)
 })

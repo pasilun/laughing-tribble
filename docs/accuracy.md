@@ -43,10 +43,20 @@ corner of 152 (kitchenette, WC, stair; `UNCERTAIN` in the spec) is where the las
 the model differ most: measured, listed, kept out of the limits.
 
 Baseline today (the limits in the spec): walls median ~25 mm off, about three quarters within
-50 mm, none further than 150 mm and none turned; doors and openings 4 of 18 found, windows 1 of 7.
-Wall snapping works on this survey; the opening and window readers do not yet: the survey outlines
-each room and draws windows as thin lines, and the readers were tuned for filled walls and 1936 style.
-That is the next thing to improve, and the spec's limits go up when it is.
+50 mm, none further than 150 mm and none turned. **Windows 7 of 7 found, none extra** (method
+`fönsterlinjer`, see below). Doors and openings 4 of 18: the model's openings are laser measurements
+(independent of the drawing), and the survey shows only a few of them: doorways as a dashed face
+or a centre mark are read, but the entrance doors in the stair wall and several WC and closet doors
+are drawn as an unbroken wall, so no drawing reader can find them.
+
+The 1999 survey draws an exterior wall as two face lines with a white core and a window as two thin
+sill lines across that core between chamfered reveals. `findWindowLines` (`plan_scan_openings`,
+method `fönsterlinjer`) finds stretches of an exterior wall whose core carries thin line ink and no
+thick stroke (not a pier or a crossing wall), and extends them by the reveals (70 mm a side). Tested
+for wall position ±28 mm and thickness 340–455 mm: 63 of 63 windows. Where windows are read on a
+facade, the gap and dash readers are ignored on that wall (they find the wall between the windows).
+The two window methods are for two drawing styles: `fönsterband` for a wall drawn solid black with
+hollow window stretches (the cellar), `fönsterlinjer` for an outlined wall with sill lines.
 
 Found by this case: a fit through two stray cross-sections made a short wall a 10 m diagonal at 74° and
 still reported "ok". Now a fit that leaves the search window, rests on fewer than three sections or

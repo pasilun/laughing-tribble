@@ -172,6 +172,72 @@ export function findWindowBands(g: Gray, r: Raster, wall: Wall, opts: { minWidth
   return out
 }
 
+// Windows drawn as thin lines inside an outlined wall: the 1999 survey draws an exterior wall as two
+// face lines with a white core, and a window as two thin sill lines across that core between
+// chamfered reveals. A stretch of an exterior wall whose core carries thin line ink (and no thick
+// stroke, which would be a pier or a wall crossing) is a window. Stretches that touch a crossing
+// wall (junctions) are left out. The width is the stretch's (flagged to check).
+export const WINDOW_LINES = 'fönsterlinjer (kontrollera bredd)'
+
+export function findWindowLines(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: number; maxWidth?: number; threshold?: number; junctions?: Array<[number, number]>; core?: number[]; thick?: number } = {}): Gap[] {
+  const minW = opts.minWidth ?? 500
+  const maxW = opts.maxWidth ?? 2600
+  const th = opts.threshold ?? 128
+  const len = wallLength(wall)
+  const d = wallDir(wall)
+  const n = leftNormal(d)
+  const half = wall.thickness / 2
+  const step = Math.max(4, r.mmPerPx)
+  const core = opts.core ?? [-0.3, -0.15, 0, 0.15, 0.3]
+  const reach = 1.4 * half
+  const pxStep = Math.max(1, r.mmPerPx)
+  const near = (t: number) => (opts.junctions ?? []).some(([j, rad]) => Math.abs(t - j) <= rad + 60)
+  const on: boolean[] = []
+  const ts: number[] = []
+  for (let t = 0; t <= len + 1e-6; t += step) {
+    const c = along(wall, t)
+    const ink = (s: number) => inkNear(g, r, c.x + n.x * s * half, c.y + n.y * s * half, th)
+    const coreInk = core.some(ink)
+    // The longest unbroken dark stretch across the wall: thick means a pier or a crossing wall.
+    let longest = 0
+    let run = 0
+    for (let q = -reach; q <= reach + 1e-6; q += pxStep) {
+      if (inkNear(g, r, c.x + n.x * q, c.y + n.y * q, th)) {
+        run += pxStep
+        if (run > longest) longest = run
+      } else run = 0
+    }
+    ts.push(t)
+    on.push(coreInk && longest < (opts.thick ?? 0.5) * wall.thickness && !near(t))
+  }
+  // Short breaks (a mullion, a dash) do not end a stretch.
+  const bridge = Math.max(1, Math.round(120 / step))
+  for (let i = 0; i < on.length; i++) {
+    if (on[i]) continue
+    let a = i - 1
+    while (a >= 0 && !on[a] && i - a <= bridge) a--
+    let b = i + 1
+    while (b < on.length && !on[b] && b - i <= bridge) b++
+    if (a >= 0 && b < on.length && on[a] && on[b] && b - a <= bridge * 2) on[i] = true
+  }
+  const out: Gap[] = []
+  let start = -1
+  for (let i = 0; i <= on.length; i++) {
+    const v = i < on.length && on[i]
+    if (v && start < 0) start = i
+    if (!v && start >= 0) {
+      const t0 = ts[start]
+      const t1 = ts[i - 1] + step
+      // The thin lines stop short of the clear opening by the reveal: about 70 mm each side.
+      const o0 = Math.max(0, t0 - 70)
+      const o1 = Math.min(len, t1 + 70)
+      if (t1 - t0 >= minW && t1 - t0 <= maxW) out.push({ wallId: wall.id, offset: Math.round(o0), width: Math.round(o1 - o0), method: WINDOW_LINES })
+      start = -1
+    }
+  }
+  return out
+}
+
 // Doorways drawn as a dashed face: older Stockholm drawings outline each room
 // as a closed figure and mark a door by dashing that outline across the
 // doorway; the other face may stay solid. Each face line is located (the
@@ -236,7 +302,7 @@ export function findDashed(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: nu
         const e = ts[i - 1] + step
         const bl = e - a
         const atJunction = (opts.junctions ?? []).some(([c, rad]) => a < c + rad && e > c - rad)
-        if (b0 > 0 && i < ink.length && bl >= 25 && bl <= 140 && !atJunction) breaks.push([a, e])
+        if (b0 > 0 && i < ink.length && bl >= 25 && bl <= 260 && !atJunction) breaks.push([a, e])
         b0 = -1
       }
     }
@@ -251,7 +317,7 @@ export function findDashed(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: nu
       // (scan noise makes breaks of any length).
       const blen = (q: number) => breaks[q][1] - breaks[q][0]
       const alike = (q: number) => Math.max(blen(q), blen(k)) <= 2 * Math.min(blen(q), blen(k))
-      while (m + 1 < breaks.length && breaks[m + 1][0] - breaks[m][1] >= 120 && breaks[m + 1][0] - breaks[m][1] <= 550 && alike(m + 1)) m++
+      while (m + 1 < breaks.length && breaks[m + 1][0] - breaks[m][1] >= 120 && breaks[m + 1][0] - breaks[m][1] <= 650 && alike(m + 1)) m++
       if (m > k) {
         let dash = 0
         for (let q = k; q < m; q++) dash += breaks[q + 1][0] - breaks[q][1]
@@ -456,7 +522,7 @@ function junctionsOn(w: Wall, plan: Plan): Array<[number, number]> {
   return out
 }
 
-export const METHODS = ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge', 'fönsterband'] as const
+export const METHODS = ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge', 'fönsterband', 'fönsterlinjer'] as const
 type Find = Gap & { hinge?: 'a' | 'b'; swing?: 'left' | 'right' }
 
 // How each method fares on the openings the plan already has (doors and
@@ -491,7 +557,7 @@ export function newOpenings(
   const raw = new Map<string, Record<string, Find[]>>()
   const walls = plan.walls.filter((w) => !ids || ids.includes(w.id) || plan.openings.some((o) => o.wallId === w.id && o.kind !== 'window'))
   for (const w of walls) {
-    const per: Record<string, Find[]> = { mellanrum: [], streckad: [], mittstreck: [], dörrbåge: [], fönsterband: [] }
+    const per: Record<string, Find[]> = { mellanrum: [], streckad: [], mittstreck: [], dörrbåge: [], fönsterband: [], fönsterlinjer: [] }
     // One-sided marks only in light interior partitions (WC and closet
     // doors): on facades, party and load-bearing walls whatever is drawn
     // on the far side reads as a mark.
@@ -512,7 +578,10 @@ export function newOpenings(
         return { ...f, offset: o, method: `${f.method}, flyttad ${Math.abs(o - f.offset)} mm från vägg` }
       }
       per.mittstreck.push(...back(findCentreMarks(g, r, drawn, { threshold, junctions, oneSided: light })).map(clearMark))
-      if (w.exterior) per.fönsterband.push(...back(findWindowBands(g, r, drawn, { threshold })))
+      if (w.exterior) {
+        per.fönsterband.push(...back(findWindowBands(g, r, drawn, { threshold })))
+        per.fönsterlinjer.push(...back(findWindowLines(g, r, drawn, { threshold, junctions })))
+      }
     }
     const fit = snapWall(g, r, w, [], { threshold, square: true })
     const parts = locateParts(g, r, w, plan, threshold)
@@ -542,7 +611,7 @@ export function newOpenings(
   const checks: MethodCheck[] = METHODS.map((m) => {
     const found = known.filter((o) => (raw.get(o.wallId)?.[m] ?? []).some((f) => hitsKnown(f, o))).length
     // Windows are never among the known openings: the band reader only fires on a wall drawn solid with hollow stretches.
-    const used = methods === 'auto' ? m === 'fönsterband' || known.length < 3 || found >= Math.max(2, known.length / 4) : methods.includes(m)
+    const used = methods === 'auto' ? m === 'fönsterband' || m === 'fönsterlinjer' || known.length < 3 || found >= Math.max(2, known.length / 4) : methods.includes(m)
     return { method: m, found, known: known.length, used }
   })
   const isUsed = (m: string) => checks.find((c) => c.method === m)?.used
@@ -561,13 +630,19 @@ export function newOpenings(
     if (ids && !ids.includes(w.id)) continue
     const per = raw.get(w.id)!
     const existing = plan.openings.filter((o) => o.wallId === w.id)
-    const finds: Find[] = mergeGaps([...(isUsed('mellanrum') ? per.mellanrum : []), ...(isUsed('streckad') ? per.streckad : [])])
+    // Windows read as such (hollow band, sill lines) come first: on a facade a gap or dashes found
+    // by the other readers is often the wall between two windows, and must not hide the window.
+    const windows: Find[] = []
+    for (const m of [...(isUsed('fönsterlinjer') ? per.fönsterlinjer : []), ...(isUsed('fönsterband') ? per.fönsterband : [])])
+      if (!windows.some((f) => Math.min(f.offset + f.width, m.offset + m.width) - Math.max(f.offset, m.offset) > 0)) windows.push(m)
+    // On a facade where windows were read, gaps and dashes the other readers find are the wall
+    // between windows (door symbols are still taken below).
+    const clear = (f: Find) => !(w.exterior && windows.length >= 2) && !windows.some((q) => Math.min(f.offset + f.width, q.offset + q.width) - Math.max(f.offset, q.offset) > 0)
+    const finds: Find[] = mergeGaps([...(isUsed('mellanrum') ? per.mellanrum : []), ...(isUsed('streckad') ? per.streckad : [])]).filter(clear)
     // A centre mark only where nothing better shows the opening.
-    for (const m of isUsed('mittstreck') ? per.mittstreck : [])
+    for (const m of isUsed('mittstreck') ? per.mittstreck.filter(clear) : [])
       if (!finds.some((f) => Math.min(f.offset + f.width, m.offset + m.width) - Math.max(f.offset, m.offset) > 0)) finds.push(m)
-    // Window bands on exterior walls: only where nothing else shows an opening.
-    for (const m of isUsed('fönsterband') ? per.fönsterband : [])
-      if (!finds.some((f) => Math.min(f.offset + f.width, m.offset + m.width) - Math.max(f.offset, m.offset) > 0)) finds.push(m)
+    finds.push(...windows)
     // A door symbol gives the swing; its width is read in 100 mm steps, so a
     // gap of about that width keeps its own, measured extent.
     for (const dr of isUsed('dörrbåge') ? per.dörrbåge : []) {
@@ -599,7 +674,7 @@ export function newOpenings(
       out.push({
         id: freeId(w.id),
         wallId: w.id,
-        kind: gp.hinge ? 'door' : gp.method === WINDOW_BAND ? 'window' : 'opening',
+        kind: gp.hinge ? 'door' : gp.method === WINDOW_BAND || gp.method === WINDOW_LINES ? 'window' : 'opening',
         offset,
         width: gp.width,
         phase: 'existing',
