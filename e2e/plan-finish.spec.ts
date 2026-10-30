@@ -23,7 +23,8 @@ function cellar(): Plan {
     notes: [],
     masses: [],
     rooms: [{ id: 'r1', name: 'Tvättstuga', at: { x: 1500, y: 2500 } }],
-    sheet: { ...demoPlan().sheet, scale: 100, orientation: 'landscape', paper: 'A3', titleBlock: { ...demoPlan().sheet.titleBlock, property: '', address: '', apartments: '', author: '' } },
+    sheet: { ...demoPlan().sheet, scale: 100, orientation: 'landscape', paper: 'A3', titleBlock: { ...demoPlan().sheet.titleBlock, property: '', address: '', apartments: '', author: '', floor: '' } },
+    name: 'Källarvåningen',
   }
 }
 
@@ -94,6 +95,49 @@ test('plan_finish lists what is left but not the title block twice, and a plan t
   expect(finishPlan(huge).done.join('\n')).toContain('får inte plats')
 })
 
+test('plan_finish compares the traced outside size with the printed one', () => {
+  // The cellar's outer faces are 6080 wide and 10540 long.
+  const ok = finishPlan(cellar(), { printedOuter: { width: 6080, length: 10540 } })
+  expect(ok.findings.map((f) => f.code)).not.toContain('outer-size')
+  expect(ok.done.join('\n')).toContain('stämmer med det tryckta')
+  const off = finishPlan(cellar(), { printedOuter: { width: 6080, length: 10500 } })
+  expect(off.findings[0]).toMatchObject({ level: 'warning', code: 'outer-size' })
+  expect(off.findings[0].message).toContain('+40')
+  // the printed pair may come in either order
+  expect(finishPlan(cellar(), { printedOuter: { width: 10540, length: 6080 } }).findings.map((f) => f.code)).not.toContain('outer-size')
+  // within 30 mm is drawing tolerance
+  expect(finishPlan(cellar(), { printedOuter: { width: 6060, length: 10520 } }).findings.map((f) => f.code)).not.toContain('outer-size')
+  // without a printed size the finish says it was not compared
+  expect(finishPlan(cellar()).findings.map((f) => f.code)).toContain('outer-unchecked')
+})
+
+test('plan_finish warns when the exterior walls have no window', () => {
+  expect(finishPlan(cellar()).findings.map((f) => f.code)).toContain('no-windows')
+  const p = cellar()
+  p.openings.push({ id: 'f1', kind: 'window', wallId: 'n', offset: 1000, width: 1200, phase: 'existing' })
+  expect(finishPlan(p).findings.map((f) => f.code)).not.toContain('no-windows')
+})
+
+test('plan_finish sets the floor from the name, and asks about load-bearing exterior walls', () => {
+  const fin = finishPlan(cellar())
+  expect(fin.plan.sheet.titleBlock.floor).toBe('Källarvåning')
+  expect(fin.ask.join('\n')).not.toContain('våningsplan')
+  expect(fin.ask.join('\n')).toContain('bärande')
+  expect(finishPlan(cellar(), { markExteriorLoadBearing: true }).ask.join('\n')).not.toContain('bärande')
+  const named = cellar()
+  named.name = 'Gnejsen 1 tr'
+  expect(finishPlan(named).plan.sheet.titleBlock.floor).toBe('Plan 1')
+  const unknown = cellar()
+  unknown.name = 'Skiss'
+  const u = finishPlan(unknown)
+  expect(u.plan.sheet.titleBlock.floor).toBe('')
+  expect(u.ask).toContain('våningsplan')
+  // a floor that is already set is kept
+  const kept = cellar()
+  kept.sheet.titleBlock.floor = 'Suterräng'
+  expect(finishPlan(kept).plan.sheet.titleBlock.floor).toBe('Suterräng')
+})
+
 function layoutFits(plan: Plan) {
   return fittingScale({ ...plan, sheet: { ...plan.sheet } }) !== null && fittingScale(plan)! <= plan.sheet.scale
 }
@@ -109,13 +153,14 @@ test('the tool: finishes a traced plan in one revision and says what to ask the 
   const id = /Skapad: ([a-z0-9-]+)/.exec(created.content[0].text!)![1]
   const w = (i: string, a: [number, number], b: [number, number], ext = false) => ({ op: 'add', kind: 'wall', item: { id: i, a: { x: a[0], y: a[1] }, b: { x: b[0], y: b[1] }, thickness: 200, phase: 'existing', exterior: ext } })
   await call(request, 'plan_edit', { plan_id: id, base_revision: 1, ops: [w('n', [0, 0], [6000, 0], true), w('s', [0, 10000], [6000, 10000], true), w('v', [0, 0], [0, 10000], true), w('o', [6000, 0], [6000, 10000], true)] })
-  const fin = await call(request, 'plan_finish', { plan_id: id })
+  const fin = await call(request, 'plan_finish', { plan_id: id, printed_outer_mm: { width: 6200, length: 10200 } })
   expect(fin.isError, fin.content[0].text).toBeFalsy()
   const t = fin.content[0].text!
   expect(t).toContain('Färdigställd, revision 3')
   expect(t).toContain('skala 1:50')
   expect(t).toContain('Yttermått')
   expect(t).toContain('Fråga användaren')
+  expect(t).toContain('stämmer med det tryckta') // 6200 × 10200 outer faces
   expect(t).toContain('ritad av')
   expect(t).not.toContain('Inga ändringar är markerade')
   expect(fin.content.at(-1)!.type).toBe('image')

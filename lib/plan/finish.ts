@@ -13,6 +13,8 @@ import type { Plan, Sheet, TitleBlock } from './types'
 export type FinishOptions = {
   // Mark the exterior walls load-bearing (basement and masonry houses: they are).
   markExteriorLoadBearing?: boolean
+  // The overall outside size printed on the drawing: the traced plan is compared with it.
+  printedOuter?: { width: number; length: number }
 }
 
 export type Finish = {
@@ -22,6 +24,8 @@ export type Finish = {
   ask: string[]
   plan: Plan
 }
+
+export const OUTER_TOLERANCE = 30 // mm
 
 const FIELD: Array<[keyof TitleBlock, string]> = [
   ['property', 'fastighetsbeteckning (t.ex. "Stockholm Gnejsen 6")'],
@@ -52,6 +56,16 @@ function envelope(plan: Plan) {
     minY: Math.min(...pts.map((p) => p.y)),
     maxY: Math.max(...pts.map((p) => p.y)),
   }
+}
+
+// The floor, when the plan's name says it ("Källarvåningen", "plan 2", "1 tr").
+function floorFrom(name: string): string | null {
+  const n = name.toLowerCase()
+  if (/källar/.test(n)) return 'Källarvåning'
+  if (/vind/.test(n)) return 'Vindsvåning'
+  const m = /(?:plan|våning)\s*(\d+)|(\d+)\s*tr\b/.exec(n)
+  const num = m?.[1] ?? m?.[2]
+  return num ? `Plan ${num}` : null
 }
 
 export function finishPlan(input: Plan, opts: FinishOptions = {}): Finish {
@@ -89,8 +103,45 @@ export function finishPlan(input: Plan, opts: FinishOptions = {}): Finish {
     }
   }
 
+  if (!plan.sheet.titleBlock.floor.trim()) {
+    const floor = floorFrom(plan.name)
+    if (floor) {
+      apply({ op: 'setTitleBlock', patch: { floor } })
+      done.push(`Våningsplan: ${floor} (från planens namn)`)
+    }
+  }
+
   const findings = [...reviewPlan(plan).findings, ...checkPlan(plan)].filter((f) => f.code !== 'title-block' && (f.level !== 'info' || f.code === 'sealed'))
+
+  const exterior = plan.walls.filter((w) => w.exterior)
+  if (exterior.length) {
+    const e = envelope(plan)
+    const w = e.maxX - e.minX
+    const l = e.maxY - e.minY
+    if (!plan.openings.some((o) => o.kind === 'window'))
+      findings.unshift({ level: 'warning', code: 'no-windows', message: 'Inga fönster i ytterväggarna. Stämmer det med ritningen? Kontrollera fasadritningar och planens fönstermarkeringar (plan_scan_openings, plan_scan_elevation).' })
+    if (opts.printedOuter) {
+      // The printed pair may be given in either order; compare the pairing that fits best.
+      const { width: pw, length: pl } = opts.printedOuter
+      const straight = Math.abs(w - pw) + Math.abs(l - pl)
+      const swapped = Math.abs(w - pl) + Math.abs(l - pw)
+      const [tw, tl] = straight <= swapped ? [pw, pl] : [pl, pw]
+      const dw = Math.round(w - tw)
+      const dl = Math.round(l - tl)
+      if (Math.abs(dw) > OUTER_TOLERANCE || Math.abs(dl) > OUTER_TOLERANCE)
+        findings.unshift({
+          level: 'warning',
+          code: 'outer-size',
+          message: `Utvändigt mått ${Math.round(w)} × ${Math.round(l)} mm avviker från det tryckta ${tw} × ${tl} mm (${dw >= 0 ? '+' : ''}${dw} / ${dl >= 0 ? '+' : ''}${dl} mm). Kontrollera ytterväggarnas läge och tjocklek mot ritningen (plan_scan_snap_walls, plan_scan_view) och kör plan_finish igen.`,
+        })
+      else done.push(`Yttermåttet stämmer med det tryckta (${tw} × ${tl} mm, avvikelse ${dw} / ${dl} mm)`)
+    } else findings.push({ level: 'info', code: 'outer-unchecked', message: 'Yttermåttet är inte jämfört med ritningens tryckta mått – ange printed_outer_mm (bredd och längd) om ritningen har dem.' })
+  }
+
   const tb = plan.sheet.titleBlock
   const ask = FIELD.filter(([k]) => !String(tb[k] ?? '').trim()).map(([, label]) => label)
+  if (!tb.floor.trim()) ask.push('våningsplan')
+  if (exterior.length && !plan.walls.some((w) => w.loadBearing))
+    ask.push('om ytterväggarna är bärande (murade eller betong; då markeras de bärande och hatchas – svara ja och kör plan_finish igen med mark_exterior_load_bearing)')
   return { ops, done, findings, ask, plan }
 }

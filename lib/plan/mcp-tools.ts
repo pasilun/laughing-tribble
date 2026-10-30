@@ -56,6 +56,12 @@ export const PLAN_TOOLS = [
         plan_id: { type: 'string' },
         base_revision: { type: 'number', description: 'Defaults to the latest revision' },
         mark_exterior_load_bearing: { type: 'boolean', description: 'Mark exterior walls load-bearing (basements and masonry houses). Default false.' },
+        printed_outer_mm: {
+          type: 'object',
+          description: 'The overall outside size printed on the drawing, e.g. {"width":6080,"length":10500}. The traced plan is compared with it; more than 30 mm off is flagged. Always pass it when the drawing has them.',
+          properties: { width: { type: 'number' }, length: { type: 'number' } },
+          required: ['width', 'length'],
+        },
         view: { type: 'string', enum: ['fore', 'efter'], description: 'Preview view (default efter)' },
       },
       required: ['plan_id'],
@@ -231,11 +237,13 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
   if (name === 'plan_finish') {
     const rev = await loadPlan(planId)
     if (!rev) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
-    const fin = finishPlan(rev.plan, { markExteriorLoadBearing: args.mark_exterior_load_bearing === true })
+    const po = args.printed_outer_mm as { width?: unknown; length?: unknown } | undefined
+    const printedOuter = po && typeof po.width === 'number' && typeof po.length === 'number' ? { width: po.width, length: po.length } : undefined
+    const fin = finishPlan(rev.plan, { markExteriorLoadBearing: args.mark_exterior_load_bearing === true, printedOuter })
     let plan = rev.plan
     let n = rev.meta.n
     if (fin.ops.length) {
-      const res = await editPlan(planId, fin.ops, typeof args.base_revision === 'number' ? args.base_revision : n, 'claude', 'Färdigställd: blad, yttermått')
+      const res = await editPlan(planId, fin.ops, typeof args.base_revision === 'number' ? args.base_revision : n, 'claude', 'Färdigställd: blad, yttermått, våningsplan')
       if (res.status !== 200) return { content: [text(`Ingen ändring sparades:\n${res.errors.join('\n')}${res.status === 409 ? '\nLäs planen igen med plan_get och kör plan_finish mot senaste revisionen.' : ''}`)], isError: true }
       plan = res.plan
       n = res.revision.n
@@ -243,7 +251,7 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     const done = fin.done.length ? fin.done.map((d) => `- ${d}`).join('\n') : '- inget behövde ändras'
     const order = { error: 0, warning: 1, info: 2 }
     const left = [...fin.findings].sort((a, b) => order[a.level] - order[b.level]).map((f) => `- [${f.level}] ${f.message}`).join('\n') || '- inga'
-    const ask = fin.ask.length ? `\n\nFråga användaren (ett meddelande): ${fin.ask.join(', ')}. Sätt svaret med setTitleBlock. Skriv inte in egna gissningar.` : ''
+    const ask = fin.ask.length ? `\n\nFråga användaren (ett meddelande): ${fin.ask.join('; ')}. Sätt fälten med setTitleBlock. Skriv inte in egna gissningar.` : ''
     return {
       content: [
         text(`Färdigställd, revision ${n}.\nGjort:\n${done}\n\nKvarstår att åtgärda eller förklara:\n${left}${ask}\n\n${links(planId, n)}`),

@@ -37,7 +37,7 @@ export const GUIDE = `WORKING ORDER FOR A PLAN TRACED FROM A DRAWING
    - plan_review (access, doors, rooms, joints, structure) and plan_check (what the permit sheet needs). Resolve every error; for each remaining warning say why it stays.
 
 7. Finish
-   - Call plan_finish: it sets the largest scale where the plan fills the sheet, adds the overall dimension lines, runs plan_review and plan_check and lists what is left. Fix what it lists (or say why it stays). Ask the user for the title block fields it names (fastighetsbeteckning, adress, lägenhet, ritad av) in ONE question, then set them with setTitleBlock. Never fill them with guesses.
+   - Call plan_finish with printed_outer_mm (the overall outside width and length printed on the drawing): it sets the largest scale where the plan fills the sheet, adds the overall dimension lines, compares the traced outside size with the printed one (more than 30 mm off means the walls need correcting), warns when no windows were found, runs plan_review and plan_check and lists what is left. Fix what it lists (or say why it stays). Ask the user for what it names (fastighetsbeteckning, adress, lägenhet, ritad av, and whether the exterior walls are load-bearing) in ONE question, then set them with setTitleBlock. Never fill them with guesses.
    - A plan with nothing marked as demolished or new is a record of what exists: one sheet, titled "befintlig".
 
 8. Say what you did
