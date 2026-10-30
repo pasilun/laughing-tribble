@@ -18,7 +18,7 @@ with their own key, their own plans and their own storage.
 1. **Blob store.** Vercel → project → Storage → create a Blob store with **private**
    access (a public store is refused by the app) and connect it with the custom
    prefix `PLANS`. That creates `PLANS_READ_WRITE_TOKEN` by itself; do not make one
-   by hand. It wins over `BLOB_`/`public_` tokens from stores connected earlier.
+   by hand. If the project holds several store tokens, the app tries them in turn and uses the first that is private.
    Give *Preview* its own store (or none) so a branch deploy never touches real plans.
 2. **First person.** `npm run user:add <id>` prints a key, the line for `PLAN_USERS`
    and the connector URL. Put the line in Vercel → Settings → Environment

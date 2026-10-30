@@ -81,16 +81,40 @@ class FsBackend implements Backend {
   }
 }
 
+// A project can carry tokens from several Blob stores (one per connection, each
+// with its own prefix). The app only works with a private store, so it tries the
+// tokens in turn, skips a public store, and keeps the first one that works.
+const TOKEN_VARS = ['PLANS_READ_WRITE_TOKEN', 'BLOB_READ_WRITE_TOKEN', 'public_READ_WRITE_TOKEN']
+const tokens = () => TOKEN_VARS.map((k) => process.env[k]).filter((t): t is string => !!t)
+let working: string | undefined
+const isPublicStore = (e: unknown) => /private access on a public store/i.test((e as Error)?.message ?? '')
+
+async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
+  const all = tokens()
+  const order = working && all.includes(working) ? [working, ...all.filter((t) => t !== working)] : all
+  let last: unknown
+  for (const t of order) {
+    try {
+      const out = await fn(t)
+      working = t
+      return out
+    } catch (e) {
+      if (!isPublicStore(e)) throw e
+      last = e
+    }
+  }
+  throw last ?? new Error('ingen Blob-nyckel')
+}
+
 class BlobBackend implements Backend {
-  constructor(private token: string) {}
   async read(key: string) {
-    const res = await get(key, { access: 'private', token: this.token })
+    const res = await withToken((token) => get(key, { access: 'private', token }))
     if (!res || res.statusCode !== 200) return null
     return Buffer.from(await new Response(res.stream).arrayBuffer())
   }
   async write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }) {
     try {
-      await put(key, data, { access: 'private', token: this.token, allowOverwrite: !opts?.createOnly, contentType, addRandomSuffix: false })
+      await withToken((token) => put(key, data, { access: 'private', token, allowOverwrite: !opts?.createOnly, contentType, addRandomSuffix: false }))
       return true
     } catch (e) {
       if (opts?.createOnly && (await this.read(key))) return false
@@ -98,13 +122,13 @@ class BlobBackend implements Backend {
     }
   }
   async remove(keys: string[]) {
-    for (let i = 0; i < keys.length; i += 100) await del(keys.slice(i, i + 100), { token: this.token })
+    for (let i = 0; i < keys.length; i += 100) await withToken((token) => del(keys.slice(i, i + 100), { token }))
   }
   async keys(prefix: string) {
     const out: string[] = []
     let cursor: string | undefined
     do {
-      const page = await list({ prefix: `${prefix}/`, token: this.token, cursor })
+      const page = await withToken((token) => list({ prefix: `${prefix}/`, token, cursor }))
       out.push(...page.blobs.map((b) => b.pathname))
       cursor = page.hasMore ? page.cursor : undefined
     } while (cursor)
@@ -112,28 +136,21 @@ class BlobBackend implements Backend {
   }
 }
 
-// The whole store, every person's data. Only for migration and the health probe.
-// PLANS_READ_WRITE_TOKEN is a private store connected with the prefix "PLANS"; it
-// wins over the other tokens a project may carry from stores connected earlier.
-function blobToken(): string | undefined {
-  return process.env.PLANS_READ_WRITE_TOKEN ?? process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
-}
-
 // Names only, never values: which store tokens the deploy has and which one is used.
 function tokenNames(): { found: string[]; using: string | null } {
   const found = Object.keys(process.env).filter((k) => /READ_WRITE_TOKEN$/.test(k)).sort()
-  const using = ['PLANS_READ_WRITE_TOKEN', 'public_READ_WRITE_TOKEN', 'BLOB_READ_WRITE_TOKEN'].find((k) => process.env[k]) ?? null
+  const using = TOKEN_VARS.find((k) => process.env[k] && process.env[k] === working) ?? null
   return { found, using }
 }
 
+// The whole store, every person's data. Only for migration and the health probe.
 export function systemBackend(): Backend {
-  const token = blobToken()
-  if (token && process.env.PLAN_STORE !== 'fs') return new BlobBackend(token)
+  if (tokens().length && process.env.PLAN_STORE !== 'fs') return new BlobBackend()
   return new FsBackend(path.resolve(process.env.PLAN_DATA_DIR ?? '.data'))
 }
 
 export function storageKind(): 'blob' | 'fs' {
-  return blobToken() && process.env.PLAN_STORE !== 'fs' ? 'blob' : 'fs'
+  return tokens().length && process.env.PLAN_STORE !== 'fs' ? 'blob' : 'fs'
 }
 
 // One person's view of the store: every key is under their prefix, and what

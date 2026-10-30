@@ -53,8 +53,8 @@ npx tsx scripts/render-plan.ts demo .visual/plan   # render example sheets to PN
 | --- | --- |
 | `PLAN_USERS` | One access key per person: `anna:<hash>, bo:<hash>` (made by `npm run user:add <id>`). Each person has their own plans and files. Without any sign-in variable everything is open locally and refused on Vercel. See [docs/deploy.md](docs/deploy.md). |
 | `PLAN_PASSWORD` | Older single-password mode, used only when `PLAN_USERS` is not set: everyone shares the same plans. |
-| `PLANS_READ_WRITE_TOKEN` | Token of a **private** Vercel Blob store connected with the prefix `PLANS`. Used first when set. |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token. When set, plans are stored in that Blob store, which must be private. (`public_READ_WRITE_TOKEN` is also accepted.) |
+| `PLANS_READ_WRITE_TOKEN` | Token of a **private** Vercel Blob store connected with the prefix `PLANS`. Tried first. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token. Plans are stored in a private Blob store; when the project holds several store tokens (`PLANS_`, `BLOB_`, `public_`), the app uses the first that is private. |
 | `PLAN_STORE=fs` | Force filesystem storage even when a Blob token is set. |
 | `PLAN_DATA_DIR` | Filesystem root for plans (default `.data/`). |
 
