@@ -74,6 +74,10 @@ The key can also be sent as `Authorization: Bearer <key>`.
 
 Plan tools:
 
+- Start here: `plan_guide` (the working order for a plan traced from a drawing) and
+  `plan_upload_link` (a link where the user drops the drawing; a chat attachment
+  cannot be passed to a tool). The server also sends a short version of the guide as
+  its MCP `instructions` when a client connects.
 - Plans: `plan_list`, `plan_create`, `plan_get`, `plan_edit`, `plan_check`,
   `plan_review`, `plan_revisions`, `plan_import`, `plan_compare`
 - Scanning: `plan_source_add`, `plan_scan_view`, `plan_scan_profile`,
@@ -84,6 +88,11 @@ Plan tools:
 
 `plan_edit` takes a `base_revision`; if the plan has changed since, the edit is
 rejected and the plan must be read again.
+
+Drawings reach a plan through `/plans/<id>/upload` (browser) or
+`POST /api/plans/<id>/sources?id=…&filename=a.png&scale=100&dpi=300` with the raw
+bytes and the personal key (up to 4.4 MB: Vercel's request limit). Both register the
+file as a source like `plan_source_add`.
 
 ## Deploy
 

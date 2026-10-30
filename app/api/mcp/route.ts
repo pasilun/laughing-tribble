@@ -1,6 +1,7 @@
 import { PLAN_TOOLS, handlePlanTool } from '@/lib/plan/mcp-tools'
 import { authenticate } from '@/lib/plan/access'
 import { runAs } from '@/lib/plan/user'
+import { INSTRUCTIONS } from '@/lib/plan/guide'
 
 export const runtime = 'nodejs'
 // Scans and renders can take a while.
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
         protocolVersion: '2025-03-26',
         capabilities: { tools: {} },
         serverInfo: { name: 'plan-studio', version: '1.0.0' },
+        instructions: INSTRUCTIONS,
       },
     }, 200, { 'Mcp-Session-Id': SESSION_ID })
   }

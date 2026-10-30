@@ -1,8 +1,8 @@
 import { bounds, wallLength } from '../geometry'
 import type { Op } from '../ops'
 import { editPlan, loadPlan } from '../service'
-import { putAsset } from '../store'
 import type { Plan, Pt, Source, Wall } from '../types'
+import { addSource, type SourceInput } from './add-source'
 import { calibrate, rescaleAround, type Measurement } from './calibrate'
 import { detectWalls } from './detect'
 import { scanDiff } from './diff'
@@ -12,7 +12,7 @@ import { clipToFree } from '../clear'
 import { missingWalls } from './missing'
 import { newOpenings, showsWall } from './openings'
 import { profile, roundRun } from './profile'
-import { convertToPng, loadGray, mmPerPxFor, resolveSource, type Gray, type Raster } from './raster'
+import { loadGray, resolveSource, type Gray, type Raster } from './raster'
 import { register } from './register'
 import { snapWalls } from './snap'
 import { scanView, type Rect } from './view'
@@ -299,47 +299,19 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
   const plan = rev.plan
   try {
     if (name === 'plan_source_add') {
-      const id = String(args.id ?? '')
-      if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(id)) return err('id: gemener, siffror och bindestreck')
-      const filename = String(args.filename ?? '')
+      if (typeof args.base_revision !== 'number') return err('base_revision krävs för att spara')
       const data = Buffer.from(String(args.data_base64 ?? ''), 'base64')
       if (data.length === 0) return err('data_base64 är tom')
-      const conv = await convertToPng(data, filename)
-      const dpi = typeof args.dpi === 'number' ? args.dpi : conv.dpi
-      const scale = typeof args.scale === 'number' ? args.scale : undefined
-      let note = ''
-      let mmPerPx: number
-      if (typeof args.mm_per_px === 'number') mmPerPx = args.mm_per_px
-      else if (scale && dpi) mmPerPx = mmPerPxFor(dpi, scale)
-      else {
-        mmPerPx = mmPerPxFor(dpi ?? 300, scale ?? 100)
-        note = `\nOBS: skala/upplösning saknas – antog ${scale ?? 100} och ${dpi ?? 300} dpi. Kalibrera med plan_scan_calibrate.`
-      }
-      const src = await putAsset(planId, `src-${id}.png`, conv.png, 'image/png')
-      const source: Source = {
-        id,
-        name: String(args.name ?? filename),
-        role: (['archive', 'before', 'after', 'other'].includes(String(args.role)) ? args.role : 'other') as Source['role'],
-        src,
-        widthPx: conv.widthPx,
-        heightPx: conv.heightPx,
-        dpi,
-        mmPerPx,
-        x: typeof args.x === 'number' ? args.x : 0,
-        y: typeof args.y === 'number' ? args.y : 0,
-        rotation: 0,
-        ...(typeof args.year === 'number' ? { year: args.year } : {}),
-        ...(args.view === 'elevation' ? { view: 'elevation' as const } : {}),
-      }
-      const saved = await save(planId, args.base_revision, [{ op: 'add', kind: 'source', item: source }], `Källritning ${source.name}`)
-      if (typeof saved === 'string') return err(saved)
-      const wMm = Math.round(conv.widthPx * mmPerPx)
-      const hMm = Math.round(conv.heightPx * mmPerPx)
-      const r = resolveSource(saved.plan, id)
-      const view = await scanView(planId, saved.plan, r, { x: source.x, y: source.y, w: wMm, h: hMm }, { maxPx: 1200 })
+      const added = await addSource(planId, { ...(args as unknown as SourceInput), id: String(args.id ?? ''), filename: String(args.filename ?? '') }, data)
+      if ('errors' in added) return err(`Ingen ändring sparades:\n${added.errors.join('\n')}${added.status === 409 ? '\nLäs planen igen (plan_get) och använd senaste revision.' : ''}`)
+      const { source, mmPerPx, dpi } = added
+      const wMm = Math.round(added.widthPx * mmPerPx)
+      const hMm = Math.round(added.heightPx * mmPerPx)
+      const r = resolveSource(added.plan, source.id)
+      const view = await scanView(planId, added.plan, r, { x: source.x, y: source.y, w: wMm, h: hMm }, { maxPx: 1200 })
       return {
         content: [
-          text(`Sparad som revision ${saved.n}. Källa ${id}: ${conv.widthPx}×${conv.heightPx} px (${conv.kind}${dpi ? `, ${Math.round(dpi)} dpi` : ''}), ${mmPerPx.toFixed(4)} mm/px ≈ ${wMm}×${hMm} mm, övre vänstra hörnet (${source.x},${source.y}).${note}`),
+          text(`Sparad som revision ${added.n}. Källa ${source.id}: ${added.widthPx}×${added.heightPx} px (${added.kind}${dpi ? `, ${Math.round(dpi)} dpi` : ''}), ${mmPerPx.toFixed(4)} mm/px ≈ ${wMm}×${hMm} mm, övre vänstra hörnet (${source.x},${source.y}).${added.note}`),
           image(view.png),
         ],
       }

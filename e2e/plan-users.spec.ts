@@ -14,6 +14,7 @@ import { GET as sheetGET } from '../app/api/plans/[id]/sheet/route'
 import { GET as assetGET } from '../app/api/plans/[id]/assets/[name]/route'
 import { GET as revisionsGET } from '../app/api/plans/[id]/revisions/route'
 import { POST as opsPOST } from '../app/api/plans/[id]/ops/route'
+import { POST as sourcesPOST } from '../app/api/plans/[id]/sources/route'
 import { POST as loginPOST } from '../app/api/plans/login/route'
 import { resetLimits } from '../app/api/plans/login/limit'
 
@@ -96,6 +97,7 @@ test('over HTTP: wrong key 401, other persons plan 404 on every route, delete on
     await revisionsGET(as('kb', `http://x/api/plans/${id}/revisions`), ctx(id)),
     await assetGET(as('kb', `http://x/api/plans/${id}/assets/ritning.png`), assetCtx(id, 'ritning.png')),
     await opsPOST(as('kb', `http://x/api/plans/${id}/ops`, { method: 'POST', body: JSON.stringify({ ops: [], baseRevision: 1 }) }), ctx(id)),
+    await sourcesPOST(as('kb', `http://x/api/plans/${id}/sources?id=a&filename=a.png`, { method: 'POST', body: new Uint8Array([137, 80, 78, 71]) }), ctx(id)),
     await planDELETE(as('kb', `http://x/api/plans/${id}`, { method: 'DELETE' }), ctx(id)),
   ].entries())
     expect([i, r.status]).toEqual([i, 404])

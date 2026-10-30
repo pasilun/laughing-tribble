@@ -1,4 +1,5 @@
 import { checkPlan } from './checks'
+import { GUIDE } from './guide'
 import { describeReview, reviewPlan } from './review'
 import { comparePlans } from './compare'
 import { sheetPng } from './export'
@@ -33,6 +34,17 @@ Phases: "existing" = stays, "demolish" = exists today and is removed, "new" = ad
 All ops in one call succeed together or none are applied.`
 
 export const PLAN_TOOLS = [
+  {
+    name: 'plan_guide',
+    description: 'The working order for making a plan that can be trusted: getting the drawing into the plan, calibrating, tracing, comparing, reviewing, filling in the sheet. Read it before drawing anything from a drawing or photo.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'plan_upload_link',
+    description:
+      'Returns a link where the user drops a drawing (PNG, JPG, TIF or PDF, up to about 4 MB) so it becomes a source of the plan. A chat attachment cannot be passed to a tool, so use this whenever the user has a drawing or photo to trace. Afterwards read the plan (plan_get), view the source (plan_scan_view) and calibrate it (plan_scan_calibrate).',
+    inputSchema: { type: 'object', properties: { plan_id: { type: 'string' } }, required: ['plan_id'] },
+  },
   {
     name: 'plan_list',
     description: 'Lists saved floor plans (planritningar) with their latest revision.',
@@ -172,6 +184,11 @@ export function summarisePlan(plan: Plan): string {
   for (const src of plan.sources ?? [])
     lines.push(`Källa ${src.id} (${src.role}) "${src.name}": ${src.widthPx}×${src.heightPx} px, ${src.mmPerPx.toFixed(4)} mm/px vid (${src.x},${src.y})${src.calibration ? `, kalibrerad: ${src.calibration}` : ', ej kalibrerad'}`)
   if (plan.underlay) lines.push(`Underlag: ${plan.underlay.widthPx}×${plan.underlay.heightPx} px, ${plan.underlay.mmPerPx.toFixed(3)} mm/px vid (${plan.underlay.x},${plan.underlay.y})`)
+  const sources = plan.sources ?? []
+  if (plan.walls.length && !sources.length && !plan.underlay)
+    lines.push('OBS: planen har ingen källritning – måtten är uppskattade, inte avritade. Be användaren ladda upp ritningen (plan_upload_link) och läs plan_guide.')
+  else if (sources.length && !sources.some((x) => x.calibration))
+    lines.push('OBS: ingen källa är kalibrerad mot angivna mått – kalibrera med plan_scan_calibrate innan du ritar av den.')
   return lines.join('\n')
 }
 
@@ -194,6 +211,19 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
   if (scan) return scan
   const planId = String(args.plan_id ?? '')
   const view: View = args.view === 'fore' ? 'fore' : 'efter'
+
+  if (name === 'plan_guide') return { content: [text(GUIDE)] }
+
+  if (name === 'plan_upload_link') {
+    if (!(await loadPlan(planId))) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
+    return {
+      content: [
+        text(
+          `Be användaren öppna länken och släppa ritningen där (logga in med den personliga nyckeln första gången):\n${host()}/plans/${planId}/upload\n\nBe om ritningens skala (t.ex. 1:100) och år. När användaren säger att den är uppladdad: läs planen med plan_get (revisionen har ökat), titta på källan med plan_scan_view och kalibrera mot angivna mått med plan_scan_calibrate. Läs plan_guide för resten av arbetsordningen.`,
+        ),
+      ],
+    }
+  }
 
   if (name === 'plan_list') {
     const plans = await listPlans()
