@@ -1,9 +1,11 @@
 import { bounds, wallLength } from '../geometry'
 import type { Op } from '../ops'
 import { editPlan, loadPlan } from '../service'
+import { putAsset } from '../store'
 import type { Plan, Pt, Source, Wall } from '../types'
 import { addSource, type SourceInput } from './add-source'
 import { calibrate, rescaleAround, type Measurement } from './calibrate'
+import { findDimensionEnds } from './dimension'
 import { detectWalls } from './detect'
 import { scanDiff } from './diff'
 import { describeDoor, readDoor, readDoors } from './doors'
@@ -12,7 +14,8 @@ import { clipToFree } from '../clear'
 import { missingWalls } from './missing'
 import { newOpenings, showsWall } from './openings'
 import { profile, roundRun } from './profile'
-import { loadGray, resolveSource, type Gray, type Raster } from './raster'
+import sharp from 'sharp'
+import { loadGray, loadPng, resolveSource, toPx, type Gray, type Raster } from './raster'
 import { register } from './register'
 import { snapWalls } from './snap'
 import { scanView, type Rect } from './view'
@@ -73,6 +76,26 @@ export const SCAN_TOOLS = [
       type: 'object',
       properties: { plan_id: { type: 'string' }, source_id: SRC, from: PT, to: PT, threshold: { type: 'number' } },
       required: ['plan_id', 'from', 'to'],
+    },
+  },
+  {
+    name: 'plan_scan_dimension',
+    description:
+      'Finds the exact ends of printed dimension lines in the source drawing and calibrates the scale from them. Give each dimension as a rough a→b (plan mm, read off a plan_scan_view crop: the two ends of the dimension line, where its end strokes are) and the printed value in mm. The end strokes (extension lines, ticks) are found to about a pixel, so the scale does not depend on how well the pixel positions were eyeballed. Returns the refined ends, the measured length against the printed one and the scale factor; apply=true calibrates the source with them (like plan_scan_calibrate). Use at least two dimensions, one in each direction, and prefer the long overall ones. Note: a printed dimension is usually between the outer faces of the walls.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        base_revision: { type: 'number' },
+        source_id: SRC,
+        dimensions: {
+          type: 'array',
+          items: { type: 'object', properties: { a: PT, b: PT, mm: { type: 'number', description: 'The printed value in mm (6,08 m → 6080)' }, label: { type: 'string' } }, required: ['a', 'b', 'mm'] },
+        },
+        search_mm: { type: 'number', description: 'How far from each given end a stroke is looked for (default 350)' },
+        apply: { type: 'boolean' },
+      },
+      required: ['plan_id', 'dimensions'],
     },
   },
   {
@@ -168,7 +191,7 @@ export const SCAN_TOOLS = [
         wall_ids: { type: 'array', items: { type: 'string' }, description: 'Default: all walls' },
         apply: { type: 'boolean' },
         accept: { type: 'array', items: { type: 'string' }, description: 'With apply: ids of the new openings to add (from a preview); default all. Confirmations of existing openings are always recorded.' },
-        methods: { type: 'array', items: { type: 'string', enum: ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge'] }, description: 'Detectors to run: mellanrum = both faces stop, streckad = dashed face, mittstreck = centre mark across the wall (1936 plans; width estimated 800, or 700 for a one-sided mark), dörrbåge = door symbol. Default auto: each is tried on the openings other archive drawings already show, and used if it finds at least a quarter of them (with fewer than 3 such openings, all are used). For an independent build from one set of drawings, give methods explicitly.' },
+        methods: { type: 'array', items: { type: 'string', enum: ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge', 'fönsterband'] }, description: 'Detectors to run: fönsterband = a hollow stretch (two thin face lines, empty core) between solid parts of a wall drawn black – a window on an exterior wall, width the whole stretch; mellanrum = both faces stop, streckad = dashed face, mittstreck = centre mark across the wall (1936 plans; width estimated 800, or 700 for a one-sided mark), dörrbåge = door symbol. Default auto: each is tried on the openings other archive drawings already show, and used if it finds at least a quarter of them (with fewer than 3 such openings, all are used). For an independent build from one set of drawings, give methods explicitly.' },
         threshold: { type: 'number' },
       },
       required: ['plan_id'],
@@ -411,6 +434,88 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
       const runs = p.runs.map(roundRun)
       const lines = runs.map((x, i) => `${i + 1}. ${x.from}–${x.to} mm (bredd ${x.width}, mitt ${x.mid})`)
       return { content: [text(`Linje ${Math.round(p.length)} mm i källa ${r.id}, ${runs.length} mörka partier (± ${r.mmPerPx.toFixed(1)} mm):\n${lines.join('\n') || '–'}`)] }
+    }
+
+    if (name === 'plan_scan_dimension') {
+      const dims = (Array.isArray(args.dimensions) ? args.dimensions : []) as Array<{ a: Pt; b: Pt; mm: number; label?: string }>
+      if (!dims.length) return err('dimensions krävs: [{a, b, mm}]')
+      const searchMm = typeof args.search_mm === 'number' ? args.search_mm : undefined
+      const refined: Measurement[] = []
+      const lines: string[] = []
+      for (const [i, dm] of dims.entries()) {
+        const label = dm.label ?? `mått ${i + 1}`
+        const ends = findDimensionEnds(g, r, dm.a, dm.b, { searchMm, threshold })
+        const note = (e: { found: boolean; moved: number; strength: number }, name: string) => (e.found ? `${name} flyttad ${e.moved} mm (streck ${e.strength} px)` : `${name}: inget tydligt ändstreck hittat, behåller din punkt`)
+        const a2 = ends.a.found ? ends.a.point : dm.a
+        const b2 = ends.b.found ? ends.b.point : dm.b
+        refined.push({ a: a2, b: b2, mm: dm.mm, label })
+        lines.push(`- ${label}: (${a2.x},${a2.y})→(${b2.x},${b2.y}); ${note(ends.a, 'a')}; ${note(ends.b, 'b')}`)
+      }
+      const c = calibrate(r, refined)
+      const res = c.residuals.map((x) => `- ${x.label}: tryckt ${x.measuredMm}, ritat ${x.drawnMm} (${x.residualMm >= 0 ? '+' : ''}${x.residualMm} mm, ${x.residualPct}%)`).join('\n')
+      // Several dimensions should agree on one scale; a spread means a misread value or a skewed scan.
+      const factors = refined.map((m) => m.mm / Math.hypot(m.b.x - m.a.x, m.b.y - m.a.y))
+      const spread = (Math.max(...factors) - Math.min(...factors)) / (factors.reduce((x, y) => x + y, 0) / factors.length)
+      let out = `Hittade ändstreck:\n${lines.join('\n')}\n\nFaktor ${c.factor.toFixed(5)} (${((c.factor - 1) * 100).toFixed(2)}%) → ${c.mmPerPx.toFixed(4)} mm/px. RMS ${c.rmsMm} mm.\n${res}`
+      if (refined.length > 1 && spread > 0.01) out += `\nOBS: måtten ger olika skala (${(spread * 100).toFixed(1)}% spridning) – kontrollera de tryckta värdena, vilka punkter som avses, eller om skanningen är skev.`
+      // A scan is often stretched a little more along one axis than the other (1 % or
+      // more is common). The scan tools work on one scale, so when the horizontal and
+      // the vertical dimensions disagree the image is resampled to one scale.
+      const axisFactor = (horizontal: boolean) => {
+        const ms = refined.filter((m) => {
+          const dx = Math.abs(m.b.x - m.a.x)
+          const dy = Math.abs(m.b.y - m.a.y)
+          return horizontal ? dx >= 2 * dy : dy >= 2 * dx
+        })
+        if (!ms.length) return null
+        let sdm = 0
+        let sdd = 0
+        for (const m of ms) {
+          const d = horizontal ? Math.abs(m.b.x - m.a.x) : Math.abs(m.b.y - m.a.y)
+          sdm += d * m.mm
+          sdd += d * d
+        }
+        return { k: sdm / sdd, len: Math.sqrt(sdd) }
+      }
+      const fx = axisFactor(true)
+      const fy = axisFactor(false)
+      const skew = fx && fy ? Math.abs(fx.k - fy.k) / ((fx.k + fy.k) / 2) : 0
+      if (fx && fy) out += `\nSkala per axel: vågrätt ${(r.mmPerPx * fx.k).toFixed(4)} mm/px, lodrätt ${(r.mmPerPx * fy.k).toFixed(4)} mm/px (skillnad ${(skew * 100).toFixed(2)}%).`
+      if (args.apply) {
+        if (fx && fy && skew > 0.005) {
+          const kx = r.mmPerPx * fx.k
+          const ky = r.mmPerPx * fy.k
+          const kb = fx.len >= fy.len ? kx : ky // keep the scale of the longer dimension
+          const png = await loadPng(planId, r)
+          const sx = kx / kb
+          const sy = ky / kb
+          const w = Math.max(1, Math.round(r.widthPx * sx))
+          const h = Math.max(1, Math.round(r.heightPx * sy))
+          const straight = await sharp(png, { limitInputPixels: 200_000_000 }).resize(w, h, { fit: 'fill', kernel: 'lanczos3' }).png().toBuffer()
+          const anchor = refined[0].a
+          const apx = toPx(r, anchor)
+          const src = await putAsset(planId, `src-${r.id}-rak-${Date.now().toString(36)}.png`, straight, 'image/png')
+          const patch = {
+            src,
+            widthPx: w,
+            heightPx: h,
+            mmPerPx: kb,
+            x: Math.round(anchor.x - apx.x * sx * kb),
+            y: Math.round(anchor.y - apx.y * sy * kb),
+            calibration: `${refined.length} tryckta mått (ändstreck funna), bilden rätad (${(skew * 100).toFixed(1)}% skillnad mellan axlarna)`,
+          }
+          const saved = await save(planId, args.base_revision, sourceOps(plan, r, patch), `Kalibrerade och rätade ${r.id} från tryckta mått`)
+          if (typeof saved === 'string') return err(`${out}\n\n${saved}`)
+          out += `\nBilden var sträckt ${(skew * 100).toFixed(1)}% mer längs en axel: den är omsamplad till en skala (${kb.toFixed(4)} mm/px, ${w}×${h} px). Mått du redan ritat mot den gamla bilden kan ligga fel – ritade väggar behöver snappas om. Sparad som revision ${saved.n}.`
+        } else {
+          const next = rescaleAround(r, c.factor, refined[0].a)
+          const patch = { mmPerPx: next.mmPerPx, x: Math.round(next.x), y: Math.round(next.y), calibration: `${refined.length} tryckta mått (ändstreck funna), RMS ${c.rmsMm} mm` }
+          const saved = await save(planId, args.base_revision, sourceOps(plan, r, patch), `Kalibrerade ${r.id} från tryckta mått (${((c.factor - 1) * 100).toFixed(2)}%)`)
+          if (typeof saved === 'string') return err(`${out}\n\n${saved}`)
+          out += `\nSparad som revision ${saved.n}.`
+        }
+      }
+      return { content: [text(out)] }
     }
 
     if (name === 'plan_scan_calibrate') {

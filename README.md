@@ -23,7 +23,8 @@ The app is in Swedish; this README is in English.
 - **MCP**: the same operations exposed as tools at `/api/mcp`.
 
 See [`docs/plan-studio.md`](docs/plan-studio.md) for the editor and the model,
-and [`docs/plan-review.md`](docs/plan-review.md) for the review rules.
+[`docs/plan-review.md`](docs/plan-review.md) for the review rules and
+[`docs/accuracy.md`](docs/accuracy.md) for calibration, straightening and scoring.
 
 ## Quick start
 
@@ -82,7 +83,7 @@ Plan tools:
 - Plans: `plan_list`, `plan_create`, `plan_get`, `plan_edit`, `plan_check`,
   `plan_review`, `plan_finish`, `plan_revisions`, `plan_import`, `plan_compare`
 - Scanning: `plan_source_add`, `plan_scan_view`, `plan_scan_profile`,
-  `plan_scan_calibrate`, `plan_scan_detect_walls`, `plan_scan_missing_walls`,
+  `plan_scan_calibrate`, `plan_scan_dimension`, `plan_scan_detect_walls`, `plan_scan_missing_walls`,
   `plan_scan_snap_walls`, `plan_scan_openings`, `plan_scan_elevation`,
   `plan_openings_report`, `plan_scan_doors`, `plan_scan_register`,
   `plan_scan_diff`

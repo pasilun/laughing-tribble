@@ -29,6 +29,7 @@ const OPS_DOC = `Operations (all lengths in whole millimetres; x to the right, y
 - {"op":"moveVertex","from":{x,y},"to":{x,y}}  (moves every wall end at that point — joined walls follow)
 - {"op":"moveWall","id":"v1","dx":100,"dy":0}  (walls joined at its ends stretch)
 - {"op":"setWallLength","id":"v1","length":3500,"fixed":"a"|"b"}
+- {"op":"scale","origin":{"x":..,"y":..},"fx":1.01,"fy":1.006,"sources"?:1.008}  (scales the whole drawing about a point, separately along x and y; wall thicknesses and fixture sizes stay, openings keep their size. plan_finish with fit_outer does this to match the printed outside size)
 - {"op":"setSheet","patch":{"paper":"A3"|"A4","orientation":"landscape"|"portrait","scale":50|100|150|200,"northAngle":0,"doorSwings":false}}  (doorSwings false = doors without swing arcs, for overview sheets)
 - {"op":"setTitleBlock","patch":{"project","property","address","apartments","floor","drawingNumber","author","date"}}
 Phases: "existing" = stays, "demolish" = exists today and is removed, "new" = added. Före shows today; efter marks rivs/ny.
@@ -56,6 +57,7 @@ export const PLAN_TOOLS = [
         plan_id: { type: 'string' },
         base_revision: { type: 'number', description: 'Defaults to the latest revision' },
         mark_exterior_load_bearing: { type: 'boolean', description: 'Mark exterior walls load-bearing (basements and masonry houses). Default false.' },
+        fit_outer: { type: 'boolean', description: 'With printed_outer_mm: when the traced outside size is more than 30 mm but less than 3 % off the printed one, scale the plan (and the source drawing) to it. Use after tracing when the printed size is known.' },
         printed_outer_mm: {
           type: 'object',
           description: 'The overall outside size printed on the drawing, e.g. {"width":6080,"length":10500}. The traced plan is compared with it; more than 30 mm off is flagged. Always pass it when the drawing has them.',
@@ -239,7 +241,7 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     if (!rev) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
     const po = args.printed_outer_mm as { width?: unknown; length?: unknown } | undefined
     const printedOuter = po && typeof po.width === 'number' && typeof po.length === 'number' ? { width: po.width, length: po.length } : undefined
-    const fin = finishPlan(rev.plan, { markExteriorLoadBearing: args.mark_exterior_load_bearing === true, printedOuter })
+    const fin = finishPlan(rev.plan, { markExteriorLoadBearing: args.mark_exterior_load_bearing === true, printedOuter, fitOuter: args.fit_outer === true })
     let plan = rev.plan
     let n = rev.meta.n
     if (fin.ops.length) {

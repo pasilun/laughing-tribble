@@ -19,7 +19,7 @@ export const GUIDE = `WORKING ORDER FOR A PLAN TRACED FROM A DRAWING
    - If there is no drawing, say so and mark every dimension as estimated. Do not present an estimate as a measurement.
 
 2. Calibrate
-   - Find dimensions printed on the drawing (overall lengths, a scale bar, a door width) and call plan_scan_calibrate with at least two, one in each direction. Check the residual: more than ~30 mm means a misread number or a skewed scan.
+   - Find the overall dimensions printed on the drawing (outside width and length) and call plan_scan_dimension with their rough end points (read off plan_scan_view) and printed values; it finds the end strokes to a pixel, and with apply it calibrates, and straightens the image when the two axes differ (scans are often stretched 1 % more one way). Do this BEFORE tracing. plan_scan_calibrate is for lengths without end strokes (a scale bar, a door width). A printed dimension is between outer wall faces.
 
 3. Trace the walls
    - plan_scan_detect_walls, then plan_scan_snap_walls; correct by hand with plan_edit. Walls are centre lines with a thickness per wall (measure it; do not give every wall the same one). Mark exterior and loadBearing walls. Keep joints exact: a wall that ends in another wall stops at its centre line.
@@ -37,7 +37,7 @@ export const GUIDE = `WORKING ORDER FOR A PLAN TRACED FROM A DRAWING
    - plan_review (access, doors, rooms, joints, structure) and plan_check (what the permit sheet needs). Resolve every error; for each remaining warning say why it stays.
 
 7. Finish
-   - Call plan_finish with printed_outer_mm (the overall outside width and length printed on the drawing): it sets the largest scale where the plan fills the sheet, adds the overall dimension lines, compares the traced outside size with the printed one (more than 30 mm off means the walls need correcting), warns when no windows were found, runs plan_review and plan_check and lists what is left. Fix what it lists (or say why it stays). Ask the user for what it names (fastighetsbeteckning, adress, lägenhet, ritad av, and whether the exterior walls are load-bearing) in ONE question, then set them with setTitleBlock. Never fill them with guesses.
+   - Call plan_finish with printed_outer_mm (the overall outside width and length printed on the drawing) and fit_outer true: it sets the largest scale where the plan fills the sheet, adds the overall dimension lines, compares the traced outside size with the printed one (more than 30 mm off means the walls need correcting), warns when no windows were found, runs plan_review and plan_check and lists what is left. Fix what it lists (or say why it stays). Ask the user for what it names (fastighetsbeteckning, adress, lägenhet, ritad av, and whether the exterior walls are load-bearing) in ONE question, then set them with setTitleBlock. Never fill them with guesses.
    - A plan with nothing marked as demolished or new is a record of what exists: one sheet, titled "befintlig".
 
 8. Say what you did

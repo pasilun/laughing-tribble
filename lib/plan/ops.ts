@@ -39,6 +39,12 @@ export type Op =
   | { op: 'moveWall'; id: string; dx: number; dy: number }
   // Changes a wall's length by moving one end along the wall's direction.
   | { op: 'setWallLength'; id: string; length: number; fixed?: 'a' | 'b' }
+  // Scales the drawing about a point, separately along x and y: every wall end, mass corner,
+  // fixture centre, room label and outline, dimension end and note moves; openings keep their
+  // size and stay at the same relative place on their wall; wall thicknesses and fixture sizes
+  // stay. For a traced plan whose overall size is a little off the printed one. `sources` also
+  // rescales the source drawings by that (equal on both axes) factor, so the underlay still fits.
+  | { op: 'scale'; origin: Pt; fx: number; fy: number; sources?: number }
   | { op: 'setSheet'; patch: Partial<Omit<Sheet, 'titleBlock'>> }
   | { op: 'setTitleBlock'; patch: Partial<TitleBlock> }
   | { op: 'setUnderlay'; underlay: Underlay | null }
@@ -183,6 +189,37 @@ function applyOne(plan: Plan, op: Op): Plan {
       const d = wallDir(w)
       if ((op.fixed ?? 'a') === 'a') return moveVertex(plan, w.b, { x: w.a.x + d.x * op.length, y: w.a.y + d.y * op.length })
       return moveVertex(plan, w.a, { x: w.b.x - d.x * op.length, y: w.b.y - d.y * op.length })
+    }
+    case 'scale': {
+      const { origin: o, fx, fy } = op
+      if (!(fx > 0.5 && fx < 2 && fy > 0.5 && fy < 2)) throw new Error('scale: faktorerna måste ligga mellan 0,5 och 2')
+      const mv = (p: Pt): Pt => ({ x: o.x + (p.x - o.x) * fx, y: o.y + (p.y - o.y) * fy })
+      const lenFactor = (w: Wall) => {
+        const dx = w.b.x - w.a.x
+        const dy = w.b.y - w.a.y
+        const l = Math.hypot(dx, dy)
+        return l === 0 ? 1 : Math.hypot(dx * fx, dy * fy) / l
+      }
+      const factors = new Map(plan.walls.map((w) => [w.id, lenFactor(w)]))
+      const walls = plan.walls.map((w) => ({ ...w, a: mv(w.a), b: mv(w.b) }))
+      const openings = plan.openings.map((x) => {
+        const f = factors.get(x.wallId) ?? 1
+        const w = walls.find((q) => q.id === x.wallId)
+        const centre = f * (x.offset + x.width / 2)
+        return { ...x, offset: Math.max(0, Math.min(w ? wallLength(w) - x.width : Infinity, centre - x.width / 2)) }
+      })
+      const k = op.sources
+      return {
+        ...plan,
+        walls,
+        openings,
+        masses: plan.masses?.map((m) => ({ ...m, points: m.points.map(mv) })),
+        fixtures: plan.fixtures.map((x) => ({ ...x, ...mv({ x: x.x, y: x.y }) })),
+        rooms: plan.rooms.map((r) => ({ ...r, at: mv(r.at), ...(r.polygon ? { polygon: r.polygon.map(mv) } : {}) })),
+        dimensions: plan.dimensions.map((d) => ({ ...d, a: mv(d.a), b: mv(d.b) })),
+        notes: plan.notes.map((n) => ({ ...n, at: mv(n.at) })),
+        ...(k && plan.sources ? { sources: plan.sources.map((s) => ({ ...s, ...mv({ x: s.x, y: s.y }), mmPerPx: s.mmPerPx * k })) } : {}),
+      }
     }
     case 'setSheet':
       return { ...plan, sheet: { ...plan.sheet, ...op.patch, titleBlock: plan.sheet.titleBlock } }

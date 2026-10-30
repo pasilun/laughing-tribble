@@ -15,6 +15,9 @@ export type FinishOptions = {
   markExteriorLoadBearing?: boolean
   // The overall outside size printed on the drawing: the traced plan is compared with it.
   printedOuter?: { width: number; length: number }
+  // With printedOuter: when the traced size is off by more than the tolerance but by less
+  // than FIT_MAX, rescale the plan (per axis) to the printed size.
+  fitOuter?: boolean
 }
 
 export type Finish = {
@@ -26,6 +29,7 @@ export type Finish = {
 }
 
 export const OUTER_TOLERANCE = 30 // mm
+export const FIT_MAX = 0.03 // the largest correction fit_outer will make (3 %)
 
 const FIELD: Array<[keyof TitleBlock, string]> = [
   ['property', 'fastighetsbeteckning (t.ex. "Stockholm Gnejsen 6")'],
@@ -58,6 +62,13 @@ function envelope(plan: Plan) {
   }
 }
 
+// The printed pair may be given in either order; the pairing that fits the plan best.
+function pairPrinted(w: number, l: number, printed: { width: number; length: number }): [number, number] {
+  const straight = Math.abs(w - printed.width) + Math.abs(l - printed.length)
+  const swapped = Math.abs(w - printed.length) + Math.abs(l - printed.width)
+  return straight <= swapped ? [printed.width, printed.length] : [printed.length, printed.width]
+}
+
 // The floor, when the plan's name says it ("Källarvåningen", "plan 2", "1 tr").
 function floorFrom(name: string): string | null {
   const n = name.toLowerCase()
@@ -77,6 +88,35 @@ export function finishPlan(input: Plan, opts: FinishOptions = {}): Finish {
     if (res.errors.length) throw new Error(res.errors.join('\n'))
     plan = res.plan
     ops.push(op)
+  }
+
+  // First, before dimensions are drawn: bring a slightly off traced size to the printed one.
+  if (opts.fitOuter && opts.printedOuter && plan.walls.some((x) => x.exterior)) {
+    const e = envelope(plan)
+    const w = e.maxX - e.minX
+    const l = e.maxY - e.minY
+    const [tw, tl] = pairPrinted(w, l, opts.printedOuter)
+    if ((Math.abs(w - tw) > OUTER_TOLERANCE || Math.abs(l - tl) > OUTER_TOLERANCE) && Math.abs(w / tw - 1) <= FIT_MAX && Math.abs(l / tl - 1) <= FIT_MAX) {
+      // Scale about the outer north-west corner until the outer faces match (the wall
+      // thicknesses stay, so one pass is not exact: repeat on a copy, apply the total).
+      let tmp = plan
+      let tfx = 1
+      let tfy = 1
+      for (let i = 0; i < 4; i++) {
+        const ee = envelope(tmp)
+        const cw = ee.maxX - ee.minX
+        const cl = ee.maxY - ee.minY
+        if (Math.abs(cw - tw) <= 1 && Math.abs(cl - tl) <= 1) break
+        const fx = tw / cw
+        const fy = tl / cl
+        tmp = applyOps(tmp, [{ op: 'scale', origin: { x: e.minX, y: e.minY }, fx, fy }]).plan
+        tfx *= fx
+        tfy *= fy
+      }
+      const iso = Math.abs(tfx - tfy) <= 0.01 ? (tfx + tfy) / 2 : undefined
+      apply({ op: 'scale', origin: { x: e.minX, y: e.minY }, fx: tfx, fy: tfy, ...(iso ? { sources: iso } : {}) })
+      done.push(`Planen skalad till det tryckta yttermåttet: ${((tfx - 1) * 100).toFixed(2)}% i bredd, ${((tfy - 1) * 100).toFixed(2)}% i längd${iso ? ' (källritningen skalad med)' : ' (källritningen lämnad – axlarna skiljer sig, rätta bilden med plan_scan_dimension)'}`)
+    }
   }
 
   if (plan.walls.length) {
@@ -122,13 +162,13 @@ export function finishPlan(input: Plan, opts: FinishOptions = {}): Finish {
       findings.unshift({ level: 'warning', code: 'no-windows', message: 'Inga fönster i ytterväggarna. Stämmer det med ritningen? Kontrollera fasadritningar och planens fönstermarkeringar (plan_scan_openings, plan_scan_elevation).' })
     if (opts.printedOuter) {
       // The printed pair may be given in either order; compare the pairing that fits best.
-      const { width: pw, length: pl } = opts.printedOuter
-      const straight = Math.abs(w - pw) + Math.abs(l - pl)
-      const swapped = Math.abs(w - pl) + Math.abs(l - pw)
-      const [tw, tl] = straight <= swapped ? [pw, pl] : [pl, pw]
+      const [tw, tl] = pairPrinted(w, l, opts.printedOuter)
       const dw = Math.round(w - tw)
       const dl = Math.round(l - tl)
-      if (Math.abs(dw) > OUTER_TOLERANCE || Math.abs(dl) > OUTER_TOLERANCE)
+      // Too far off to scale to (fit_outer only corrects up to FIT_MAX).
+      if (opts.fitOuter && (Math.abs(dw) > OUTER_TOLERANCE || Math.abs(dl) > OUTER_TOLERANCE) && (Math.abs(w / tw - 1) > FIT_MAX || Math.abs(l / tl - 1) > FIT_MAX))
+        findings.unshift({ level: 'warning', code: 'outer-size', message: `Utvändigt mått ${Math.round(w)} × ${Math.round(l)} mm ligger mer än ${FIT_MAX * 100}% från det tryckta ${tw} × ${tl} mm – för stort för att skalas till: kontrollera kalibreringen (plan_scan_dimension) och ytterväggarna.` })
+      else if (Math.abs(dw) > OUTER_TOLERANCE || Math.abs(dl) > OUTER_TOLERANCE)
         findings.unshift({
           level: 'warning',
           code: 'outer-size',

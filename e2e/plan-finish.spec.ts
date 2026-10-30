@@ -138,6 +138,64 @@ test('plan_finish sets the floor from the name, and asks about load-bearing exte
   expect(finishPlan(kept).plan.sheet.titleBlock.floor).toBe('Suterräng')
 })
 
+test('plan_finish fit_outer: a traced plan that is 1.5 % small is scaled to the printed size, nothing else changes shape', () => {
+  const p = cellar()
+  p.openings.push({ id: 'd1', kind: 'door', wallId: 'mitt', offset: 1000, width: 800, phase: 'existing', hinge: 'a', swing: 'right' })
+  p.sources = [{ id: 's', name: 's', role: 'archive', src: '/x.png', widthPx: 100, heightPx: 100, mmPerPx: 8, x: 0, y: 0, rotation: 0 }]
+  // Shrink the drawing as a mis-calibration would: 1.5 % along x, 0.6 % along y, about the NW corner.
+  const small = applyOps(p, [{ op: 'scale', origin: { x: 0, y: 0 }, fx: 0.985, fy: 0.994 }]).plan
+  const faces = (q: Plan) => {
+    const pts = q.walls.filter((w) => w.exterior).flatMap(wallQuadPts)
+    return { w: Math.max(...pts.map((x) => x.x)) - Math.min(...pts.map((x) => x.x)), l: Math.max(...pts.map((x) => x.y)) - Math.min(...pts.map((x) => x.y)) }
+  }
+  expect(faces(small).w).toBeLessThan(6080 - 60)
+  const fin = finishPlan(small, { printedOuter: { width: 6080, length: 10540 }, fitOuter: true })
+  expect(fin.done.join('\n')).toContain('skalad till det tryckta yttermåttet')
+  expect(fin.findings.map((f) => f.code)).not.toContain('outer-size')
+  // Outer faces equal the printed size, within a millimetre or two (thickness does not scale).
+  expect(Math.abs(faces(fin.plan).w - 6080)).toBeLessThan(2)
+  expect(Math.abs(faces(fin.plan).l - 10540)).toBeLessThan(2)
+  // Thicknesses and the size of fixtures and openings are unchanged; the door keeps its place on its wall.
+  expect(fin.plan.walls.map((w) => w.thickness)).toEqual(small.walls.map((w) => w.thickness))
+  expect(fin.plan.fixtures[0].w).toBe(small.fixtures[0].w)
+  const d0 = small.openings.find((o) => o.id === 'd1')!
+  const d1 = fin.plan.openings.find((o) => o.id === 'd1')!
+  expect(d1.width).toBe(800)
+  const wallLen = (q: Plan) => {
+    const w = q.walls.find((x) => x.id === 'mitt')!
+    return Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y)
+  }
+  expect((d1.offset + 400) / wallLen(fin.plan)).toBeCloseTo((d0.offset + 400) / wallLen(small), 2)
+  // The source drawing follows (axes differ by less than 1 %, so one factor).
+  expect(fin.plan.sources![0].mmPerPx).toBeGreaterThan(8)
+  // Overall dimension lines are drawn on the corrected plan, with the printed lengths.
+  const dl = fin.plan.dimensions.map((d) => Math.round(Math.hypot(d.b.x - d.a.x, d.b.y - d.a.y)))
+  expect(dl.some((v) => Math.abs(v - 6080) <= 2)).toBe(true)
+  expect(dl.some((v) => Math.abs(v - 10540) <= 2)).toBe(true)
+  // Without fit_outer it only warns.
+  expect(finishPlan(small, { printedOuter: { width: 6080, length: 10540 } }).findings.map((f) => f.code)).toContain('outer-size')
+  // 5 % off is too far to scale to: warn and leave the plan alone.
+  const far = applyOps(p, [{ op: 'scale', origin: { x: 0, y: 0 }, fx: 0.95, fy: 0.95 }]).plan
+  const f2 = finishPlan(far, { printedOuter: { width: 6080, length: 10540 }, fitOuter: true })
+  expect(f2.findings[0]).toMatchObject({ code: 'outer-size' })
+  expect(f2.findings[0].message).toContain('för stort')
+  expect(faces(f2.plan).w).toBeCloseTo(faces(far).w, 0)
+})
+
+function wallQuadPts(w: Wall): Array<{ x: number; y: number }> {
+  const dx = w.b.x - w.a.x
+  const dy = w.b.y - w.a.y
+  const l = Math.hypot(dx, dy)
+  const nx = (dy / l) * (w.thickness / 2)
+  const ny = (-dx / l) * (w.thickness / 2)
+  return [
+    { x: w.a.x + nx, y: w.a.y + ny },
+    { x: w.b.x + nx, y: w.b.y + ny },
+    { x: w.b.x - nx, y: w.b.y - ny },
+    { x: w.a.x - nx, y: w.a.y - ny },
+  ]
+}
+
 function layoutFits(plan: Plan) {
   return fittingScale({ ...plan, sheet: { ...plan.sheet } }) !== null && fittingScale(plan)! <= plan.sheet.scale
 }
