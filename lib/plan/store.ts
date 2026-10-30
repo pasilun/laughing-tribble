@@ -119,6 +119,13 @@ function blobToken(): string | undefined {
   return process.env.PLANS_READ_WRITE_TOKEN ?? process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
 }
 
+// Names only, never values: which store tokens the deploy has and which one is used.
+function tokenNames(): { found: string[]; using: string | null } {
+  const found = Object.keys(process.env).filter((k) => /READ_WRITE_TOKEN$/.test(k)).sort()
+  const using = ['PLANS_READ_WRITE_TOKEN', 'public_READ_WRITE_TOKEN', 'BLOB_READ_WRITE_TOKEN'].find((k) => process.env[k]) ?? null
+  return { found, using }
+}
+
 export function systemBackend(): Backend {
   const token = blobToken()
   if (token && process.env.PLAN_STORE !== 'fs') return new BlobBackend(token)
@@ -159,17 +166,18 @@ function backend(): Backend {
 }
 
 // Writes, reads back and removes a small file outside any person's prefix.
-export async function storageProbe(): Promise<{ kind: 'blob' | 'fs'; ok: boolean; ms: number; error?: string }> {
+export async function storageProbe(): Promise<{ kind: 'blob' | 'fs'; ok: boolean; ms: number; tokens?: { found: string[]; using: string | null }; error?: string }> {
   const t = Date.now()
   const b = systemBackend()
   const key = `_health/${Math.random().toString(36).slice(2)}.txt`
+  const tokens = storageKind() === 'blob' ? { tokens: tokenNames() } : {}
   try {
     await b.write(key, 'ok', 'text/plain')
     const back = await b.read(key)
     await b.remove([key])
-    return { kind: storageKind(), ok: back?.toString() === 'ok', ms: Date.now() - t }
+    return { kind: storageKind(), ok: back?.toString() === 'ok', ms: Date.now() - t, ...tokens }
   } catch (e) {
-    return { kind: storageKind(), ok: false, ms: Date.now() - t, error: (e as Error).message }
+    return { kind: storageKind(), ok: false, ms: Date.now() - t, ...tokens, error: (e as Error).message }
   }
 }
 
