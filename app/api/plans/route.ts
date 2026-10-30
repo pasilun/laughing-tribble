@@ -1,4 +1,4 @@
-import { denied, hasAccess } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/access'
 import { createPlan } from '@/lib/plan/service'
 import { listPlans } from '@/lib/plan/store'
 import type { Plan } from '@/lib/plan/types'
@@ -6,17 +6,15 @@ import { author, fail, readJson } from './http'
 
 export const runtime = 'nodejs'
 
-export async function GET(req: Request) {
-  if (!hasAccess(req)) return denied()
+export const GET = secured(async (): Promise<Response> => {
   try {
     return Response.json({ plans: await listPlans() })
   } catch (e) {
     return fail(e)
   }
-}
+})
 
-export async function POST(req: Request) {
-  if (!hasAccess(req)) return denied()
+export const POST = secured(async (req: Request): Promise<Response> => {
   const body = await readJson(req)
   const name = typeof body?.name === 'string' && body.name.trim() ? body.name.trim() : null
   if (!body || !name) return Response.json({ errors: ['name krävs'] }, { status: 400 })
@@ -32,4 +30,4 @@ export async function POST(req: Request) {
   } catch (e) {
     return fail(e)
   }
-}
+})

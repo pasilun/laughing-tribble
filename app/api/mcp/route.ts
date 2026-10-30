@@ -1,7 +1,10 @@
 import { PLAN_TOOLS, handlePlanTool } from '@/lib/plan/mcp-tools'
-import { hasAccess } from '@/lib/plan/access'
+import { authenticate } from '@/lib/plan/access'
+import { runAs } from '@/lib/plan/user'
 
 export const runtime = 'nodejs'
+// Scans and renders can take a while.
+export const maxDuration = 60
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -62,10 +65,13 @@ export async function POST(request: Request) {
     if (name) {
       try {
         // Plan tools need the plan password (connector URL ?key=… or bearer token).
-        if (PLAN_TOOLS.some((t) => t.name === name) && !hasAccess(request))
-          return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'Planverktygen kräver lösenord: lägg till ?key=<PLAN_PASSWORD> i MCP-adressen.' }], isError: true } })
-        const planResult = await handlePlanTool(name, args)
-        if (planResult) return mcpResp({ jsonrpc: '2.0', id, result: planResult })
+        if (PLAN_TOOLS.some((t) => t.name === name)) {
+          const user = authenticate(request)
+          if (!user)
+            return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'Planverktygen kräver din personliga nyckel: lägg till ?key=<din nyckel> i MCP-adressen.' }], isError: true } })
+          const planResult = await runAs(user, () => handlePlanTool(name, args))
+          if (planResult) return mcpResp({ jsonrpc: '2.0', id, result: planResult })
+        }
       } catch (err) {
         return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' } })
       }

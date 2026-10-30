@@ -1,14 +1,17 @@
-import { get, list, put } from '@vercel/blob'
+import { del, get, list, put } from '@vercel/blob'
 import { promises as fs } from 'fs'
 import path from 'path'
+import { accessMode } from './access'
 import type { Plan, Revision } from './types'
+import { currentUser, scopeOf } from './user'
 
 // Append-only revision history per plan. Every save — from the editor or
 // from Claude — writes a new immutable revision; nothing is overwritten
 // except the small head pointer.
 //
 // Storage: Vercel Blob (private) when a blob token is configured, otherwise
-// the local filesystem under .data/plans (development).
+// the local filesystem under .data (development). Each signed-in person has
+// their own prefix (u/<id>/…); see backend().
 
 export type StoredRevision = { plan: Plan; meta: Revision }
 export type Head = { revision: number; name: string; updatedAt: string; issued: string[] }
@@ -19,8 +22,9 @@ export class ConflictError extends Error {
   }
 }
 
-interface Backend {
+export interface Backend {
   read(key: string): Promise<Buffer | null>
+  remove(keys: string[]): Promise<void>
   // createOnly: fails (returns false) instead of replacing an existing file.
   write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }): Promise<boolean>
   keys(prefix: string): Promise<string[]>
@@ -58,6 +62,14 @@ class FsBackend implements Backend {
       await fs.unlink(tmp).catch(() => undefined)
     }
   }
+  async remove(keys: string[]) {
+    for (const k of keys) {
+      const p = this.file(k)
+      await fs.unlink(p).catch(() => undefined)
+      // Leave no empty folders behind (rmdir refuses while one has files).
+      for (let d = path.dirname(p); d.length > this.root.length; d = path.dirname(d)) if (!(await fs.rmdir(d).then(() => true, () => false))) break
+    }
+  }
   async keys(prefix: string) {
     const dir = this.file(prefix)
     try {
@@ -69,27 +81,56 @@ class FsBackend implements Backend {
   }
 }
 
+// A project can carry tokens from several Blob stores (one per connection, each
+// with its own prefix). The app only works with a private store, so it tries the
+// tokens in turn, skips a public store, and keeps the first one that works.
+const TOKEN_VARS = ['PLANS_READ_WRITE_TOKEN', 'BLOB_READ_WRITE_TOKEN', 'public_READ_WRITE_TOKEN']
+const tokens = () => TOKEN_VARS.map((k) => process.env[k]).filter((t): t is string => !!t)
+let working: string | undefined
+const isPublicStore = (e: unknown) => /private access on a public store/i.test((e as Error)?.message ?? '')
+
+async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
+  const all = tokens()
+  const order = working && all.includes(working) ? [working, ...all.filter((t) => t !== working)] : all
+  let last: unknown
+  for (const t of order) {
+    try {
+      const out = await fn(t)
+      working = t
+      return out
+    } catch (e) {
+      if (!isPublicStore(e)) throw e
+      last = e
+    }
+  }
+  throw last ?? new Error('ingen Blob-nyckel')
+}
+
+// Reads go to the origin, not the CDN: a "not found" seen while a plan was being
+// created, or the old head.json after an edit, would otherwise be served for a while.
 class BlobBackend implements Backend {
-  constructor(private token: string) {}
   async read(key: string) {
-    const res = await get(key, { access: 'private', token: this.token })
+    const res = await withToken((token) => get(key, { access: 'private', token, useCache: false }))
     if (!res || res.statusCode !== 200) return null
     return Buffer.from(await new Response(res.stream).arrayBuffer())
   }
   async write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }) {
     try {
-      await put(key, data, { access: 'private', token: this.token, allowOverwrite: !opts?.createOnly, contentType, addRandomSuffix: false })
+      await withToken((token) => put(key, data, { access: 'private', token, allowOverwrite: !opts?.createOnly, contentType, addRandomSuffix: false }))
       return true
     } catch (e) {
       if (opts?.createOnly && (await this.read(key))) return false
       throw e
     }
   }
+  async remove(keys: string[]) {
+    for (let i = 0; i < keys.length; i += 100) await withToken((token) => del(keys.slice(i, i + 100), { token }))
+  }
   async keys(prefix: string) {
     const out: string[] = []
     let cursor: string | undefined
     do {
-      const page = await list({ prefix: `${prefix}/`, token: this.token, cursor })
+      const page = await withToken((token) => list({ prefix: `${prefix}/`, token, cursor }))
       out.push(...page.blobs.map((b) => b.pathname))
       cursor = page.hasMore ? page.cursor : undefined
     } while (cursor)
@@ -97,10 +138,66 @@ class BlobBackend implements Backend {
   }
 }
 
-function backend(): Backend {
-  const token = process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
-  if (token && process.env.PLAN_STORE !== 'fs') return new BlobBackend(token)
+// Names only, never values: which store tokens the deploy has and which one is used.
+function tokenNames(): { found: string[]; using: string | null } {
+  const found = Object.keys(process.env).filter((k) => /READ_WRITE_TOKEN$/.test(k)).sort()
+  const using = TOKEN_VARS.find((k) => process.env[k] && process.env[k] === working) ?? null
+  return { found, using }
+}
+
+// The whole store, every person's data. Only for migration and the health probe.
+export function systemBackend(): Backend {
+  if (tokens().length && process.env.PLAN_STORE !== 'fs') return new BlobBackend()
   return new FsBackend(path.resolve(process.env.PLAN_DATA_DIR ?? '.data'))
+}
+
+export function storageKind(): 'blob' | 'fs' {
+  return tokens().length && process.env.PLAN_STORE !== 'fs' ? 'blob' : 'fs'
+}
+
+// One person's view of the store: every key is under their prefix, and what
+// comes back has it removed.
+class Scoped implements Backend {
+  constructor(
+    private inner: Backend,
+    private prefix: string,
+  ) {}
+  read(key: string) {
+    return this.inner.read(this.prefix + key)
+  }
+  write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }) {
+    return this.inner.write(this.prefix + key, data, contentType, opts)
+  }
+  remove(keys: string[]) {
+    return this.inner.remove(keys.map((k) => this.prefix + k))
+  }
+  async keys(prefix: string) {
+    return (await this.inner.keys(this.prefix + prefix)).map((k) => k.slice(this.prefix.length))
+  }
+}
+
+// The storage of the person making the current request. With sign-in
+// configured a request without a person is a bug, never "everyone's data".
+function backend(): Backend {
+  const user = currentUser()
+  if (!user && accessMode() !== 'open') throw new Error('ingen användare för anropet – lagring nekas')
+  return new Scoped(systemBackend(), user ? scopeOf(user) : '')
+}
+
+// Writes, reads back and removes a small file outside any person's prefix.
+export async function storageProbe(): Promise<{ kind: 'blob' | 'fs'; ok: boolean; ms: number; tokens?: { found: string[]; using: string | null }; error?: string }> {
+  const t = Date.now()
+  const b = systemBackend()
+  const key = `_health/${Math.random().toString(36).slice(2)}.txt`
+  const report = () => (storageKind() === 'blob' ? { tokens: tokenNames() } : {})
+  try {
+    await b.write(key, 'ok', 'text/plain')
+    const back = await b.read(key)
+    await b.remove([key])
+    return { kind: storageKind(), ok: back?.toString() === 'ok', ms: Date.now() - t, ...report() }
+  } catch (e) {
+    return { kind: storageKind(), ok: false, ms: Date.now() - t, ...report(), error: (e as Error).message }
+  }
 }
 
 const ID = /^[a-z0-9][a-z0-9-]{0,80}$/
@@ -175,6 +272,16 @@ export async function saveRevision(
   }
   await b.write(headKey(plan.id), JSON.stringify(next), 'application/json')
   return rev
+}
+
+// Deletes a plan with all its revisions and assets. Returns false if it doesn't exist.
+export async function deletePlan(id: string): Promise<boolean> {
+  assertId(id)
+  const b = backend()
+  const keys = await b.keys(`plans/${id}`)
+  if (!keys.length) return false
+  await b.remove(keys)
+  return true
 }
 
 // Scanned drawings used as underlay. Stored next to the plan, not inside

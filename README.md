@@ -51,8 +51,10 @@ npx tsx scripts/render-plan.ts demo .visual/plan   # render example sheets to PN
 
 | Variable | Purpose |
 | --- | --- |
-| `PLAN_PASSWORD` | Protects `/plans`, `/api/plans` and `/api/mcp`. Unset means everything is open, which is only for local development. |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token. When set, plans are stored in a private Blob store. (`public_READ_WRITE_TOKEN` is also accepted.) |
+| `PLAN_USERS` | One access key per person: `anna:<hash>, bo:<hash>` (made by `npm run user:add <id>`). Each person has their own plans and files. Without any sign-in variable everything is open locally and refused on Vercel. See [docs/deploy.md](docs/deploy.md). |
+| `PLAN_PASSWORD` | Older single-password mode, used only when `PLAN_USERS` is not set: everyone shares the same plans. |
+| `PLANS_READ_WRITE_TOKEN` | Token of a **private** Vercel Blob store connected with the prefix `PLANS`. Tried first. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token. Plans are stored in a private Blob store; when the project holds several store tokens (`PLANS_`, `BLOB_`, `public_`), the app uses the first that is private. |
 | `PLAN_STORE=fs` | Force filesystem storage even when a Blob token is set. |
 | `PLAN_DATA_DIR` | Filesystem root for plans (default `.data/`). |
 
@@ -62,13 +64,13 @@ is ephemeral, so connect a Blob store to the project.
 ## MCP
 
 The endpoint is `/api/mcp` (streamable HTTP). Add it as a connector in Claude
-with the password in the URL:
+with your personal key in the URL:
 
 ```
-https://<host>/api/mcp?key=<PLAN_PASSWORD>
+https://<host>/api/mcp?key=<your key>
 ```
 
-The password can also be sent as `Authorization: Bearer <PLAN_PASSWORD>`.
+The key can also be sent as `Authorization: Bearer <key>`.
 
 Plan tools:
 
@@ -93,8 +95,9 @@ Required GitHub configuration:
 - Secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
 - Variable: `PROD_URL`
 
-In the Vercel project, set `PLAN_PASSWORD` and connect a Blob store. Region and
-security headers are in `vercel.json`.
+In the Vercel project, set `PLAN_USERS` and connect a Blob store. Region and
+security headers are in `vercel.json`. Setup, adding people, migrating existing
+plans and troubleshooting a failed deploy: [docs/deploy.md](docs/deploy.md).
 
 ## Layout
 

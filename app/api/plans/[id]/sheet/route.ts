@@ -1,14 +1,14 @@
-import { denied, hasAccess } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/access'
 import { planDxf, sheetPdf, sheetPng, sheetSvg } from '@/lib/plan/export'
 import { loadPlan } from '@/lib/plan/service'
 import type { View } from '@/lib/plan/types'
 import { fail, revParam, type Ctx } from '../../http'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 
 // GET ?view=fore|efter|both&format=svg|pdf|png|dxf&rev=n
-export async function GET(req: Request, { params }: Ctx) {
-  if (!hasAccess(req)) return denied()
+export const GET = secured(async (req: Request, { params }: Ctx): Promise<Response> => {
   const { id } = await params
   const q = new URL(req.url).searchParams
   const view = q.get('view') ?? 'efter'
@@ -40,4 +40,4 @@ export async function GET(req: Request, { params }: Ctx) {
   } catch (e) {
     return fail(e)
   }
-}
+})

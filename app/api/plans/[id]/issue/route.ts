@@ -1,11 +1,10 @@
-import { denied, hasAccess } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/access'
 import { issuePlan } from '@/lib/plan/service'
 import { author, fail, readJson, type Ctx } from '../../http'
 
 export const runtime = 'nodejs'
 
-export async function POST(req: Request, { params }: Ctx) {
-  if (!hasAccess(req)) return denied()
+export const POST = secured(async (req: Request, { params }: Ctx): Promise<Response> => {
   const { id } = await params
   const body = await readJson(req)
   try {
@@ -15,4 +14,4 @@ export async function POST(req: Request, { params }: Ctx) {
   } catch (e) {
     return fail(e)
   }
-}
+})

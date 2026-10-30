@@ -1,4 +1,4 @@
-import { denied, hasAccess } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/access'
 import { putAsset } from '@/lib/plan/store'
 import { fail, type Ctx } from '../../http'
 
@@ -8,8 +8,7 @@ const TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpe
 const MAX = 15 * 1024 * 1024
 
 // POST raw image bytes, ?name=file.png. TIF/PDF are converted to PNG in the browser first.
-export async function POST(req: Request, { params }: Ctx) {
-  if (!hasAccess(req)) return denied()
+export const POST = secured(async (req: Request, { params }: Ctx): Promise<Response> => {
   const { id } = await params
   const name = new URL(req.url).searchParams.get('name') ?? ''
   const ext = name.split('.').pop()?.toLowerCase() ?? ''
@@ -22,4 +21,4 @@ export async function POST(req: Request, { params }: Ctx) {
   } catch (e) {
     return fail(e)
   }
-}
+})
