@@ -113,14 +113,20 @@ class BlobBackend implements Backend {
 }
 
 // The whole store, every person's data. Only for migration and the health probe.
+// PLANS_READ_WRITE_TOKEN is a private store connected with the prefix "PLANS"; it
+// wins over the other tokens a project may carry from stores connected earlier.
+function blobToken(): string | undefined {
+  return process.env.PLANS_READ_WRITE_TOKEN ?? process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
+}
+
 export function systemBackend(): Backend {
-  const token = process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN
+  const token = blobToken()
   if (token && process.env.PLAN_STORE !== 'fs') return new BlobBackend(token)
   return new FsBackend(path.resolve(process.env.PLAN_DATA_DIR ?? '.data'))
 }
 
 export function storageKind(): 'blob' | 'fs' {
-  return (process.env.public_READ_WRITE_TOKEN ?? process.env.BLOB_READ_WRITE_TOKEN) && process.env.PLAN_STORE !== 'fs' ? 'blob' : 'fs'
+  return blobToken() && process.env.PLAN_STORE !== 'fs' ? 'blob' : 'fs'
 }
 
 // One person's view of the store: every key is under their prefix, and what

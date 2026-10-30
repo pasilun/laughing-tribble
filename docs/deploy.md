@@ -15,9 +15,11 @@ with their own key, their own plans and their own storage.
 
 ## One-time setup
 
-1. **Blob store.** Vercel → project → Storage → connect a Blob store. That creates
-   `BLOB_READ_WRITE_TOKEN` by itself; do not make one by hand. Give *Preview* its
-   own store (or none) so a branch deploy never touches real plans.
+1. **Blob store.** Vercel → project → Storage → create a Blob store with **private**
+   access (a public store is refused by the app) and connect it with the custom
+   prefix `PLANS`. That creates `PLANS_READ_WRITE_TOKEN` by itself; do not make one
+   by hand. It wins over `BLOB_`/`public_` tokens from stores connected earlier.
+   Give *Preview* its own store (or none) so a branch deploy never touches real plans.
 2. **First person.** `npm run user:add <id>` prints a key, the line for `PLAN_USERS`
    and the connector URL. Put the line in Vercel → Settings → Environment
    Variables → `PLAN_USERS` (Production and Preview), redeploy.
@@ -70,7 +72,9 @@ shows the same checks as JSON: build, storage, sharp, canvas, resvg and a PDF re
 2. Vercel → Deployments → the failed one → build log; or `vercel inspect <url> --logs`.
 3. Runtime errors: Vercel → project → Logs, or `vercel logs <url>`.
 4. `/api/health` says which part is broken:
-   - `storage` fails: the Blob token is missing or belongs to another project.
+   - `storage` fails: the Blob token is missing or belongs to another project. "Cannot
+     use private access on a public store" means the store the app picked is public:
+     create a private one and connect it with the prefix `PLANS`.
    - `sharp` / `canvas` / `resvg` fail: a native module did not install for the
      platform; the Node version in the project settings must be 20 or newer.
    - `pdf` fails while the libraries work: a font did not get into the function; add its
