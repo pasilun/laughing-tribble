@@ -1,11 +1,10 @@
-import { denied, hasAccess } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/access'
 import { getAsset } from '@/lib/plan/store'
 import { fail } from '../../../http'
 
 export const runtime = 'nodejs'
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string; name: string }> }) {
-  if (!hasAccess(req)) return denied()
+export const GET = secured(async (req: Request, { params }: { params: Promise<{ id: string; name: string }> }): Promise<Response> => {
   const { id, name } = await params
   try {
     const data = await getAsset(id, decodeURIComponent(name))
@@ -15,4 +14,4 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   } catch (e) {
     return fail(e)
   }
-}
+})

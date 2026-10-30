@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/api/plans/**': ['./lib/plan/fonts/**'],
     '/api/mcp': ['./lib/plan/fonts/**'],
+    '/api/health': ['./lib/plan/fonts/**'],
   },
 };
 
