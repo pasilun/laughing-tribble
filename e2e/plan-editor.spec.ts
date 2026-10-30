@@ -82,7 +82,7 @@ test('trace a scanned drawing: TIF underlay, calibrate, draw, undo, save, sheet'
   expect(saved.plan.sheet.titleBlock.property).toBe('Stockholm Testet 1')
 
   await page.getByTestId('mode-sheet').click()
-  await expect(page.getByTestId('sheet-preview')).toContainText('Planritning efter')
+  await expect(page.getByTestId('sheet-preview')).toContainText('Planritning – befintlig')
   await expect(page.getByTestId('sheet-preview')).toContainText('Stockholm Testet 1')
 })
 

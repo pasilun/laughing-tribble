@@ -3,7 +3,7 @@ import PDFDocument from 'pdfkit'
 import SVGtoPDF from 'svg-to-pdfkit'
 import path from 'path'
 import { add, along, leftNormal, scale, wallDir } from './geometry'
-import { fireRatingIn, layoutSheet, massPieces, renderSheet, visibleIn, wallPieces, VIEW_TITLE } from './sheet'
+import { fireRatingIn, hasChanges, layoutSheet, massPieces, renderSheet, viewTitle, visibleIn, wallPieces } from './sheet'
 import type { Plan, Pt, View } from './types'
 
 const FONT_DIR = path.join(process.cwd(), 'lib/plan/fonts')
@@ -14,10 +14,12 @@ export function sheetSvg(plan: Plan, view: View): string {
 }
 
 // Vector PDF at the sheet's paper size; prints at true scale at 100%.
-export async function sheetPdf(plan: Plan, views: View[]): Promise<Buffer> {
+export async function sheetPdf(plan: Plan, requested: View[]): Promise<Buffer> {
+  // Nothing changed: före and efter are the same drawing, so one page.
+  const views = hasChanges(plan) ? requested : requested.slice(0, 1)
   const L = layoutSheet(plan)
   const size: [number, number] = [L.paperW * PT_PER_MM, L.paperH * PT_PER_MM]
-  const doc = new PDFDocument({ size, margin: 0, autoFirstPage: false, info: { Title: `${plan.name} – ${views.map((v) => VIEW_TITLE[v]).join(', ')}` } })
+  const doc = new PDFDocument({ size, margin: 0, autoFirstPage: false, info: { Title: `${plan.name} – ${views.map((v) => viewTitle(plan, v)).join(', ')}` } })
   const chunks: Buffer[] = []
   doc.on('data', (c: Buffer) => chunks.push(c))
   const done = new Promise<void>((resolve) => doc.on('end', () => resolve()))

@@ -608,6 +608,23 @@ function legend(view: View, L: SheetLayout, plan: Plan): string {
 
 export const VIEW_TITLE: Record<View, string> = { fore: 'Planritning före', efter: 'Planritning efter' }
 
+// A plan with nothing demolished, added or renamed is a record of what exists: one
+// sheet ("befintlig"), not a före/efter pair that would show the same drawing twice.
+export function hasChanges(plan: Plan): boolean {
+  return (
+    plan.walls.some((w) => w.phase !== 'existing') ||
+    (plan.masses ?? []).some((m) => m.phase !== 'existing') ||
+    plan.openings.some((o) => o.phase !== 'existing') ||
+    plan.fixtures.some((x) => x.phase !== 'existing') ||
+    plan.notes.some((n) => n.phase && n.phase !== 'existing') ||
+    plan.rooms.some((r) => r.goneAfter || r.renamed)
+  )
+}
+
+export function viewTitle(plan: Plan, view: View): string {
+  return hasChanges(plan) ? VIEW_TITLE[view] : 'Planritning – befintlig'
+}
+
 function titleBlock(plan: Plan, view: View, L: SheetLayout): string {
   const tb = plan.sheet.titleBlock
   const w = 150
@@ -625,7 +642,7 @@ function titleBlock(plan: Plan, view: View, L: SheetLayout): string {
     out.push(text({ x: cx + 1.5, y: y + row * rowH + 2.6 }, label, 1.8, { anchor: 'start' }))
     out.push(text({ x: cx + 1.5, y: y + row * rowH + rowH - 1.6 }, value, big ? 3.5 : TEXT, { anchor: 'start', weight: big ? 'bold' : undefined, testid }))
   }
-  const title = `${VIEW_TITLE[view]}${tb.floor ? ` – ${tb.floor}` : ''}`
+  const title = `${viewTitle(plan, view)}${tb.floor ? ` – ${tb.floor}` : ''}`
   cell(x, 0, 'Ritning', title, 'tb-title', true)
   cell(x, 1, 'Projekt', tb.project, 'tb-project')
   cell(x, 2, 'Fastighet', tb.property, 'tb-property')
@@ -635,7 +652,7 @@ function titleBlock(plan: Plan, view: View, L: SheetLayout): string {
   cell(x + w / 2, 3, 'Datum', tb.date, 'tb-date')
   cell(x + w * 0.75, 3, 'Rev', tb.revision || '–', 'tb-revision')
   cell(x, 4, 'Ritad av', tb.author, 'tb-author')
-  cell(x + w / 2, 4, 'Ritningsnummer', `${tb.drawingNumber}${view === 'fore' ? '-F' : '-E'}`, 'tb-number')
+  cell(x + w / 2, 4, 'Ritningsnummer', hasChanges(plan) ? `${tb.drawingNumber}${view === 'fore' ? '-F' : '-E'}` : tb.drawingNumber, 'tb-number')
   return `<g data-testid="title-block">${out.join('')}</g>`
 }
 

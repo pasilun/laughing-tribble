@@ -18,7 +18,8 @@ The app is in Swedish; this README is in English.
 - **Checks and review**: required elements, scale fit, overlaps, room
   connectivity, entrances, and structural checks (load-bearing walls, joints).
 - **Output**: A3/A4 sheets at 1:50, 1:100, 1:150 or 1:200 as PDF and PNG, and
-  DXF for CAD.
+  DXF for CAD. A plan with changes (demolished or new parts) gets a före and an
+  efter sheet; a plan of what exists is one sheet, titled "befintlig".
 - **MCP**: the same operations exposed as tools at `/api/mcp`.
 
 See [`docs/plan-studio.md`](docs/plan-studio.md) for the editor and the model,
@@ -79,7 +80,7 @@ Plan tools:
   cannot be passed to a tool). The server also sends a short version of the guide as
   its MCP `instructions` when a client connects.
 - Plans: `plan_list`, `plan_create`, `plan_get`, `plan_edit`, `plan_check`,
-  `plan_review`, `plan_revisions`, `plan_import`, `plan_compare`
+  `plan_review`, `plan_finish`, `plan_revisions`, `plan_import`, `plan_compare`
 - Scanning: `plan_source_add`, `plan_scan_view`, `plan_scan_profile`,
   `plan_scan_calibrate`, `plan_scan_detect_walls`, `plan_scan_missing_walls`,
   `plan_scan_snap_walls`, `plan_scan_openings`, `plan_scan_elevation`,

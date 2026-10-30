@@ -1,4 +1,5 @@
 import { checkPlan } from './checks'
+import { finishPlan } from './finish'
 import { GUIDE } from './guide'
 import { describeReview, reviewPlan } from './review'
 import { comparePlans } from './compare'
@@ -44,6 +45,21 @@ export const PLAN_TOOLS = [
     description:
       'Returns a link where the user drops a drawing (PNG, JPG, TIF or PDF, up to about 4 MB) so it becomes a source of the plan. A chat attachment cannot be passed to a tool, so use this whenever the user has a drawing or photo to trace. Afterwards read the plan (plan_get), view the source (plan_scan_view) and calibrate it (plan_scan_calibrate).',
     inputSchema: { type: 'object', properties: { plan_id: { type: 'string' } }, required: ['plan_id'] },
+  },
+  {
+    name: 'plan_finish',
+    description:
+      'The last mechanical steps of a plan, in one call: sets the largest sheet scale (and orientation) where the plan fills the paper, adds the overall dimension lines if there are none, optionally marks the exterior walls load-bearing, runs plan_review and plan_check, and lists what only the user can supply (property, address, flat number, drawn by). Saves one revision if it changed anything. Call it when the drawing is traced, then fix what it lists and ask the user for the missing title block fields in one question.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        base_revision: { type: 'number', description: 'Defaults to the latest revision' },
+        mark_exterior_load_bearing: { type: 'boolean', description: 'Mark exterior walls load-bearing (basements and masonry houses). Default false.' },
+        view: { type: 'string', enum: ['fore', 'efter'], description: 'Preview view (default efter)' },
+      },
+      required: ['plan_id'],
+    },
   },
   {
     name: 'plan_list',
@@ -211,6 +227,30 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
   if (scan) return scan
   const planId = String(args.plan_id ?? '')
   const view: View = args.view === 'fore' ? 'fore' : 'efter'
+
+  if (name === 'plan_finish') {
+    const rev = await loadPlan(planId)
+    if (!rev) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
+    const fin = finishPlan(rev.plan, { markExteriorLoadBearing: args.mark_exterior_load_bearing === true })
+    let plan = rev.plan
+    let n = rev.meta.n
+    if (fin.ops.length) {
+      const res = await editPlan(planId, fin.ops, typeof args.base_revision === 'number' ? args.base_revision : n, 'claude', 'Färdigställd: blad, yttermått')
+      if (res.status !== 200) return { content: [text(`Ingen ändring sparades:\n${res.errors.join('\n')}${res.status === 409 ? '\nLäs planen igen med plan_get och kör plan_finish mot senaste revisionen.' : ''}`)], isError: true }
+      plan = res.plan
+      n = res.revision.n
+    }
+    const done = fin.done.length ? fin.done.map((d) => `- ${d}`).join('\n') : '- inget behövde ändras'
+    const order = { error: 0, warning: 1, info: 2 }
+    const left = [...fin.findings].sort((a, b) => order[a.level] - order[b.level]).map((f) => `- [${f.level}] ${f.message}`).join('\n') || '- inga'
+    const ask = fin.ask.length ? `\n\nFråga användaren (ett meddelande): ${fin.ask.join(', ')}. Sätt svaret med setTitleBlock. Skriv inte in egna gissningar.` : ''
+    return {
+      content: [
+        text(`Färdigställd, revision ${n}.\nGjort:\n${done}\n\nKvarstår att åtgärda eller förklara:\n${left}${ask}\n\n${links(planId, n)}`),
+        await preview(plan, view, false),
+      ],
+    }
+  }
 
   if (name === 'plan_guide') return { content: [text(GUIDE)] }
 

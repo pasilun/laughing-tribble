@@ -1,5 +1,6 @@
 import { secured } from '@/lib/plan/access'
 import { planDxf, sheetPdf, sheetPng, sheetSvg } from '@/lib/plan/export'
+import { hasChanges } from '@/lib/plan/sheet'
 import { loadPlan } from '@/lib/plan/service'
 import type { View } from '@/lib/plan/types'
 import { fail, revParam, type Ctx } from '../../http'
@@ -21,7 +22,7 @@ export const GET = secured(async (req: Request, { params }: Ctx): Promise<Respon
     const tb = plan.sheet.titleBlock
     const base = `${tb.drawingNumber || plan.id}${tb.revision ? `-rev${tb.revision}` : ''}`
     const single: View = view === 'fore' ? 'fore' : 'efter'
-    const suffix = view === 'both' ? '' : single === 'fore' ? '-fore' : '-efter'
+    const suffix = view === 'both' || !hasChanges(plan) ? '' : single === 'fore' ? '-fore' : '-efter'
     const disposition = (ext: string) => `attachment; filename="${base}${suffix}.${ext}"`
     if (format === 'pdf') {
       const pdf = await sheetPdf(plan, view === 'both' ? ['fore', 'efter'] : [single])

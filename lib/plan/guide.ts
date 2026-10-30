@@ -36,8 +36,9 @@ export const GUIDE = `WORKING ORDER FOR A PLAN TRACED FROM A DRAWING
 6. Review and check
    - plan_review (access, doors, rooms, joints, structure) and plan_check (what the permit sheet needs). Resolve every error; for each remaining warning say why it stays.
 
-7. Sheet
-   - Fill in the title block (fastighetsbeteckning, adress, lägenhet, ritad av, ritningsnummer, datum). Choose the largest scale that fits the paper (setSheet; the fit check names it). Overall dimensions and dimensions for new or removed openings are drawn.
+7. Finish
+   - Call plan_finish: it sets the largest scale where the plan fills the sheet, adds the overall dimension lines, runs plan_review and plan_check and lists what is left. Fix what it lists (or say why it stays). Ask the user for the title block fields it names (fastighetsbeteckning, adress, lägenhet, ritad av) in ONE question, then set them with setTitleBlock. Never fill them with guesses.
+   - A plan with nothing marked as demolished or new is a record of what exists: one sheet, titled "befintlig".
 
 8. Say what you did
    - List what is measured from the drawing, what is estimated, what you could not read, and what the user should check on site. Do not give legal or structural assessments: that is for the municipality and the structural engineer.

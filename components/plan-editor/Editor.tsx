@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { checkPlan, type Finding } from '@/lib/plan/checks'
 import { dist } from '@/lib/plan/geometry'
 import { applyOps, type Op } from '@/lib/plan/ops'
-import { renderSheet } from '@/lib/plan/sheet'
+import { hasChanges, renderSheet } from '@/lib/plan/sheet'
 import type { FixtureKind, Plan, Pt, Revision, View } from '@/lib/plan/types'
 import { Canvas, type Selection, type Tool, type ToolOptions } from './Canvas'
 import { initHistory, push, redo, undo, type History } from './history'
@@ -72,6 +72,7 @@ export function Editor({ id }: { id: string }) {
 
   const plan = draft ?? hist?.present ?? null
   const dirty = !!hist && !!base && hist.present !== base.plan
+  const record = !!plan && !hasChanges(plan)
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
@@ -279,16 +280,18 @@ export function Editor({ id }: { id: string }) {
             <div className="absolute right-0 z-10 mt-1 w-56 rounded border bg-white p-1 text-sm shadow">
               {dirty && <p className="px-2 py-1 text-xs text-amber-700">Exporterar senast sparade revision ({base.n}).</p>}
               <a className="block rounded px-2 py-1 hover:bg-zinc-100" data-testid="export-pdf" href={exportUrl('pdf', 'both')}>
-                PDF – före och efter
+                {record ? 'PDF' : 'PDF – före och efter'}
               </a>
-              <a className="block rounded px-2 py-1 hover:bg-zinc-100" href={exportUrl('pdf', view)}>
-                PDF – {view === 'fore' ? 'före' : 'efter'}
-              </a>
+              {!record && (
+                <a className="block rounded px-2 py-1 hover:bg-zinc-100" href={exportUrl('pdf', view)}>
+                  PDF – {view === 'fore' ? 'före' : 'efter'}
+                </a>
+              )}
               <a className="block rounded px-2 py-1 hover:bg-zinc-100" href={exportUrl('svg', view)}>
-                SVG – {view === 'fore' ? 'före' : 'efter'}
+                SVG{record ? '' : ` – ${view === 'fore' ? 'före' : 'efter'}`}
               </a>
               <a className="block rounded px-2 py-1 hover:bg-zinc-100" href={exportUrl('dxf', view)}>
-                DXF – {view === 'fore' ? 'före' : 'efter'} (för konsulter)
+                DXF{record ? '' : ` – ${view === 'fore' ? 'före' : 'efter'}`} (för konsulter)
               </a>
             </div>
           </details>

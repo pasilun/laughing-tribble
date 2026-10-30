@@ -43,11 +43,7 @@ export function checkPlan(plan: Plan): Finding[] {
 
   if (plan.walls.length === 0) out.push({ level: 'error', code: 'empty', message: 'Planen har inga väggar' })
 
-  const changes =
-    plan.walls.some((w) => w.phase !== 'existing') ||
-    plan.openings.some((o) => o.phase !== 'existing') ||
-    plan.fixtures.some((f) => f.phase !== 'existing')
-  if (!changes) out.push({ level: 'warning', code: 'no-change', message: 'Inga ändringar är markerade (rivs/ny) – före och efter blir likadana' })
+  // A plan with nothing marked is a record of what exists; that is fine (one sheet, "befintlig").
 
   const walls = new Map(plan.walls.map((w) => [w.id, w]))
   // An opening that runs into another wall: a window through a corner, a door against a stair wall.
