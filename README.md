@@ -87,13 +87,8 @@ rejected and the plan must be read again.
 
 ## Deploy
 
-Pushes to `main` deploy to Vercel through `.github/workflows/deploy.yml`, then
-smoke-test `/plans/login` and `/api/mcp`.
-
-Required GitHub configuration:
-
-- Secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
-- Variable: `PROD_URL`
+Vercel's Git integration deploys every push: `main` to production, other
+branches to previews. There is no deploy workflow in GitHub.
 
 In the Vercel project, set `PLAN_USERS` and connect a Blob store. Region and
 security headers are in `vercel.json`. Setup, adding people, migrating existing

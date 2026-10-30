@@ -11,7 +11,7 @@ with their own key, their own plans and their own storage.
 | Plans, revisions, scanned drawings | Vercel Blob (private), under `u/<person>/plans/…` |
 | Who is who | `PLAN_USERS` in the Vercel project: `id:<hash of key>`, comma separated |
 | The key itself | With the person only. It is never stored, only its hash is. |
-| Deploy credentials | GitHub secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` |
+| Deploys | Vercel's Git integration: `main` to production, other branches to previews |
 
 ## One-time setup
 
@@ -48,12 +48,12 @@ as a password and share it only with the person it is for.
 
 ## Tokens
 
-- `VERCEL_TOKEN` (vercel.com/account/tokens, scoped to the team, with an expiry)
-  deploys from CI. To let Claude read build logs and environment variable names
-  from a session, add the same kind of token as `VERCEL_TOKEN` in the session's
-  environment settings, never in chat.
-- `VERCEL_ORG_ID` = `team_JLz4qrIZ7bgOBGx6fCuMmKcY`,
-  `VERCEL_PROJECT_ID` = `prj_MVMEK9eApm5ktc0cb7vlp3FcGbHi`. They identify, they do not grant.
+Vercel deploys by itself, so no token is needed for that. To let Claude read build
+logs and environment variable names from a session, create a token at
+vercel.com/account/tokens (scoped to the team, with an expiry) and add it as
+`VERCEL_TOKEN` in the session's environment settings, never in chat.
+Team `team_JLz4qrIZ7bgOBGx6fCuMmKcY`, project `prj_MVMEK9eApm5ktc0cb7vlp3FcGbHi`
+identify the project; they do not grant anything.
 
 ## Is it working?
 
@@ -82,13 +82,18 @@ shows the same checks as JSON: build, storage, sharp, canvas, resvg and a PDF re
 5. `401` everywhere: wrong or missing key. `503 inloggning är inte konfigurerad`:
    `PLAN_USERS` is not set in that environment (preview and production are separate).
 
-## CI and the smoke step (proposed, not yet in `.github/`)
+## CI and the smoke test
 
-`deploy.yml` currently deploys `main` and checks that `/plans/login` and `/api/mcp`
-answer. Two additions would catch the rest earlier. Add them as-is.
+Vercel runs the build on every push. The signed-in smoke test is run by hand after
+a deploy (and by Claude from a session):
 
-`.github/workflows/ci.yml` – the same build Vercel runs, plus the tests that need no
-browser, on every pull request:
+```
+node scripts/smoke.mjs https://<host> <key> [<other person's key>]
+```
+
+A pull-request check that runs typecheck, lint and the tests that need no browser
+would catch the rest earlier; it is not set up. If you want it, add this as
+`.github/workflows/ci.yml`:
 
 ```yaml
 name: CI
@@ -109,17 +114,4 @@ jobs:
       - run: npm run build
       - run: npx playwright test e2e/plan-model.spec.ts e2e/plan-review.spec.ts e2e/plan-scan.spec.ts e2e/plan-snap.spec.ts e2e/plan-access.spec.ts e2e/plan-users.spec.ts --reporter=line
         env: { CI: 'true' }
-```
-
-A last step in `deploy.yml` – the signed-in smoke test (skipped until `SMOKE_KEY` exists):
-
-```yaml
-      - name: Production smoke (signed in)
-        env:
-          PROD_URL: ${{ vars.PROD_URL }}
-          SMOKE_KEY: ${{ secrets.SMOKE_KEY }}
-          SMOKE_KEY_OTHER: ${{ secrets.SMOKE_KEY_OTHER }}
-        run: |
-          if [ -z "$SMOKE_KEY" ]; then echo "SMOKE_KEY saknas – hoppar över"; exit 0; fi
-          node scripts/smoke.mjs "$PROD_URL" "$SMOKE_KEY" "$SMOKE_KEY_OTHER"
 ```
