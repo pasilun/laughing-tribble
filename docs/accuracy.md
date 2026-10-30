@@ -23,7 +23,9 @@ else is measured against them.
    stretch between solid parts of an exterior wall is a window; its width is the whole
    stretch (flagged "kontrollera bredd"). Judged from the ink across the wall, not from
    the nominal thickness (stable for ±60 mm in position and 260–380 mm in thickness on
-   the cellar drawing).
+   the cellar drawing). A narrow dark post inside a hollow stretch (up to ~250 mm: a mullion, the
+   rounded blob in the right cellar window) does not end the window; piers are wider. The
+   cellar's right window is therefore ~1.5 m, from pier to pier, not the 0.9 m after the post.
 
 ## Limits
 

@@ -105,14 +105,16 @@ test('the window bands on the north wall are found on the real drawing', async (
   expect(win).toHaveLength(2)
   // The left window (Tvättstuga side) is the long hollow stretch from the corner post to the first pier;
   // the right one (Passage) sits between the second pier and the corner post: the whole hollow stretch.
-  expect(win[0][0]).toBeGreaterThan(200)
+  expect(win[0][0]).toBeGreaterThan(100)
   expect(win[0][0]).toBeLessThan(400)
   expect(win[0][1]).toBeGreaterThan(2300)
-  expect(win[0][1]).toBeLessThan(2700)
-  expect(win[1][0]).toBeGreaterThan(4000)
-  expect(win[1][0]).toBeLessThan(4400)
-  expect(win[1][1]).toBeGreaterThan(800)
-  expect(win[1][1]).toBeLessThan(1100)
+  expect(win[0][1]).toBeLessThan(2800)
+  // The right window runs from the first pier's reveal to the corner pier, a post (the rounded blob)
+  // in the middle of it: about 1.5 m, not the 0.9 m after the post.
+  expect(win[1][0]).toBeGreaterThan(3400)
+  expect(win[1][0]).toBeLessThan(3900)
+  expect(win[1][1]).toBeGreaterThan(1300)
+  expect(win[1][1]).toBeLessThan(1750)
 })
 
 // ── the band reader on a drawn-by-code wall ──────────────────────────────

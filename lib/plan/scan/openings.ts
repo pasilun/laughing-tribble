@@ -86,7 +86,7 @@ export function findGaps(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: numb
 // stretch's, not a measured window, and says so.
 export const WINDOW_BAND = 'fönsterband (hela det ihåliga stycket – kontrollera bredd)'
 
-export function findWindowBands(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: number; maxWidth?: number; endMargin?: number; threshold?: number } = {}): Gap[] {
+export function findWindowBands(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: number; maxWidth?: number; endMargin?: number; threshold?: number; debug?: (kinds: string, step: number) => void } = {}): Gap[] {
   const minW = opts.minWidth ?? 500
   const maxW = opts.maxWidth ?? 3600
   const th = opts.threshold ?? 128
@@ -136,6 +136,20 @@ export function findWindowBands(g: Gray, r: Raster, wall: Wall, opts: { minWidth
     if (j - i < minSolid) for (let q = i; q < j; q++) kind[q] = 'other'
     i = j
   }
+  // A post inside a window (a mullion, a rounded blob, a frame) is dark for up to ~250 mm: when
+  // there is no solid wall on either side of it, it does not end the window. Piers are wider.
+  const postMax = Math.max(minSolid + 1, Math.round(250 / step))
+  for (let i = 0; i < kind.length; ) {
+    if (kind[i] !== 'solid') {
+      i++
+      continue
+    }
+    let j = i
+    while (j < kind.length && kind[j] === 'solid') j++
+    if (i > 0 && j < kind.length && j - i <= postMax) for (let q = i; q < j; q++) kind[q] = 'other'
+    i = j
+  }
+  opts.debug?.(kind.map((k) => (k === 'solid' ? '#' : k === 'hollow' ? '-' : '.')).join(''), step)
   if (kind.filter((k) => k === 'solid').length < 0.1 * kind.length) return []
   // Short interruptions (a mullion, a dash, a tick) do not end a hollow stretch.
   const bridge = Math.max(1, Math.round(250 / step))
@@ -149,8 +163,9 @@ export function findWindowBands(g: Gray, r: Raster, wall: Wall, opts: { minWidth
     if (a >= 0 && b < kind.length && hollow[a] && hollow[b] && b - a <= bridge * 2) hollow[i] = true
   }
   const margin = opts.endMargin ?? Math.max(60, half)
-  // A hollow stretch is a window when solid wall (or a corner) is within 100 mm of each end.
-  const nearN = Math.max(3, Math.round(100 / step))
+  // A hollow stretch is a window when solid wall (or a corner) is within 300 mm of each end (the chamfered
+  // reveals between the pier and the glass are drawn as slopes, neither solid nor hollow).
+  const nearN = Math.max(3, Math.round(300 / step))
   const solidNear = (i: number) => kind.slice(Math.max(0, i - nearN), i + nearN + 1).some((k) => k === 'solid')
   const out: Gap[] = []
   let start = -1
