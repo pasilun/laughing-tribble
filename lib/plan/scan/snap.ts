@@ -135,22 +135,33 @@ export function snapWall(g: Gray, r: Raster, wall: Wall, skip: Array<[number, nu
   const thickness = median(inliers.map((s) => s.width))
   const rms = Math.sqrt(inliers.reduce((s, x) => s + (x.centre - (fit.a + fit.b * x.t)) ** 2, 0) / inliers.length)
 
+  // A rough wall is placed within ~100 mm and at about the right angle: a fit that turns it more
+  // than 4° is a short wall or noise (a pillar, a stub beside a fixture), so only its position is taken.
+  const rawAngle = Math.round((Math.atan(fit.b) * 180) / Math.PI * 100) / 100 // reported as read, so several drawings can still be compared
+  const tiltIgnored = Math.abs(rawAngle) > 4
+  if (tiltIgnored) fit = { a: median(inliers.map((s) => s.centre)), b: 0 }
   const offA = fit.a
   const offB = fit.a + fit.b * len
   const fitted = { a: { x: wall.a.x + n.x * offA, y: wall.a.y + n.y * offA }, b: { x: wall.b.x + n.x * offB, y: wall.b.y + n.y * offB } }
   const { a, b } = opts.square === false ? fitted : squared(fitted.a, fitted.b)
   const confidence = inliers.length / picks.length
+  // A fit that leaves the search window at either end, or rests on fewer than three
+  // cross-sections, is a line through noise (two stray sections gave a 10 m diagonal at 74°
+  // that still counted as "ok"): the wall stays where it was drawn.
+  const leaves = Math.abs(offA) > search * 1.05 || Math.abs(offB) > search * 1.05
+  const few = inliers.length < Math.min(3, picks.length)
   const report: SnapReport = {
     id: wall.id,
-    ok: confidence >= 0.4,
+    ok: confidence >= 0.4 && !leaves && !few,
     confidence: Math.round(confidence * 100) / 100,
     sections: inliers.length,
     shiftMm: Math.round(Math.max(Math.abs(offA), Math.abs(offB))),
-    angleDeg: Math.round((Math.atan(fit.b) * 180) / Math.PI * 100) / 100,
+    angleDeg: rawAngle,
     thicknessMm: Math.round(thickness),
     rmsMm: Math.round(rms * 10) / 10,
   }
-  if (!report.ok) report.note = 'osäker – få tvärsnitt stämmer, kontrollera i bilden'
+  if (tiltIgnored && report.ok) report.note = 'vinkeln (över 4°) ignorerad – bara läget är anpassat'
+  if (!report.ok) report.note = leaves ? 'osäker – linjen hamnar utanför sökfönstret (vinkel eller läge); väggen lämnas som den var, kontrollera i bilden' : 'osäker – få tvärsnitt stämmer, kontrollera i bilden'
   const t = opts.keepThickness ? wall.thickness : Math.round(thickness / 5) * 5
   return { wall: { ...wall, a, b, thickness: t }, report }
 }

@@ -30,6 +30,28 @@ else is measured against them.
 A hand-drawn 1:100 sheet has pen lines 50–100 mm wide in reality: asking for better than
 about 50 mm from it is false precision. Beyond that only a measurement on site helps.
 
+## The flat as a golden case
+
+`e2e/plan-flat.spec.ts` uses the user's model of lgh 152–154 (`e2e/fixtures/flat/reference.json`,
+rev 40) and a crop of the 1999 survey (`a00-crop.png`, the straightened A00:24, 1.4 × 1.7k px).
+The model's walls are shifted by a seeded error (60 and 120 mm), the snapper puts them back,
+and the openings are read from the drawing with the walls only. Both are scored against the model.
+
+The model was traced from this same drawing, so the score says how well the tools reproduce a
+careful tracing; it is not independent truth (the cellar's printed dimensions are). The north-west
+corner of 152 (kitchenette, WC, stair; `UNCERTAIN` in the spec) is where the laser measurements and
+the model differ most: measured, listed, kept out of the limits.
+
+Baseline today (the limits in the spec): walls median ~25 mm off, about three quarters within
+50 mm, none further than 150 mm and none turned; doors and openings 4 of 18 found, windows 1 of 7.
+Wall snapping works on this survey; the opening and window readers do not yet: the survey outlines
+each room and draws windows as thin lines, and the readers were tuned for filled walls and 1936 style.
+That is the next thing to improve, and the spec's limits go up when it is.
+
+Found by this case: a fit through two stray cross-sections made a short wall a 10 m diagonal at 74° and
+still reported "ok". Now a fit that leaves the search window, rests on fewer than three sections or
+turns a wall more than 4° does not move the wall (or only its position), and says so.
+
 ## Scoring
 
 `e2e/plan-cellar.spec.ts` runs the cellar drawing (`e2e/fixtures/cellar/kallare.png`)
