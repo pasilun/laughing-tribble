@@ -106,9 +106,11 @@ async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
   throw last ?? new Error('ingen Blob-nyckel')
 }
 
+// Reads go to the origin, not the CDN: a "not found" seen while a plan was being
+// created, or the old head.json after an edit, would otherwise be served for a while.
 class BlobBackend implements Backend {
   async read(key: string) {
-    const res = await withToken((token) => get(key, { access: 'private', token }))
+    const res = await withToken((token) => get(key, { access: 'private', token, useCache: false }))
     if (!res || res.statusCode !== 200) return null
     return Buffer.from(await new Response(res.stream).arrayBuffer())
   }
@@ -187,14 +189,14 @@ export async function storageProbe(): Promise<{ kind: 'blob' | 'fs'; ok: boolean
   const t = Date.now()
   const b = systemBackend()
   const key = `_health/${Math.random().toString(36).slice(2)}.txt`
-  const tokens = storageKind() === 'blob' ? { tokens: tokenNames() } : {}
+  const report = () => (storageKind() === 'blob' ? { tokens: tokenNames() } : {})
   try {
     await b.write(key, 'ok', 'text/plain')
     const back = await b.read(key)
     await b.remove([key])
-    return { kind: storageKind(), ok: back?.toString() === 'ok', ms: Date.now() - t, ...tokens }
+    return { kind: storageKind(), ok: back?.toString() === 'ok', ms: Date.now() - t, ...report() }
   } catch (e) {
-    return { kind: storageKind(), ok: false, ms: Date.now() - t, ...tokens, error: (e as Error).message }
+    return { kind: storageKind(), ok: false, ms: Date.now() - t, ...report(), error: (e as Error).message }
   }
 }
 
