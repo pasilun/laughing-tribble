@@ -1,4 +1,4 @@
-import { area, bbox, centroid, dist, pointInRing, shortest, type P } from './geometry'
+import { area, bbox, centroid, closestOnSegment, dist, pointInRing, shortest, type P } from './geometry'
 import type { Building } from './buildings'
 import type { Mosaic } from './lantmateriet'
 
@@ -238,8 +238,28 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     out.push(label(lx, ly + 2.4, sub, 2.3, { anchor }))
   })
   ;(s.areas ?? []).forEach((a, ai) => {
-    const c = centroid(a.ring)
-    out.push(label(X(c.x), Y(c.y), `A${ai + 1} ${a.name.replace(/\s*\(.*\)$/, '')}`, 2.6, { anchor: 'middle', bold: true }))
+    const title = `A${ai + 1} ${a.name.replace(/\s*\(.*\)$/, '')}`
+    // The label goes where the area is widest and nothing else is written: the point inside with the most
+    // room to the outline whose label box clears the building labels and the earlier area labels.
+    const edges = a.ring.map((p, i) => [p, a.ring[(i + 1) % a.ring.length]] as const)
+    const ab0 = bbox(a.ring)
+    let c = centroid(a.ring)
+    let bestRoom = -1
+    const halfW = Math.max(title.length * 2.6 * 0.55, 30 * 2.3 * 0.52) / 2 + 1
+    for (let gx = ab0.minX; gx <= ab0.maxX; gx += 1)
+      for (let gy = ab0.minY; gy <= ab0.maxY; gy += 1) {
+        const p = { x: gx, y: gy }
+        if (!pointInRing(p, a.ring)) continue
+        const bx0: Box = { x0: X(p.x) - halfW, x1: X(p.x) + halfW, y0: Y(p.y) - 4, y1: Y(p.y) + 6 }
+        if (taken.some((t) => hit(bx0, t))) continue
+        const room = Math.min(...edges.map(([e0, e1]) => dist(p, closestOnSegment(p, e0, e1))))
+        if (room > bestRoom) {
+          bestRoom = room
+          c = p
+        }
+      }
+    taken.push({ x0: X(c.x) - halfW, x1: X(c.x) + halfW, y0: Y(c.y) - 4, y1: Y(c.y) + 6 })
+    out.push(label(X(c.x), Y(c.y), title, 2.6, { anchor: 'middle', bold: true }))
     // An area may run over the boundary (a meadow that goes on into the neighbour's land): say how much is inside.
     const whole = area(a.ring)
     const ab = bbox(a.ring)
