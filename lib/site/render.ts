@@ -218,8 +218,10 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     const c = centroid(q.corners)
     const xs = q.corners.map((p) => X(p.x))
     const title = `${q.id} ${q.kind === 'bostadshus' ? 'Bostadshus' : 'Komplementbyggnad'}`
-    const sub = `${dec(q.width)} × ${dec(q.depth)} m, ca ${q.area} m²`
-    const w = Math.max(title.length * 2.5 * 0.55, sub.length * 2.3 * 0.52) + 2
+    // A footprint made of several parts says so (label); else its two sides.
+    const sub = q.label ?? `${dec(q.width)} × ${dec(q.depth)} m, ca ${q.area} m²`
+    const subLines = sub.length > 34 ? (sub.match(/.{1,34}(\s|$)/g) ?? [sub]).map((x) => x.trim()) : [sub]
+    const w = Math.max(title.length * 2.5 * 0.55, ...subLines.map((x) => x.length * 2.3 * 0.52)) + 2
     const options: Array<{ right: boolean; up: boolean }> = [
       { right: true, up: false }, { right: true, up: true }, { right: false, up: false }, { right: false, up: true },
     ]
@@ -240,7 +242,7 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     out.push(`<line x1="${f(X(c.x))}" y1="${f(Y(c.y))}" x2="${f(lx)}" y2="${f(ly)}" stroke="#000" stroke-width="0.15"/>`)
     const anchor = pick.right ? 'start' : 'end'
     out.push(label(lx, ly - 0.6, title, 2.5, { bold: true, anchor }))
-    out.push(label(lx, ly + 2.4, sub, 2.3, { anchor }))
+    subLines.forEach((ln, k) => out.push(label(lx, ly + 2.4 + k * 2.9, ln, 2.3, { anchor })))
   })
   ;(s.areas ?? []).forEach((a, ai) => {
     const title = `A${ai + 1} ${a.name.replace(/\s*\(.*\)$/, '')}`

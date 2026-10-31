@@ -66,3 +66,16 @@ test('marked areas (a meadow, an idea) are drawn with name, area and a legend li
   expect(svg).toContain('Äng (min bedömning)')
   expect(svg).toContain('Rutnät 10 m')
 })
+
+test('a building that is not a rectangle is drawn as its outline, with its own label and its true distance to the boundary', () => {
+  const doc = JSON.parse(readFileSync('e2e/fixtures/site/lovinge-doc.json', 'utf8')) as { origin: P; property: P[][][]; buildings: Array<Building & { label?: string }> }
+  const o = doc.origin
+  const map = (p: P) => ({ x: p.x + o.x, y: p.y + o.y })
+  const b1 = doc.buildings.find((b) => b.id === 'B1')!
+  expect(b1.corners).toHaveLength(8)
+  const svg = renderSite({ polygons: doc.property.map((poly) => poly.map((r) => r.map(map))), buildings: doc.buildings.map((b) => ({ ...b, corners: b.corners.map(map) })), title: { designation: 'Strängnäs Lövinge 3:2', municipality: 'Strängnäs' } })
+  expect(svg).toContain('tillbyggnad i norr')
+  expect(svg).toContain('ca 54 m²')
+  // The outline has eight corners: its path has eight points.
+  expect(svg.match(/<path d="M[^"]*" fill="#8f8f8f"/)![0].split('L')).toHaveLength(8)
+})

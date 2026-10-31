@@ -664,7 +664,7 @@ export function SiteEditor({ slug }: { slug: string }) {
                 <ul className="mt-1 text-xs text-zinc-700">
                   {doc.buildings.map((b) => (
                     <li key={b.id}>
-                      {b.id} {b.kind}: {fmt(b.width)} × {fmt(b.depth)} m (ca {b.area} m²)
+                      {b.id} {b.kind}: {b.label ?? `${fmt(b.width)} × ${fmt(b.depth)} m (ca ${b.area} m²)`}
                     </li>
                   ))}
                 </ul>

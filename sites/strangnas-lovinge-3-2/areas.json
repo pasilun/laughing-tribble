@@ -299,6 +299,14 @@
      "y": 125.9
     },
     {
+     "x": 42.7,
+     "y": 126.0
+    },
+    {
+     "x": 42.7,
+     "y": 131.5
+    },
+    {
      "x": 43.4,
      "y": 133.2
     },
@@ -317,6 +325,49 @@
    ],
    "symbol": "dots",
    "note": "Avgränsad av ägaren på ritningen (grovt, ej inmätt)."
+  }
+ ],
+ "buildings": [
+  {
+   "id": "B1",
+   "kind": "bostadshus",
+   "label": "8,5 × 5,5 m + tillbyggnad i norr 4,9 × 1,5 m, ca 54 m²",
+   "note": "Tillbyggnaden i norr (ca 1,5 m, smalare än huset) syns i flygbilden men ligger inom kartans rektangel; formen är avläst ur flygbilden, ej inmätt.",
+   "corners": [
+    {
+     "x": 42.7,
+     "y": 126.0
+    },
+    {
+     "x": 51.2,
+     "y": 126.0
+    },
+    {
+     "x": 51.2,
+     "y": 131.5
+    },
+    {
+     "x": 49.4,
+     "y": 131.5
+    },
+    {
+     "x": 49.4,
+     "y": 133.0
+    },
+    {
+     "x": 44.5,
+     "y": 133.0
+    },
+    {
+     "x": 44.5,
+     "y": 131.5
+    },
+    {
+     "x": 42.7,
+     "y": 131.5
+    }
+   ],
+   "area": 54
   }
  ]
 }

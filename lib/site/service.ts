@@ -1,9 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { extractBuildings, type Building } from './buildings'
-import { cleanItems, propertyBox, slugOf, type SiteDoc, type SiteItem, type SiteRevision } from './doc'
+import { cleanItems, propertyBox, slugOf, type SiteBuilding, type SiteDoc, type SiteItem, type SiteRevision } from './doc'
 import { backgroundUri, svgToPdf, svgToPng } from './export'
-import { bbox, type P } from './geometry'
+import { area as polygonArea, bbox, type P } from './geometry'
 import { fetchAerial, fetchMosaic, findProperty, type Mosaic } from './lantmateriet'
 import { layoutSite, renderSite, type SiteArea, type SiteLine, type SitePoint, type SiteSheet } from './render'
 import { getSite, saveSite, type StoredSite } from './store'
@@ -34,6 +34,20 @@ export function knownDesignations(): string[] {
   })
 }
 
+// Corrections to what the map shows: a building that is not a rectangle (sites/<slug>/areas.json, "buildings"), in local metres.
+type BuildingFix = { id: string; kind?: SiteBuilding['kind']; label?: string; note?: string; area?: number; corners: P[] }
+export function buildingFixes(slug: string): BuildingFix[] {
+  const file = path.join(process.cwd(), 'sites', slug, 'areas.json')
+  if (!existsSync(file)) return []
+  return ((JSON.parse(readFileSync(file, 'utf8')) as { buildings?: BuildingFix[] }).buildings ?? []).filter((b) => b.id && Array.isArray(b.corners) && b.corners.length >= 3)
+}
+export function applyBuildingFixes(buildings: SiteBuilding[], fixes: BuildingFix[]): SiteBuilding[] {
+  return buildings.map((b) => {
+    const f = fixes.find((x) => x.id === b.id && (!x.kind || x.kind === b.kind))
+    return f ? { ...b, corners: f.corners, area: f.area ?? Math.round(polygonArea(f.corners)), label: f.label, note: f.note } : b
+  })
+}
+
 // A new site: the property's boundary from Lantmäteriet's Min karta and the buildings read from its map.
 export async function createSite(designation: string, author: SiteRevision['author']): Promise<{ stored: StoredSite } | { errors: string[]; status: number }> {
   const prop = await findProperty(designation)
@@ -51,7 +65,10 @@ export async function createSite(designation: string, author: SiteRevision['auth
     objectId: prop.id,
     origin,
     property: prop.polygons.map((poly) => poly.map((ring) => ring.map((p) => local(p, origin)))),
-    buildings: found.map((q) => ({ id: q.id, kind: q.kind, corners: q.corners.map((p) => local(p, origin)), area: q.area, width: q.width, depth: q.depth })),
+    buildings: applyBuildingFixes(
+      found.map((q) => ({ id: q.id, kind: q.kind, corners: q.corners.map((p) => local(p, origin)), area: q.area, width: q.width, depth: q.depth })),
+      buildingFixes(slug),
+    ),
     view: { minX: -VIEW_MARGIN, maxX: b.maxX - b.minX + VIEW_MARGIN, minY: -VIEW_MARGIN, maxY: b.maxY - b.minY + VIEW_MARGIN },
     items: seedItems(slug),
   }
@@ -72,16 +89,22 @@ export async function importSite(input: SiteDoc, author: SiteRevision['author'])
   return { stored: { doc, meta } }
 }
 
-export async function editItems(slug: string, items: unknown, base: number, author: SiteRevision['author'], message: string): Promise<{ stored: StoredSite } | { errors: string[]; status: number; head?: number }> {
+export async function editSite(slug: string, change: { items?: unknown; buildings?: SiteBuilding[] }, base: number, author: SiteRevision['author'], message: string): Promise<{ stored: StoredSite } | { errors: string[]; status: number; head?: number }> {
   const cur = await getSite(slug)
   if (!cur) return { errors: ['tomten finns inte'], status: 404 }
   if (cur.meta.n !== base) return { errors: [`tomten har ändrats – senaste revision är ${cur.meta.n}`], status: 409, head: cur.meta.n }
-  const { items: clean, errors } = cleanItems(items)
-  if (errors.length) return { errors, status: 422 }
-  const doc: SiteDoc = { ...cur.doc, items: clean }
+  let items = cur.doc.items
+  if (change.items !== undefined) {
+    const clean = cleanItems(change.items)
+    if (clean.errors.length) return { errors: clean.errors, status: 422 }
+    items = clean.items
+  }
+  const doc: SiteDoc = { ...cur.doc, items, buildings: change.buildings ?? cur.doc.buildings }
   const meta = await saveSite(doc, { author, message }, base)
   return { stored: { doc, meta } }
 }
+
+export const editItems = (slug: string, items: unknown, base: number, author: SiteRevision['author'], message: string) => editSite(slug, { items }, base, author, message)
 
 // ── pictures ────────────────────────────────────────────────────────────────
 

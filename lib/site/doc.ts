@@ -20,7 +20,7 @@ export type SiteItem = {
   points: P[] // local metres; an area's ring is open (not closed by repeating the first point)
 }
 
-export type SiteBuilding = { id: string; kind: 'bostadshus' | 'komplementbyggnad'; corners: P[]; area: number; width: number; depth: number }
+export type SiteBuilding = { id: string; kind: 'bostadshus' | 'komplementbyggnad'; corners: P[]; area: number; width: number; depth: number; label?: string; note?: string }
 
 export type SiteDoc = {
   slug: string

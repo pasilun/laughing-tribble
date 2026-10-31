@@ -1,7 +1,8 @@
 import { area, bbox, type P } from './geometry'
+import type { SiteBuilding } from './doc'
 import { cleanItems, itemArea, itemLength, STATUSES, KINDS, type SiteDoc, type SiteItem } from './doc'
 import { svgToPng } from './export'
-import { createSite, editItems, renderDoc } from './service'
+import { createSite, editSite, renderDoc } from './service'
 import { getSite, listSites } from './store'
 
 // Claude's tools for a site (a property seen from above): read what the person drew on the page, in the same
@@ -44,7 +45,7 @@ export const SITE_TOOLS = [
   {
     name: 'site_edit',
     description: `Draws on a site: adds, changes or removes items and saves one revision (against base_revision from site_get; a refused save means the person has saved since: read again). Items: area (a ring of 3+ points), line (2+), point (1). Coordinates in local metres. For a rectangle (a shed, a terrace) give rect {x,y,w,d,angle?}: south-west corner, width east, depth north, angle in degrees counter-clockwise. status: ${STATUSES.join(', ')}; kind: ${KINDS.join(', ')}; color "#rrggbb" (default red).
-ops: {"op":"add","item":{"type":"area","name":"Växthus","kind":"byggnad","status":"idé","rect":{"x":30,"y":112,"w":6,"d":4}}} · {"op":"update","id":"i1","patch":{"name":"…","status":"planerad","points":[…]}} · {"op":"delete","id":"i1"}. All ops succeed together or none.`,
+ops: {"op":"add","item":{"type":"area","name":"Växthus","kind":"byggnad","status":"idé","rect":{"x":30,"y":112,"w":6,"d":4}}} · {"op":"update","id":"i1","patch":{"name":"…","status":"planerad","points":[…]}} · {"op":"delete","id":"i1"} · {"op":"set_building","id":"B1","corners":[{x,y},…],"label":"8,5 × 5,5 m + tillbyggnad 4,9 × 1,5 m"} (a building that is not a rectangle: its outline, 3+ corners in order; area is recalculated). All ops succeed together or none.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -68,7 +69,7 @@ function describe(doc: SiteDoc, full: boolean): string {
     `Byggnader (avlästa ur kartan, ±1 m):`,
     ...doc.buildings.map((b) => {
       const c = { x: b.corners.reduce((t, p) => t + p.x, 0) / b.corners.length, y: b.corners.reduce((t, p) => t + p.y, 0) / b.corners.length }
-      return `- ${b.id} ${b.kind} ${m(b.width)} × ${m(b.depth)} m (ca ${b.area} m²), mitt ${pt(c)}`
+      return `- ${b.id} ${b.kind} ${b.label ?? `${m(b.width)} × ${m(b.depth)} m (ca ${b.area} m²)`}, mitt ${pt(c)}${b.corners.length > 4 ? `, kontur: ${b.corners.map(pt).join(' ')}` : ''}${b.note ? ` – ${b.note}` : ''}`
     }),
     `Objekt (${doc.items.length}):`,
   ]
@@ -127,6 +128,7 @@ export async function handleSiteTool(name: string, args: Record<string, unknown>
       return `i${k}`
     }
     const problems: string[] = []
+    let buildings: SiteBuilding[] | undefined
     ;(args.ops as Array<Record<string, unknown>>).forEach((op, i) => {
       const at = `op ${i + 1}`
       if (op.op === 'add') {
@@ -144,12 +146,26 @@ export async function handleSiteTool(name: string, args: Record<string, unknown>
       } else if (op.op === 'delete') {
         if (!items.some((x) => x.id === op.id)) return void problems.push(`${at}: ${String(op.id)} finns inte`)
         items = items.filter((x) => x.id !== op.id)
-      } else problems.push(`${at}: okänd op "${String(op.op)}" (add, update, delete)`)
+      } else if (op.op === 'set_building') {
+        buildings = buildings ?? cur.doc.buildings.map((q) => ({ ...q }))
+        const k = buildings.findIndex((q) => q.id === op.id)
+        if (k < 0) return void problems.push(`${at}: byggnaden ${String(op.id)} finns inte (${cur.doc.buildings.map((q) => q.id).join(', ')})`)
+        const corners = op.rect ? rectPoints(op.rect as { x: number; y: number; w: number; d: number; angle?: number }) : (op.corners as P[] | undefined)
+        if (corners && (!Array.isArray(corners) || corners.length < 3 || !corners.every((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y)))) return void problems.push(`${at}: corners behöver minst 3 punkter med x och y`)
+        const next = { ...buildings[k] }
+        if (corners) {
+          next.corners = corners.map((p) => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 }))
+          next.area = Math.round(area(next.corners))
+        }
+        if (typeof op.label === 'string') next.label = op.label || undefined
+        if (typeof op.note === 'string') next.note = op.note || undefined
+        buildings[k] = next
+      } else problems.push(`${at}: okänd op "${String(op.op)}" (add, update, delete, set_building)`)
     })
     if (problems.length) return err(`Ingen ändring sparades:\n${problems.join('\n')}`)
     const check = cleanItems(items)
     if (check.errors.length) return err(`Ingen ändring sparades:\n${check.errors.join('\n')}`)
-    const res = await editItems(slug, items, args.base_revision, 'claude', String(args.message ?? 'Ändrat av Claude'))
+    const res = await editSite(slug, { items, buildings }, args.base_revision, 'claude', String(args.message ?? 'Ändrat av Claude'))
     if ('errors' in res) return err(`Ingen ändring sparades:\n${res.errors.join('\n')}${res.status === 409 ? '\nLäs tomten igen (site_get) och gör om ändringen mot senaste revisionen.' : ''}`)
     return { content: [text(`Sparad som revision ${res.stored.meta.n}.\n${describe(res.stored.doc, false)}`), ...(args.image === true ? await picture(res.stored.doc, args.underlay) : [])] }
   } catch (e) {

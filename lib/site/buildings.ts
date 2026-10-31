@@ -14,6 +14,9 @@ export type Building = {
   area: number // m²
   width: number // long side, m
   depth: number // short side, m
+  // For a footprint that is not a rectangle: the corners above are its outline, and this says what it is made of.
+  label?: string
+  note?: string
 }
 
 const KINDS: Array<{ kind: Building['kind']; rgb: [number, number, number]; tol: number }> = [

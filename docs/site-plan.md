@@ -39,6 +39,15 @@ count small (about a dozen tiles per sheet) and use it for the property at hand.
 
 The photo is a reference, not drawing material: it is taken at an angle to the vertical in places, roofs overhang walls, and trees hide the ground. The building rectangles come from the map, not from the photo.
 
+## Buildings that are not rectangles
+
+Lantmäteriet's map draws a building as one rectangle, so an extension (a narrower part, a porch) disappears into it. The aerial
+photo shows it. A building's real outline is kept as `corners` (3 or more, local metres) with a `label` ("8,5 × 5,5 m +
+tillbyggnad i norr 4,9 × 1,5 m"); the area follows the corners. For Lövinge the dwelling B1 is a T: the main body and a 1,5 m
+extension in the north, about 5 m wide and 1,8 m in from the west wall (`sites/strangnas-lovinge-3-2/areas.json`, "buildings",
+applied when the site is made). On a site that exists, Claude changes an outline with `site_edit`
+`{"op":"set_building","id":"B1","corners":[…],"label":"…"}`. The distance to the boundary is measured from the outline.
+
 ## Marked areas
 
 `sites/<property>/areas.json` (for Lövinge: `sites/strangnas-lovinge-3-2/areas.json`) holds areas to mark on both sheets: a name, a kind, a status (befintlig, idé, planerad, ansökan), colours, and a ring in **local metres** (x east, y north of the property's south-west corner, the same numbers as the photo sheet's grid). On the drawing (`situationsplan.*`) an area is a plan item like a building: grass hatching for a meadow, dots for a lawn, a dash-dot outline, a number (A1, A2), name and area (and how much of it is inside the boundary when it runs over it), and a legend line. Over the aerial photo (`flygbild.*`) it is only a yellow dashed outline, so the photo stays readable. The meadow in the file is read from the photo by brightness and smoothness (open, even ground between the dark spruce) and is an estimate, not a survey.

@@ -9,8 +9,10 @@ import sharp from 'sharp'
 import path from 'node:path'
 import { extractBuildings } from '../lib/site/buildings'
 import { backgroundUri, svgToPdf, svgToPng } from '../lib/site/export'
-import { bbox } from '../lib/site/geometry'
+import { area as polygonArea, bbox } from '../lib/site/geometry'
+import { slugOf } from '../lib/site/doc'
 import { fetchAerial, fetchMosaic, findProperty } from '../lib/site/lantmateriet'
+import { buildingFixes } from '../lib/site/service'
 import type { P } from '../lib/site/geometry'
 import { layoutSite, renderSite, type SiteArea } from '../lib/site/render'
 
@@ -34,7 +36,13 @@ const b = bbox(rings.flat())
 const margin = 60
 const area = { minX: b.minX - margin, maxX: b.maxX + margin, minY: b.minY - margin, maxY: b.maxY + margin }
 const topo = await fetchMosaic(area, 'topowebb')
-const buildings = await extractBuildings(topo, rings)
+const extracted = await extractBuildings(topo, rings)
+// Corrections for buildings that are not rectangles (sites/<property>/areas.json "buildings", local metres).
+const fixes = buildingFixes(slugOf(prop.designation))
+const buildings = extracted.map((q) => {
+  const f = fixes.find((x) => x.id === q.id)
+  return f ? { ...q, corners: f.corners.map((p) => ({ x: p.x + b.minX, y: p.y + b.minY })), area: f.area ?? Math.round(polygonArea(f.corners)), label: f.label, note: f.note } : q
+})
 const paper: 'A3' | 'A4' = opt('paper') === 'A4' ? 'A4' : 'A3'
 const scale = opt('scale') ? Number(opt('scale')) : undefined
 const L = layoutSite({ polygons: prop.polygons, paper, scale })

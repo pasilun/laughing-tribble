@@ -65,6 +65,9 @@ test('Claude: site_get reads what is drawn in local metres, site_edit adds a rec
   expect(t).toContain('Revision 1')
   expect(t).toContain('lokala koordinater'.replace('l', 'L')) // "Lokala koordinater"
   expect(t).toContain('B1 bostadshus')
+  // The dwelling is not a rectangle: the extension in the north is part of its outline.
+  expect(t).toContain('tillbyggnad i norr')
+  expect(t).toMatch(/kontur: (\(\d+,?\d*, \d+,?\d*\) ?){8}/)
   expect(t).toMatch(/A1 \[ang\] Äng \(äng, befintlig/)
   expect(t).toMatch(/yta ca 15\d\d m²/)
   expect(got.content.at(-1)!.type).toBe('image')
@@ -79,16 +82,24 @@ test('Claude: site_get reads what is drawn in local metres, site_edit adds a rec
   expect(text(edited)).toContain('Sparad som revision 2')
   expect(text(edited)).toMatch(/Växthus \(byggnad, idé\): yta ca 24 m²/)
 
+  // A building's outline can be corrected too: the area follows the new corners, the label can be changed.
+  const fixed = await mcp(request, 'site_edit', { slug, base_revision: 2, message: 'Ny kontur', ops: [{ op: 'set_building', id: 'B3', rect: { x: 30, y: 140, w: 5, d: 3 }, label: '5,0 × 3,0 m' }] })
+  expect(fixed.isError, text(fixed)).toBeFalsy()
+  expect(text(fixed)).toMatch(/B3 komplementbyggnad 5,0 × 3,0 m, mitt/)
+  const badB = await mcp(request, 'site_edit', { slug, base_revision: 3, ops: [{ op: 'set_building', id: 'B9', corners: [] }] })
+  expect(badB.isError).toBe(true)
+  expect(text(badB)).toContain('finns inte')
+
   // The same revision again: refused, told to read again.
   const stale = await mcp(request, 'site_edit', { slug, base_revision: 1, ops: [{ op: 'delete', id: 'ang' }] })
   expect(stale.isError).toBe(true)
   expect(text(stale)).toContain('site_get')
   // Bad ops are explained and nothing is saved.
-  const bad = await mcp(request, 'site_edit', { slug, base_revision: 2, ops: [{ op: 'update', id: 'finns-inte', patch: { name: 'x' } }] })
+  const bad = await mcp(request, 'site_edit', { slug, base_revision: 3, ops: [{ op: 'update', id: 'finns-inte', patch: { name: 'x' } }] })
   expect(bad.isError).toBe(true)
   expect(text(bad)).toContain('finns inte')
   const rev = await (await request.get(`/api/sites/${slug}`)).json()
-  expect(rev.revision.n).toBe(2)
+  expect(rev.revision.n).toBe(3)
   await request.delete(`/api/sites/${slug}`)
 })
 
