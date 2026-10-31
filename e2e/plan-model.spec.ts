@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { applyOps } from '@/lib/plan/ops'
 import { demoPlan } from '@/lib/plan/demo'
-import { renderSheet, layoutSheet } from '@/lib/plan/sheet'
+import { renderSheet, layoutSheet, wallPieces } from '@/lib/plan/sheet'
 import { checkPlan } from '@/lib/plan/checks'
 import type { Opening, Plan, Wall } from '@/lib/plan/types'
 import { clashes, clipToFree, shiftToFree } from '@/lib/plan/clear'
@@ -106,6 +106,39 @@ test.describe('sheet renderer', () => {
       const other = { ...plan, dimensions: [...plan.dimensions, { id: 'm-annan', a: { x: 3500, y: 0 }, b: { x: 3500, y: 3000 }, offset: 900 }] }
       expect(count(renderSheet(other, 'efter'), '>3225<')).toBe(1)
     }
+  })
+
+  test('a wall split in line meets itself end to end: the part to be demolished neither covers what stays nor is covered by it', () => {
+    const base = demoPlan()
+    const plan = {
+      ...base,
+      walls: [
+        { id: 'a', a: { x: 0, y: 0 }, b: { x: 2000, y: 0 }, thickness: 170, phase: 'existing' as const },
+        { id: 'b', a: { x: 2000, y: 0 }, b: { x: 4000, y: 0 }, thickness: 170, phase: 'demolish' as const },
+        { id: 'c', a: { x: 4000, y: 0 }, b: { x: 6000, y: 0 }, thickness: 170, phase: 'existing' as const },
+        // An L-corner at the far end still closes: this wall's end is at an angle to c.
+        { id: 'd', a: { x: 6000, y: 0 }, b: { x: 6000, y: 3000 }, thickness: 170, phase: 'existing' as const },
+      ],
+      openings: [],
+      fixtures: [],
+      rooms: [],
+      dimensions: [],
+      notes: [],
+    }
+    const xs = (id: string) => {
+      const q = wallPieces(plan, 'efter').find((p) => p.wall.id === id)!.quad
+      return [Math.min(...q.map((p) => p.x)), Math.max(...q.map((p) => p.x))]
+    }
+    expect(xs('a')).toEqual([0, 2000])
+    expect(xs('b')).toEqual([2000, 4000])
+    expect(xs('c')[0]).toBe(4000)
+    // c turns into d at its far end: extended by half the thickness there, as before.
+    expect(xs('c')[1]).toBe(6085)
+    // The length dimension of a demolished wall can be left out.
+    const withDim = renderSheet(plan, 'efter')
+    expect(withDim.slice(withDim.indexOf('auto-dims'))).toContain('>2000<')
+    const without = renderSheet({ ...plan, walls: plan.walls.map((w) => (w.id === 'b' ? { ...w, noAutoDim: true } : w)) }, 'efter')
+    expect(without.slice(without.indexOf('auto-dims'))).not.toContain('>2000<')
   })
 
   test('room areas are computed from polygons', () => {

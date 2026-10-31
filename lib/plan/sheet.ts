@@ -165,11 +165,20 @@ export function wallOpeningsIn(plan: Plan, w: Wall, view: View): Opening[] {
 
 type WallPiece = { wall: Wall; quad: Pt[]; style: Phase }
 
+// Does another wall end at p and turn away from this one (an L-corner or a T)? A wall that merely
+// carries on in the same line (a wall split where part of it is demolished, a stub) is a butt joint:
+// extending both would draw each over the other, and the dashed part to be demolished would overlap
+// what stays.
 function joinedAt(plan: Plan, w: Wall, p: Pt): boolean {
-  return plan.walls.some((o) => o.id !== w.id && (dist(o.a, p) <= 1 || dist(o.b, p) <= 1))
+  const dw = wallDir(w)
+  return plan.walls.some((o) => {
+    if (o.id === w.id || !(dist(o.a, p) <= 1 || dist(o.b, p) <= 1)) return false
+    const d = wallDir(o)
+    return Math.abs(dw.x * d.y - dw.y * d.x) > 0.05
+  })
 }
 
-// Wall bodies for a view, cut at openings. Ends that meet another wall's end
+// Wall bodies for a view, cut at openings. Ends that meet another wall's end at an angle
 // are extended by half the thickness so L-corners close.
 export function wallPieces(plan: Plan, view: View): WallPiece[] {
   const out: WallPiece[] = []
@@ -490,7 +499,7 @@ function autoDimensions(plan: Plan, view: View, L: SheetLayout): string {
     if (o.offset - from > 1) candidates.push({ a: add(along(w, from), face), b: s, label: fmtMm(o.offset - from) })
   }
   for (const w of plan.walls) {
-    if (w.phase !== 'demolish') continue
+    if (w.phase !== 'demolish' || w.noAutoDim) continue
     const face = scale(leftNormal(wallDir(w)), w.thickness / 2)
     const len = wallLength(w)
     const from = faceBefore(plan, w, len / 2)

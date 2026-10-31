@@ -19,6 +19,7 @@ export type Wall = {
   fireRatingAfter?: string   // boundary in "efter" if it changes; "" = no longer a boundary
   apartmentBoundary?: boolean
   exterior?: boolean         // outer wall of the building (facade): its openings are windows
+  noAutoDim?: boolean        // a demolished wall's length is dimensioned automatically; true leaves that dimension out
 }
 
 // A solid with a sloping outline that a straight wall can't draw, e.g. the
