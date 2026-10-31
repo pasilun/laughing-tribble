@@ -77,11 +77,11 @@ export const PLAN_TOOLS = [
   {
     name: 'plan_create',
     description:
-      'Creates a new floor plan for an interior change (e.g. joining two apartments) and returns its id and editor link. Start empty and add walls with plan_edit, or pass a full plan. The user can also trace a scanned drawing in the editor.',
+      'Creates a new floor plan and returns its id and editor link. By default it records what exists today: do not add changes, demolition or a new layout unless the user asks. If the user has a drawing or photo, call plan_upload_link next and trace from it (see plan_guide); otherwise start empty and add walls with plan_edit, or pass a full plan.',
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Short name, e.g. "Väggöppning lgh 153–154"' },
+        name: { type: 'string', description: 'Short name, e.g. "Källare Lundagatan 48 B"' },
         template: { type: 'string', enum: ['empty', 'demo'], description: 'demo = a made-up example plan' },
       },
       required: ['name'],
