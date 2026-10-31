@@ -1,14 +1,26 @@
 @import "tailwindcss";
 
+/* The app is drawn on white panels with dark text, so it is a light theme whatever the visitor's system
+   theme is: a dark system theme used to give light text on white panels (unreadable). */
+:root {
+  color-scheme: light;
+}
+
 body {
   background: #ffffff;
   color: #171717;
   font-family: Arial, Helvetica, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    background: #0a0a0a;
-    color: #ededed;
-  }
+/* Fields carry their own colours, so they never inherit a text colour that does not fit their background. */
+input,
+select,
+textarea {
+  color: #171717;
+  background-color: #ffffff;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280;
 }
