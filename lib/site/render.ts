@@ -212,7 +212,21 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
   for (const a of s.areas ?? []) {
     const c = centroid(a.ring)
     out.push(label(X(c.x), Y(c.y), a.name.replace(/\s*\(.*\)$/, ''), 2.6, { anchor: 'middle', bold: true }))
-    out.push(label(X(c.x), Y(c.y) + 3.4, `ca ${thousands(area(a.ring))} m²${a.status && a.status !== 'befintlig' ? `, ${a.status}` : ''}`, 2.3, { anchor: 'middle' }))
+    // An area may run over the boundary (a meadow that goes on into the neighbour's land): say how much is inside.
+    const whole = area(a.ring)
+    const ab = bbox(a.ring)
+    let inN = 0
+    let allN = 0
+    for (let gx = ab.minX + 0.25; gx < ab.maxX; gx += 0.5)
+      for (let gy = ab.minY + 0.25; gy < ab.maxY; gy += 0.5) {
+        const p = { x: gx, y: gy }
+        if (!pointInRing(p, a.ring)) continue
+        allN++
+        if (outer.some((o) => pointInRing(p, o))) inN++
+      }
+    const inside = allN ? whole * (inN / allN) : whole
+    const tail = whole - inside > Math.max(10, whole * 0.03) ? `, varav ca ${thousands(inside)} m² inom fastigheten` : ''
+    out.push(label(X(c.x), Y(c.y) + 3.4, `ca ${thousands(whole)} m²${tail}${a.status && a.status !== 'befintlig' ? `, ${a.status}` : ''}`, 2.3, { anchor: 'middle' }))
   }
   out.push(`</g>`)
 

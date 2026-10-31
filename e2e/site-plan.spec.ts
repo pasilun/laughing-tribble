@@ -49,7 +49,7 @@ test('marked areas (a meadow, an idea) are drawn with name, area and a legend li
   const b = rec.property.polygons[0][0]
   const x0 = Math.min(...b.map((p) => p.x))
   const y0 = Math.min(...b.map((p) => p.y))
-  const ring = [{ x: 20, y: 40 }, { x: 40, y: 40 }, { x: 40, y: 70 }, { x: 20, y: 70 }].map((p) => ({ x: p.x + x0, y: p.y + y0 }))
+  const ring = [{ x: 45, y: 40 }, { x: 60, y: 40 }, { x: 60, y: 70 }, { x: 45, y: 70 }].map((p) => ({ x: p.x + x0, y: p.y + y0 }))
   const svg = renderSite({
     polygons: rec.property.polygons,
     buildings: rec.buildings,
@@ -58,7 +58,10 @@ test('marked areas (a meadow, an idea) are drawn with name, area and a legend li
     areas: [{ id: 'a1', name: 'Äng', fill: '#f2d024', stroke: '#9a7b00', legend: 'Äng (min bedömning)', status: 'idé', ring }],
   })
   expect(svg).toContain('>Äng<')
-  expect(svg).toContain('ca 600 m², idé')
+  expect(svg).toContain('ca 450 m², idé')
+  // An area that runs over the boundary says how much is inside.
+  const over = renderSite({ polygons: rec.property.polygons, buildings: [], title: { designation: 'x', municipality: 'y' }, areas: [{ id: 'b', name: 'Äng', fill: '#f2d024', stroke: '#9a7b00', ring: [{ x: -10, y: 40 }, { x: 20, y: 40 }, { x: 20, y: 70 }, { x: -10, y: 70 }].map((p) => ({ x: p.x + x0, y: p.y + y0 })) }] })
+  expect(over).toContain('varav ca')
   expect(svg).toContain('Äng (min bedömning)')
   expect(svg).toContain('Rutnät 10 m')
 })
