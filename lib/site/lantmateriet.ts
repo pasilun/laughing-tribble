@@ -67,3 +67,17 @@ export async function fetchMosaic(box: { minX: number; maxX: number; minY: numbe
   const png = await sharp({ create: { width, height, channels: 3, background: '#ffffff' } }).composite(tiles).png().toBuffer()
   return { png, width, height, origin: { x: ORIGIN.x + c0 * tile, y: ORIGIN.y - r0 * tile }, res: RES }
 }
+
+// The aerial photo (Min karta's "Flygbild"): a WMS in EPSG:3006 that serves the best photo it has,
+// down to about 0.16 m per pixel. Asked for the area in one picture at the resolution wanted.
+export async function fetchAerial(box: { minX: number; maxX: number; minY: number; maxY: number }, res = 0.2): Promise<Mosaic> {
+  const width = Math.round((box.maxX - box.minX) / res)
+  const height = Math.round((box.maxY - box.minY) / res)
+  if (width > 4096 || height > 4096) throw new Error(`Flygbilden blir för stor (${width} × ${height} px): öka upplösningen eller minska området`)
+  const layers = ['Ortofoto_0.5', 'Ortofoto_0.4', 'Ortofoto_0.25', 'Ortofoto_0.16'].join('%2C')
+  const url = `${BASE}/map/ortofoto?REQUEST=GetMap&SERVICE=WMS&VERSION=1.1.1&FORMAT=image%2Fpng&STYLES=&TRANSPARENT=false&LAYERS=${layers}&WIDTH=${width}&HEIGHT=${height}&SRS=EPSG%3A3006&BBOX=${box.minX}%2C${box.minY}%2C${box.maxX}%2C${box.maxY}`
+  const r = await fetch(url, { headers: HEADERS })
+  if (!r.ok || !(r.headers.get('content-type') ?? '').includes('image')) throw new Error(`Flygbilden: Lantmäteriet svarade ${r.status} ${r.headers.get('content-type') ?? ''}`)
+  const png = await sharp(Buffer.from(await r.arrayBuffer())).removeAlpha().png().toBuffer()
+  return { png, width, height, origin: { x: box.minX, y: box.maxY }, res }
+}

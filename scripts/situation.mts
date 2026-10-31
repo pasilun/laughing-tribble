@@ -1,13 +1,16 @@
 // A situation plan (situationsplan) of a property from Lantmäteriet's Min karta.
 //   npx tsx scripts/situation.mts "Strängnäs Lövinge 3:2" [--out .visual/situation] [--paper A3|A4] [--scale 500]
-//        [--address "…"] [--author "…"] [--no-map]
-// Writes situationsplan.svg / .png / .pdf and site.json (property, buildings).
+//        [--address "…"] [--author "…"] [--no-map] [--no-aerial]
+// Writes situationsplan.svg / .png / .pdf (pale map underlay) and flygbild.svg / .png / .pdf (aerial photo
+// underlay with a 10 m grid in local coordinates), flygbild.jpg (the photo itself, with the boundary), and
+// site.json (property, buildings).
 import { mkdirSync, writeFileSync } from 'node:fs'
+import sharp from 'sharp'
 import path from 'node:path'
 import { extractBuildings } from '../lib/site/buildings'
 import { backgroundUri, svgToPdf, svgToPng } from '../lib/site/export'
 import { bbox } from '../lib/site/geometry'
-import { fetchMosaic, findProperty } from '../lib/site/lantmateriet'
+import { fetchAerial, fetchMosaic, findProperty } from '../lib/site/lantmateriet'
 import { layoutSite, renderSite } from '../lib/site/render'
 
 const argv = process.argv.slice(2)
@@ -40,4 +43,17 @@ writeFileSync(path.join(out, 'situationsplan.svg'), svg)
 writeFileSync(path.join(out, 'situationsplan.png'), svgToPng(svg, 2200))
 writeFileSync(path.join(out, 'situationsplan.pdf'), await svgToPdf(svg, L.paperW, L.paperH, `Situationsplan ${prop.designation}`))
 writeFileSync(path.join(out, 'site.json'), JSON.stringify({ property: prop, buildings }, null, 1))
+if (!argv.includes('--no-aerial')) {
+  // The photo covers the whole drawing area of the sheet, not only the property.
+  const halfW = ((L.map.w / 2) * L.scale) / 1000 + 2
+  const halfH = ((L.map.h / 2) * L.scale) / 1000 + 2
+  const mid = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 }
+  const aerial = await fetchAerial({ minX: mid.x - halfW, maxX: mid.x + halfW, minY: mid.y - halfH, maxY: mid.y + halfH }, 0.2)
+  const photoSheet = { ...sheet, background: aerial, backgroundOpacity: 1, grid: 10, title: { ...sheet.title, drawingNumber: 'S-02', note: 'Underlag: Lantmäteriets flygbild (Min karta), referensbild: ej ritningsunderlag. Fastighetsgräns enligt Lantmäteriets fastighetsregister. Byggnader avlästa ur kartan (±1 m). Rutnät i lokala koordinater.' } }
+  const photoSvg = renderSite(photoSheet, await backgroundUri(aerial, { photo: true }))
+  writeFileSync(path.join(out, 'flygbild.svg'), photoSvg)
+  writeFileSync(path.join(out, 'flygbild.png'), svgToPng(photoSvg, 2200))
+  writeFileSync(path.join(out, 'flygbild.pdf'), await svgToPdf(photoSvg, L.paperW, L.paperH, `Flygbild ${prop.designation}`))
+  writeFileSync(path.join(out, 'flygbild.jpg'), await sharp(aerial.png).jpeg({ quality: 88 }).toBuffer())
+}
 console.log(`${prop.designation}: ${L.paper} ${L.orientation} 1:${L.scale}, ${buildings.length} byggnader → ${out}/situationsplan.{svg,png,pdf}`)

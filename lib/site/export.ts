@@ -36,8 +36,14 @@ export async function svgToPdf(svg: string, paperW: number, paperH: number, titl
   return Buffer.concat(chunks)
 }
 
-// The base map smoothed up for print: 0.5 m pixels become soft, not blocky, at 1:500.
-export async function backgroundUri(map: Mosaic, factor = 4): Promise<string> {
+// The base map for the sheet as a data URI. A map is smoothed up for print (0.5 m pixels become soft,
+// not blocky, at 1:500); a photo is already fine and is sent as JPEG to keep the file small.
+export async function backgroundUri(map: Mosaic, o: { factor?: number; photo?: boolean } = {}): Promise<string> {
+  if (o.photo) {
+    const jpg = await sharp(map.png).jpeg({ quality: 82 }).toBuffer()
+    return `data:image/jpeg;base64,${jpg.toString('base64')}`
+  }
+  const factor = o.factor ?? 4
   const png = await sharp(map.png).resize(map.width * factor, map.height * factor, { kernel: 'lanczos3' }).png({ compressionLevel: 9 }).toBuffer()
   return `data:image/png;base64,${png.toString('base64')}`
 }

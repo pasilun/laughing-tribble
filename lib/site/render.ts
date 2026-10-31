@@ -9,7 +9,19 @@ import type { Mosaic } from './lantmateriet'
 
 export type SiteTitle = { designation: string; municipality: string; address?: string; drawingNumber?: string; author?: string; date?: string; revision?: string; note?: string }
 
-export type SiteSheet = { polygons: P[][][]; buildings: Building[]; title: SiteTitle; background?: Mosaic; paper?: 'A3' | 'A4'; orientation?: 'portrait' | 'landscape'; scale?: number }
+export type SiteSheet = {
+  polygons: P[][][]
+  buildings: Building[]
+  title: SiteTitle
+  background?: Mosaic
+  // 0.9 for the pale map, 1 for a photo.
+  backgroundOpacity?: number
+  // A metre grid in local coordinates (x east, y north from the south-west corner of the property), every n m.
+  grid?: number
+  paper?: 'A3' | 'A4'
+  orientation?: 'portrait' | 'landscape'
+  scale?: number
+}
 
 export const SITE_SCALES = [200, 250, 400, 500, 1000, 2000, 5000]
 const PAPER = { A3: [297, 420], A4: [210, 297] } as const
@@ -74,12 +86,35 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     const bg = s.background
     const w = bg.width * bg.res * k
     const h = bg.height * bg.res * k
-    out.push(`<g clip-path="url(#map)"><image href="${backgroundDataUri}" x="${f(X(bg.origin.x))}" y="${f(Y(bg.origin.y))}" width="${f(w)}" height="${f(h)}" opacity="0.9" preserveAspectRatio="none"/></g>`)
+    out.push(`<g clip-path="url(#map)"><image href="${backgroundDataUri}" x="${f(X(bg.origin.x))}" y="${f(Y(bg.origin.y))}" width="${f(w)}" height="${f(h)}" opacity="${s.backgroundOpacity ?? 0.9}" preserveAspectRatio="none"/></g>`)
   }
   out.push(`<rect x="${L.map.x}" y="${L.map.y}" width="${L.map.w}" height="${L.map.h}" fill="none" stroke="#000" stroke-width="0.25"/>`)
 
   // Property boundary and its name.
   out.push(`<g clip-path="url(#map)">`)
+  const gridLabels: string[] = []
+  if (s.grid) {
+    // Local coordinates: metres east (x) and north (y) of the property's south-west corner. Thin lines
+    // inside the map, the numbers on the frame.
+    const g = s.grid
+    const colour = s.background && (s.backgroundOpacity ?? 0.9) >= 1 ? '#ffffff' : '#0077aa'
+    const lines: string[] = []
+    const x0 = Math.ceil(((L.map.x - mx) / k + cx - b.minX) / g) * g
+    for (let lx = x0; ; lx += g) {
+      const px = X(b.minX + lx)
+      if (px > L.map.x + L.map.w) break
+      lines.push(`<line x1="${f(px)}" y1="${L.map.y}" x2="${f(px)}" y2="${f(L.map.y + L.map.h)}" stroke="${colour}" stroke-width="0.12" stroke-opacity="0.65"/>`)
+      gridLabels.push(label(px, L.map.y + 3.4, String(lx), 2.2, { anchor: 'middle' }))
+    }
+    const y0 = Math.ceil((cy - (L.map.y + L.map.h - my) / k - b.minY) / g) * g
+    for (let ly = y0; ; ly += g) {
+      const py = Y(b.minY + ly)
+      if (py < L.map.y) break
+      lines.push(`<line x1="${L.map.x}" y1="${f(py)}" x2="${f(L.map.x + L.map.w)}" y2="${f(py)}" stroke="${colour}" stroke-width="0.12" stroke-opacity="0.65"/>`)
+      gridLabels.push(label(L.map.x + 1.6, py + 0.8, String(ly), 2.2, { anchor: 'start' }))
+    }
+    out.push(...lines)
+  }
   for (const r of rings) out.push(`<path d="${path(r)}" fill="none" stroke="#a40000" stroke-width="0.5" stroke-dasharray="3.5 0.9 0.6 0.9" stroke-linejoin="round"/>`)
   const main = outer.reduce((a, c) => (area(c) > area(a) ? c : a), outer[0])
   const c0 = centroid(main)
@@ -107,7 +142,8 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
   // Buildings, the distance to the boundary from each, and the main sides of the dwelling.
   for (const q of s.buildings) {
     const dwelling = q.kind === 'bostadshus'
-    out.push(`<path d="${path(q.corners)}" fill="${dwelling ? '#8f8f8f' : '#c4c4c4'}" stroke="#000" stroke-width="0.35"/>`)
+    const photo = s.background && (s.backgroundOpacity ?? 0.9) >= 1
+    out.push(`<path d="${path(q.corners)}" fill="${dwelling ? '#8f8f8f' : '#c4c4c4'}" fill-opacity="${photo ? 0.35 : 1}" stroke="${photo ? '#fff' : '#000'}" stroke-width="0.35"/>`)
   }
   const nearest = main
   for (const q of s.buildings) {
@@ -170,6 +206,8 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
   })
   out.push(`</g>`)
 
+  out.push(...gridLabels)
+
   // North arrow (map north), top right of the drawing area.
   const nx = L.map.x + L.map.w - 12
   const ny = L.map.y + 14
@@ -192,7 +230,7 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
   out.push(`<line x1="${lgx}" y1="${lgy + 4}" x2="${lgx + 8}" y2="${lgy + 4}" stroke="#a40000" stroke-width="0.5" stroke-dasharray="3.5 0.9 0.6 0.9"/>${text(lgx + 10, lgy + 4.8, 'Fastighetsgräns', 2.2)}`)
   out.push(`<rect x="${lgx}" y="${lgy + 7}" width="8" height="3.4" fill="#8f8f8f" stroke="#000" stroke-width="0.3"/>${text(lgx + 10, lgy + 9.8, 'Befintligt bostadshus', 2.2)}`)
   out.push(`<rect x="${lgx}" y="${lgy + 12}" width="8" height="3.4" fill="#c4c4c4" stroke="#000" stroke-width="0.3"/>${text(lgx + 10, lgy + 14.8, 'Befintlig komplementbyggnad', 2.2)}`)
-  out.push(text(lgx, lgy + 19, 'Avstånd i m till fastighetsgräns', 2)) 
+  out.push(text(lgx, lgy + 19, s.grid ? `Rutnät ${s.grid} m från sydvästra hörnet (m)` : 'Avstånd i m till fastighetsgräns', 2))
 
   // Frame and title block.
   out.push(`<rect x="${FRAME}" y="${FRAME}" width="${L.paperW - 2 * FRAME}" height="${L.paperH - 2 * FRAME}" fill="none" stroke="#000" stroke-width="0.6"/>`)

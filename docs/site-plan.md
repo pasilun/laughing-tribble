@@ -14,6 +14,7 @@ Lantmäteriet's Min karta (minkarta.lantmateriet.se), through the two services t
 - `api/searchservice/searchinput` and `…/fastighetsgeometri/v1`: the property's id and its boundary as
   polygons in SWEREF 99 TM (EPSG:3006), metres. This is the register map's boundary: it is
   what Min karta draws, and what an *inmätning* would confirm or correct, not a survey.
+- `map/ortofoto` (WMS, EPSG:3006): Min karta's "Flygbild" – the best aerial photo it has, about 0.16 m per pixel, requested as one picture of the whole drawing area (`flygbild.*`: the photo under the boundary and buildings, with a 10 m grid in local coordinates, x east and y north from the south-west corner of the property, so that a place can be named "x 30, y 120"). Older photos ("Flygbild ca 1960", "ca 1975") are further layers in the same page; not used yet.
 - `map/topowebbcache`: the topographic web map as WMTS tiles in EPSG:3006, finest level 13 =
   0.5 m per pixel. Used as a pale underlay, and to read the buildings.
 
@@ -35,6 +36,8 @@ count small (about a dozen tiles per sheet) and use it for the property at hand.
 `geometry.ts` (area, smallest rectangle, shortest line between outlines), `render.ts` (the SVG sheet),
 `export.ts` (PNG, PDF). Test: `e2e/site-plan.spec.ts` on a recorded property
 (`e2e/fixtures/site/lovinge.json`), no network.
+
+The photo is a reference, not drawing material: it is taken at an angle to the vertical in places, roofs overhang walls, and trees hide the ground. The building rectangles come from the map, not from the photo.
 
 ## Not yet
 
