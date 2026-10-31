@@ -45,6 +45,8 @@ export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: s
     const g = await loadGray(planId, r)
     const snapped = snapWalls(g, r, plan, { ids: plan.walls.map((w) => w.id), add: [] }, { keepThickness: false })
     const byId = new Map(snapped.walls.map((w) => [w.id, w]))
+    const stretch = sourceStretch(plan, snapped.walls)
+    const wallStart = items.length
     for (const rep of snapped.reports) {
       const w = plan.walls.find((x) => x.id === rep.id)
       const s = byId.get(rep.id)
@@ -68,15 +70,27 @@ export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: s
         })
       }
     }
+    // The plan follows the printed dimensions; the scan may be stretched. Then the distance to the
+    // drawing grows with the distance from the corner, in one direction, and "fixing" the walls
+    // would pull them off the printed size: say so instead, and leave the walls alone.
+    if (stretch.length) {
+      for (const it of items.splice(wallStart)) if (!it.fix) items.push(it)
+      items.push({
+        id: 'plan:source-stretched',
+        level: 'error',
+        text: `Källbilden är sträckt jämfört med planen (${stretch.join('; ')}), medan planen följer de tryckta måtten. Väggarnas avstånd till bilden växer med avståndet från hörnet, så rättningar mot bilden skulle dra väggarna fel. Rätta bilden: plan_scan_dimension med apply på de tryckta måtten (den rätar bilden), och granska sedan igen.`,
+      })
+    }
     // Openings against the drawing: a plain stretch of wall where an opening was put.
     for (const o of plan.openings) {
+      if (stretch.length) break
       if (o.kind === 'window' || o.through) continue
       const wall = plan.walls.find((w) => w.id === o.wallId)
       if (!wall) continue
       if (showsWall(g, r, plan, wall, o.offset, o.width) === true)
         items.push({ id: `opening:${o.id}`, level: 'warning', text: `${o.kind === 'door' ? 'Dörren' : 'Öppningen'} ${o.id} i ${wall.id} (offset ${o.offset}, bredd ${o.width}): ritningen visar hel vägg där. Flytta den, eller ta bort den om den inte finns.` })
     }
-    const doors = readDoors(g, r, plan)
+    const doors = stretch.length ? { ops: [] as Op[], readings: [] } : readDoors(g, r, plan)
     for (const op of doors.ops) {
       if (op.op !== 'update') continue
       const rd = doors.readings.find((x) => x.id === op.id)
@@ -98,6 +112,33 @@ export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: s
 
   const rank = { error: 0, warning: 1, info: 2 }
   return items.sort((a, b) => rank[a.level] - rank[b.level])
+}
+
+// How much the drawing is stretched against the plan, per axis, from where the snapper would put the
+// walls: the offset of a vertical wall against its x (a horizontal wall against its y) is a straight
+// line through the corner when the scan is stretched, and scatter around zero when it is not.
+export function sourceStretch(plan: Plan, snapped: Wall[]): string[] {
+  const out: string[] = []
+  for (const vertical of [true, false]) {
+    const pts: Array<[number, number]> = []
+    for (const w of plan.walls) {
+      const s = snapped.find((x) => x.id === w.id)
+      if (!s || (Math.abs(w.b.x - w.a.x) < Math.abs(w.b.y - w.a.y)) !== vertical) continue
+      pts.push(vertical ? [w.a.x, s.a.x - w.a.x] : [w.a.y, s.a.y - w.a.y])
+    }
+    if (pts.length < 3) continue
+    const n = pts.length
+    const mx = pts.reduce((t, p) => t + p[0], 0) / n
+    const my = pts.reduce((t, p) => t + p[1], 0) / n
+    const sxx = pts.reduce((t, p) => t + (p[0] - mx) ** 2, 0)
+    const syy = pts.reduce((t, p) => t + (p[1] - my) ** 2, 0)
+    const sxy = pts.reduce((t, p) => t + (p[0] - mx) * (p[1] - my), 0)
+    if (sxx < 3000 ** 2 || syy === 0) continue
+    const slope = sxy / sxx
+    const r2 = (sxy * sxy) / (sxx * syy)
+    if (Math.abs(slope) >= 0.004 && r2 >= 0.7) out.push(`${vertical ? 'i x (bredd)' : 'i y (längd)'} ca ${(slope * 100).toFixed(1)} %`)
+  }
+  return out
 }
 
 export function describeAudit(items: AuditItem[]): string {

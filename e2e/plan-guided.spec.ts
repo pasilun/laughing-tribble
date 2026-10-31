@@ -120,6 +120,24 @@ test('plan_audit finds a wall moved off the drawing; plan_fix mends it by id; sm
   expect(view.content.at(-1)!.type).toBe('image')
 })
 
+test('a stretched source drawing is named as such, and the walls are not pulled off the printed size', async ({ request }) => {
+  test.setTimeout(180_000)
+  const id = await planWithSource(request, 'Sträckt')
+  await call(request, 'plan_trace', { plan_id: id, dimensions: DIMS })
+  for (let i = 0; i < 3 && /wall:\w+\] /.test(text(await call(request, 'plan_audit', { plan_id: id }))); i++) await call(request, 'plan_fix', { plan_id: id, apply: 'alla' })
+  expect(text(await call(request, 'plan_audit', { plan_id: id }))).not.toContain('source-stretched')
+  // The plan scaled 1.2 % along y while the drawing stays as it is: what a plan fitted to the printed
+  // size looks like against a scan that is stretched the other way.
+  const got = (await (await request.get(`/api/plans/${id}`)).json()) as { plan: { walls: Array<{ a: { x: number; y: number } }> }; revision: { n: number } }
+  const origin = { x: Math.min(...got.plan.walls.map((w) => w.a.x)), y: Math.min(...got.plan.walls.map((w) => w.a.y)) }
+  const scaled = await call(request, 'plan_edit', { plan_id: id, base_revision: got.revision.n, message: 'Sträckt', ops: [{ op: 'scale', origin, fx: 1, fy: 1.012 }] })
+  expect(scaled.isError, text(scaled)).toBeFalsy()
+  const audit = text(await call(request, 'plan_audit', { plan_id: id }))
+  expect(audit).toContain('[plan:source-stretched]')
+  expect(audit).toContain('plan_scan_dimension')
+  expect(audit).not.toContain('åtgärd: fäst mot ritningen')
+})
+
 test('plan_fix verbs: add a wall and a room, edit an opening', async ({ request }) => {
   const id = /Skapad: ([a-z0-9-]+)/.exec(text(await call(request, 'plan_create', { name: 'Verb' })))![1]
   const res = await call(request, 'plan_fix', { plan_id: id, set: [{ add_wall: { a: { x: 0, y: 0 }, b: { x: 4000, y: 0 }, thickness: 200, exterior: true } }, { add_room: { name: 'Kök', at: { x: 2000, y: 1500 } } }] })
