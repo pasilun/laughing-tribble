@@ -7,8 +7,7 @@
    "name": "Äng",
    "kind": "äng",
    "status": "befintlig",
-   "fill": "#f2d024",
-   "stroke": "#9a7b00",
+   "stroke": "#2f6b1f",
    "legend": "Äng (markerad av ägaren)",
    "ring": [
     {
@@ -115,15 +114,15 @@
      "x": 33.6,
      "y": 88.7
     }
-   ]
+   ],
+   "symbol": "hatch"
   },
   {
    "id": "gras",
    "name": "Gräsmatta",
    "kind": "gräsmatta",
    "status": "befintlig",
-   "fill": "#7ccf4a",
-   "stroke": "#3d7a1e",
+   "stroke": "#4f8f2f",
    "legend": "Gräsmatta (ca)",
    "ring": [
     {
@@ -326,7 +325,8 @@
      "x": 36.8,
      "y": 93.5
     }
-   ]
+   ],
+   "symbol": "dots"
   }
  ]
 }

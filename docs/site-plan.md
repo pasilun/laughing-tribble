@@ -41,7 +41,7 @@ The photo is a reference, not drawing material: it is taken at an angle to the v
 
 ## Marked areas
 
-`sites/<property>/areas.json` (for Lövinge: `sites/strangnas-lovinge-3-2/areas.json`) holds areas to mark on both sheets: a name, a kind, a status (befintlig, idé, planerad, ansökan), colours, and a ring in **local metres** (x east, y north of the property's south-west corner, the same numbers as the photo sheet's grid). They are drawn pale under the boundary and buildings with name, area and a legend line. The meadow in the file is read from the photo by brightness and smoothness (open, even ground between the dark spruce) and is an estimate, not a survey.
+`sites/<property>/areas.json` (for Lövinge: `sites/strangnas-lovinge-3-2/areas.json`) holds areas to mark on both sheets: a name, a kind, a status (befintlig, idé, planerad, ansökan), colours, and a ring in **local metres** (x east, y north of the property's south-west corner, the same numbers as the photo sheet's grid). On the drawing (`situationsplan.*`) an area is a plan item like a building: grass hatching for a meadow, dots for a lawn, a dash-dot outline, a number (A1, A2), name and area (and how much of it is inside the boundary when it runs over it), and a legend line. Over the aerial photo (`flygbild.*`) it is only a yellow dashed outline, so the photo stays readable. The meadow in the file is read from the photo by brightness and smoothness (open, even ground between the dark spruce) and is an estimate, not a survey.
 
 ## Not yet
 

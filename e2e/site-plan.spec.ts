@@ -57,7 +57,8 @@ test('marked areas (a meadow, an idea) are drawn with name, area and a legend li
     grid: 10,
     areas: [{ id: 'a1', name: 'Äng', fill: '#f2d024', stroke: '#9a7b00', legend: 'Äng (min bedömning)', status: 'idé', ring }],
   })
-  expect(svg).toContain('>Äng<')
+  expect(svg).toContain('A1 Äng')
+  expect(svg).toContain('<pattern')
   expect(svg).toContain('ca 450 m², idé')
   // An area that runs over the boundary says how much is inside.
   const over = renderSite({ polygons: rec.property.polygons, buildings: [], title: { designation: 'x', municipality: 'y' }, areas: [{ id: 'b', name: 'Äng', fill: '#f2d024', stroke: '#9a7b00', ring: [{ x: -10, y: 40 }, { x: 20, y: 40 }, { x: 20, y: 70 }, { x: -10, y: 70 }].map((p) => ({ x: p.x + x0, y: p.y + y0 })) }] })

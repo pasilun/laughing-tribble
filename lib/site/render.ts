@@ -10,7 +10,10 @@ import type { Mosaic } from './lantmateriet'
 export type SiteTitle = { designation: string; municipality: string; address?: string; drawingNumber?: string; author?: string; date?: string; revision?: string; note?: string }
 
 // A marked area: a meadow, a garden, a planned plot. Ring in map metres (SWEREF 99 TM).
-export type SiteArea = { id: string; name: string; kind?: string; status?: string; fill: string; stroke: string; legend?: string; ring: P[] }
+// An item of the plan that covers ground: a meadow, a lawn, a garden, a planned plot. On the drawing it is
+// a hatched area with an outline, a number and a name, like a building; over the aerial photo (a
+// reference sheet) it is only an outline, so the photo stays readable. Ring in map metres (SWEREF 99 TM).
+export type SiteArea = { id: string; name: string; kind?: string; status?: string; symbol?: 'hatch' | 'dots'; stroke: string; fill?: string; legend?: string; ring: P[] }
 
 export type SiteSheet = {
   areas?: SiteArea[]
@@ -83,7 +86,16 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
 
   out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${L.paperW}mm" height="${L.paperH}mm" viewBox="0 0 ${L.paperW} ${L.paperH}" font-family="Liberation Sans, Helvetica, Arial, sans-serif">`)
   out.push(`<rect width="${L.paperW}" height="${L.paperH}" fill="#fff"/>`)
-  out.push(`<defs><clipPath id="map"><rect x="${L.map.x}" y="${L.map.y}" width="${L.map.w}" height="${L.map.h}"/></clipPath></defs>`)
+  // Ground symbols for marked areas: grass hatching (meadow) and dots (lawn), in the area's line colour.
+  const defs = [...new Map((s.areas ?? []).map((a) => [`${a.kind === 'gräsmatta' || a.symbol === 'dots' ? 'dots' : 'hatch'}-${a.stroke}`, a])).values()]
+    .map((a) => {
+      const id = `sym-${a.symbol ?? (a.kind === 'gräsmatta' ? 'dots' : 'hatch')}-${a.stroke.replace('#', '')}`
+      return (a.symbol ?? (a.kind === 'gräsmatta' ? 'dots' : 'hatch')) === 'dots'
+        ? `<pattern id="${id}" patternUnits="userSpaceOnUse" width="2.2" height="2.2"><circle cx="1.1" cy="1.1" r="0.28" fill="${a.stroke}"/></pattern>`
+        : `<pattern id="${id}" patternUnits="userSpaceOnUse" width="2.4" height="2.4" patternTransform="rotate(60)"><line x1="0" y1="0" x2="0" y2="2.4" stroke="${a.stroke}" stroke-width="0.22"/></pattern>`
+    })
+    .join('')
+  out.push(`<defs>${defs}<clipPath id="map"><rect x="${L.map.x}" y="${L.map.y}" width="${L.map.w}" height="${L.map.h}"/></clipPath></defs>`)
 
   // Map underlay: the base map, pale, clipped to the drawing area.
   if (s.background && backgroundDataUri) {
@@ -119,7 +131,13 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     }
     out.push(...lines)
   }
-  for (const a of s.areas ?? []) out.push(`<path d="${path(a.ring)}" fill="${a.fill}" fill-opacity="0.38" stroke="${a.stroke}" stroke-width="0.4" stroke-dasharray="1.4 0.8" stroke-linejoin="round"/>`)
+  const photoSheet = !!s.background && (s.backgroundOpacity ?? 0.9) >= 1
+  const symbolOf = (a: SiteArea) => a.symbol ?? (a.kind === 'gräsmatta' ? 'dots' : 'hatch')
+  const fillOf = (a: SiteArea) => (photoSheet ? 'none' : `url(#sym-${symbolOf(a)}-${a.stroke.replace('#', '')})`)
+  ;(s.areas ?? []).forEach((a) => {
+    const line = photoSheet ? '#ffe14d' : a.stroke
+    out.push(`<path d="${path(a.ring)}" fill="${fillOf(a)}" stroke="${line}" stroke-width="${photoSheet ? 0.55 : 0.35}" stroke-dasharray="${photoSheet ? '2.2 1' : '2.4 0.8 0.5 0.8'}" stroke-linejoin="round"/>`)
+  })
   for (const r of rings) out.push(`<path d="${path(r)}" fill="none" stroke="#a40000" stroke-width="0.5" stroke-dasharray="3.5 0.9 0.6 0.9" stroke-linejoin="round"/>`)
   const main = outer.reduce((a, c) => (area(c) > area(a) ? c : a), outer[0])
   const c0 = centroid(main)
@@ -128,19 +146,29 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
   // the southern edge (or the middle when there are no buildings), centred on the widest stretch
   // of the property at that height.
   const southBuilding = s.buildings.length ? Math.min(...s.buildings.flatMap((q) => q.corners.map((p) => p.y))) : c0.y
-  const yAt = s.buildings.length ? (southBuilding + b.minY) / 2 : c0.y
-  let best = { x0: c0.x, x1: c0.x }
-  let run: number | null = null
-  for (let i = 0; i <= 200; i++) {
-    const x = b.minX + ((b.maxX - b.minX) * i) / 200
-    const inside = pointInRing({ x, y: yAt }, main)
-    if (inside && run === null) run = x
-    if ((!inside || i === 200) && run !== null) {
-      if (x - run > best.x1 - best.x0 || best.x0 === best.x1) best = { x0: run, x1: x }
-      run = null
+  // The widest free stretch of the property (not over a building or a marked area) between the southernmost
+  // building and the southern edge, searched row by row.
+  const free = (p: P) => pointInRing(p, main) && !(s.areas ?? []).some((a) => pointInRing(p, a.ring))
+  let spot = c0
+  let widest = -1
+  const top = s.buildings.length ? southBuilding - 6 : b.maxY - 6
+  for (let yAt = b.minY + 8; yAt <= top; yAt += 3) {
+    let run: number | null = null
+    for (let i = 0; i <= 200; i++) {
+      const x = b.minX + ((b.maxX - b.minX) * i) / 200
+      const ok = free({ x, y: yAt })
+      if (ok && run === null) run = x
+      if ((!ok || i === 200) && run !== null) {
+        // Prefer wide rows, and among equals the northern one (closer to what the plan is about).
+        const w = x - run - 0.02 * (top - yAt)
+        if (w > widest) {
+          widest = w
+          spot = { x: (run + x) / 2, y: yAt }
+        }
+        run = null
+      }
     }
   }
-  const spot = { x: (best.x0 + best.x1) / 2, y: yAt }
   out.push(label(X(spot.x), Y(spot.y), `${s.title.designation}`, 3.4, { anchor: 'middle', bold: true }))
   out.push(label(X(spot.x), Y(spot.y) + 4.4, `Tomtarea ca ${thousands(total)} m²`, 2.5, { anchor: 'middle' }))
 
@@ -209,9 +237,9 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     out.push(label(lx, ly - 0.6, title, 2.5, { bold: true, anchor }))
     out.push(label(lx, ly + 2.4, sub, 2.3, { anchor }))
   })
-  for (const a of s.areas ?? []) {
+  ;(s.areas ?? []).forEach((a, ai) => {
     const c = centroid(a.ring)
-    out.push(label(X(c.x), Y(c.y), a.name.replace(/\s*\(.*\)$/, ''), 2.6, { anchor: 'middle', bold: true }))
+    out.push(label(X(c.x), Y(c.y), `A${ai + 1} ${a.name.replace(/\s*\(.*\)$/, '')}`, 2.6, { anchor: 'middle', bold: true }))
     // An area may run over the boundary (a meadow that goes on into the neighbour's land): say how much is inside.
     const whole = area(a.ring)
     const ab = bbox(a.ring)
@@ -227,7 +255,7 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     const inside = allN ? whole * (inN / allN) : whole
     const tail = whole - inside > Math.max(10, whole * 0.03) ? `, varav ca ${thousands(inside)} m² inom fastigheten` : ''
     out.push(label(X(c.x), Y(c.y) + 3.4, `ca ${thousands(whole)} m²${tail}${a.status && a.status !== 'befintlig' ? `, ${a.status}` : ''}`, 2.3, { anchor: 'middle' }))
-  }
+  })
   out.push(`</g>`)
 
   out.push(...gridLabels)
@@ -255,7 +283,7 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
   out.push(`<line x1="${lgx}" y1="${lgy + 4}" x2="${lgx + 8}" y2="${lgy + 4}" stroke="#a40000" stroke-width="0.5" stroke-dasharray="3.5 0.9 0.6 0.9"/>${text(lgx + 10, lgy + 4.8, 'Fastighetsgräns', 2.2)}`)
   out.push(`<rect x="${lgx}" y="${lgy + 7}" width="8" height="3.4" fill="#8f8f8f" stroke="#000" stroke-width="0.3"/>${text(lgx + 10, lgy + 9.8, 'Befintligt bostadshus', 2.2)}`)
   out.push(`<rect x="${lgx}" y="${lgy + 12}" width="8" height="3.4" fill="#c4c4c4" stroke="#000" stroke-width="0.3"/>${text(lgx + 10, lgy + 14.8, 'Befintlig komplementbyggnad', 2.2)}`)
-  legends.forEach((a, i) => out.push(`<rect x="${lgx}" y="${f(lgy + 17 + i * 5)}" width="8" height="3.4" fill="${a.fill}" fill-opacity="0.5" stroke="${a.stroke}" stroke-width="0.3" stroke-dasharray="1.2 0.7"/>${text(lgx + 10, lgy + 19.8 + i * 5, a.legend ?? a.name, 2.0)}`))
+  legends.forEach((a, i) => out.push(`<rect x="${lgx}" y="${f(lgy + 17 + i * 5)}" width="8" height="3.4" fill="${photoSheet ? 'none' : fillOf(a)}" stroke="${photoSheet ? '#ffe14d' : a.stroke}" stroke-width="0.3" stroke-dasharray="1.2 0.7"/>${text(lgx + 10, lgy + 19.8 + i * 5, a.legend ?? a.name, 2.0)}`))
   out.push(text(lgx, lgy + 19 + 5 * legends.length, s.grid ? `Rutnät ${s.grid} m från sydvästra hörnet (m)` : 'Avstånd i m till fastighetsgräns', 2))
 
   // Frame and title block.
