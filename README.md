@@ -22,6 +22,10 @@ The app is in Swedish; this README is in English.
   efter sheet; a plan of what exists is one sheet, titled "befintlig".
 - **MCP**: the same operations exposed as tools at `/api/mcp`.
 
+A property's **situation plan** (boundary, buildings, distances, north arrow, scale) can be made from
+Lantmäteriet's Min karta with `npx tsx scripts/situation.mts "Strängnäs Lövinge 3:2"`; see
+[`docs/site-plan.md`](docs/site-plan.md).
+
 See [`docs/plan-studio.md`](docs/plan-studio.md) for the editor and the model,
 [`docs/plan-review.md`](docs/plan-review.md) for the review rules and
 [`docs/accuracy.md`](docs/accuracy.md) for calibration, straightening and scoring.
