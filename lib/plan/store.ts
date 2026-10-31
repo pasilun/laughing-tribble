@@ -184,6 +184,11 @@ function backend(): Backend {
   return new Scoped(systemBackend(), user ? scopeOf(user) : '')
 }
 
+// The signed-in person's storage, for other kinds of documents kept beside the plans (site plans).
+export function userBackend(): Backend {
+  return backend()
+}
+
 // Writes, reads back and removes a small file outside any person's prefix.
 export async function storageProbe(): Promise<{ kind: 'blob' | 'fs'; ok: boolean; ms: number; tokens?: { found: string[]; using: string | null }; error?: string }> {
   const t = Date.now()

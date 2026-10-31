@@ -15,7 +15,13 @@ export type SiteTitle = { designation: string; municipality: string; address?: s
 // reference sheet) it is only an outline, so the photo stays readable. Ring in map metres (SWEREF 99 TM).
 export type SiteArea = { id: string; name: string; kind?: string; status?: string; symbol?: 'hatch' | 'dots'; stroke: string; fill?: string; legend?: string; ring: P[] }
 
+// A path (a track, a fence, a pipe) and a place (a tree, a well, a stake-out point).
+export type SiteLine = { id: string; name: string; kind?: string; status?: string; stroke: string; legend?: string; points: P[] }
+export type SitePoint = { id: string; name: string; kind?: string; status?: string; stroke: string; legend?: string; at: P }
+
 export type SiteSheet = {
+  lines?: SiteLine[]
+  points?: SitePoint[]
   areas?: SiteArea[]
   polygons: P[][][]
   buildings: Building[]
@@ -211,7 +217,6 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
   s.buildings.forEach((q) => {
     const c = centroid(q.corners)
     const xs = q.corners.map((p) => X(p.x))
-    const ys = q.corners.map((p) => Y(p.y))
     const title = `${q.id} ${q.kind === 'bostadshus' ? 'Bostadshus' : 'Komplementbyggnad'}`
     const sub = `${dec(q.width)} × ${dec(q.depth)} m, ca ${q.area} m²`
     const w = Math.max(title.length * 2.5 * 0.55, sub.length * 2.3 * 0.52) + 2
@@ -276,6 +281,50 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     const tail = whole - inside > Math.max(10, whole * 0.03) ? `, varav ca ${thousands(inside)} m² inom fastigheten` : ''
     out.push(label(X(c.x), Y(c.y) + 3.4, `ca ${thousands(whole)} m²${tail}${a.status && a.status !== 'befintlig' ? `, ${a.status}` : ''}`, 2.3, { anchor: 'middle' }))
   })
+  // Paths and places: drawn over the buildings, numbered L1…, P1…, with a label that finds a free spot.
+  const placeLabel = (x: number, y: number, w: number) => {
+    const spots: Array<[number, number]> = [[0, -4], [0, 6], [w / 2 + 3, 1], [-w / 2 - 3, 1], [0, -9], [0, 11], [w / 2 + 3, -7], [-w / 2 - 3, -7]]
+    for (const [dx, dy] of spots) {
+      const bx: Box = { x0: x + dx - w / 2, x1: x + dx + w / 2, y0: y + dy - 3.6, y1: y + dy + 1.6 }
+      if (!taken.some((t) => hit(bx, t))) {
+        taken.push(bx)
+        return { x: x + dx, y: y + dy }
+      }
+    }
+    return { x, y: y - 4 }
+  }
+  const dashOf = (status?: string) => (!status || status === 'befintlig' ? '' : status === 'idé' ? ' stroke-dasharray="3 1.6"' : status === 'planerad' ? ' stroke-dasharray="6 1.4 1 1.4"' : ' stroke-dasharray="9 1.2"')
+  ;(s.lines ?? []).forEach((ln, li) => {
+    const mm = ln.points.map((p) => ({ x: X(p.x), y: Y(p.y) }))
+    out.push(`<path d="M${mm.map((p) => `${f(p.x)},${f(p.y)}`).join('L')}" fill="none" stroke="${ln.stroke}" stroke-width="${photoSheet ? 0.7 : 0.55}"${dashOf(ln.status)} stroke-linejoin="round" stroke-linecap="round"/>`)
+    let len = 0
+    for (let i = 1; i < ln.points.length; i++) len += dist(ln.points[i - 1], ln.points[i])
+    let run = 0
+    let mid = ln.points[0]
+    for (let i = 1; i < ln.points.length; i++) {
+      const d = dist(ln.points[i - 1], ln.points[i])
+      if (run + d >= len / 2) {
+        const t = d === 0 ? 0 : (len / 2 - run) / d
+        mid = { x: ln.points[i - 1].x + t * (ln.points[i].x - ln.points[i - 1].x), y: ln.points[i - 1].y + t * (ln.points[i].y - ln.points[i - 1].y) }
+        break
+      }
+      run += d
+    }
+    const title = `L${li + 1} ${ln.name}`
+    const sub = `ca ${thousands(len)} m${ln.status && ln.status !== 'befintlig' ? `, ${ln.status}` : ''}`
+    const w = Math.max(title.length * 2.6 * 0.55, sub.length * 2.3 * 0.52) + 2
+    const at = placeLabel(X(mid.x), Y(mid.y), w)
+    out.push(label(at.x, at.y, title, 2.6, { anchor: 'middle', bold: true }))
+    out.push(label(at.x, at.y + 3.2, sub, 2.3, { anchor: 'middle' }))
+  })
+  ;(s.points ?? []).forEach((pn, pi) => {
+    const x = X(pn.at.x)
+    const y = Y(pn.at.y)
+    out.push(`<circle cx="${f(x)}" cy="${f(y)}" r="1.5" fill="${pn.stroke}" fill-opacity="${photoSheet ? 0.55 : 0.85}" stroke="${photoSheet ? '#ffe14d' : '#000'}" stroke-width="0.3"/>`)
+    const title = `P${pi + 1} ${pn.name}`
+    const at = placeLabel(x, y, title.length * 2.6 * 0.55 + 2)
+    out.push(label(at.x, at.y, title, 2.6, { anchor: 'middle', bold: true }))
+  })
   out.push(`</g>`)
 
   out.push(...gridLabels)
@@ -296,15 +345,29 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
 
   // Legend, bottom right of the drawing area.
   const lgx = L.map.x + L.map.w - 62
-  const legends = [...new Map((s.areas ?? []).map((a) => [a.legend ?? a.name, a])).values()]
-  const lgy = L.map.y + L.map.h - 24 - 5 * legends.length
-  out.push(`<rect x="${lgx - 2}" y="${lgy - 4}" width="62" height="${25 + 5 * legends.length}" fill="#fff" fill-opacity="0.88" stroke="#000" stroke-width="0.15"/>`)
+  type Entry = { label: string; swatch: (y: number) => string }
+  const entries: Entry[] = []
+  const seen = new Set<string>()
+  const addEntry = (key: string, e: Entry) => {
+    if (!seen.has(key)) {
+      seen.add(key)
+      entries.push(e)
+    }
+  }
+  for (const a of s.areas ?? [])
+    addEntry(`a:${a.legend ?? a.name}`, { label: a.legend ?? a.name, swatch: (y) => `<rect x="${lgx}" y="${f(y)}" width="8" height="3.4" fill="${photoSheet ? 'none' : fillOf(a)}" stroke="${photoSheet ? '#ffe14d' : a.stroke}" stroke-width="0.3" stroke-dasharray="1.2 0.7"/>` })
+  for (const l of s.lines ?? [])
+    addEntry(`l:${l.legend ?? l.name}`, { label: l.legend ?? l.name, swatch: (y) => `<line x1="${lgx}" y1="${f(y + 1.7)}" x2="${lgx + 8}" y2="${f(y + 1.7)}" stroke="${l.stroke}" stroke-width="0.55"${dashOf(l.status)}/>` })
+  for (const q of s.points ?? [])
+    addEntry(`p:${q.legend ?? q.name}`, { label: q.legend ?? q.name, swatch: (y) => `<circle cx="${lgx + 4}" cy="${f(y + 1.7)}" r="1.5" fill="${q.stroke}" fill-opacity="0.85" stroke="#000" stroke-width="0.3"/>` })
+  const lgy = L.map.y + L.map.h - 24 - 5 * entries.length
+  out.push(`<rect x="${lgx - 2}" y="${lgy - 4}" width="62" height="${25 + 5 * entries.length}" fill="#fff" fill-opacity="0.88" stroke="#000" stroke-width="0.15"/>`)
   out.push(text(lgx, lgy, 'Teckenförklaring', 2.4, { bold: true }))
   out.push(`<line x1="${lgx}" y1="${lgy + 4}" x2="${lgx + 8}" y2="${lgy + 4}" stroke="#a40000" stroke-width="0.5" stroke-dasharray="3.5 0.9 0.6 0.9"/>${text(lgx + 10, lgy + 4.8, 'Fastighetsgräns', 2.2)}`)
   out.push(`<rect x="${lgx}" y="${lgy + 7}" width="8" height="3.4" fill="#8f8f8f" stroke="#000" stroke-width="0.3"/>${text(lgx + 10, lgy + 9.8, 'Befintligt bostadshus', 2.2)}`)
   out.push(`<rect x="${lgx}" y="${lgy + 12}" width="8" height="3.4" fill="#c4c4c4" stroke="#000" stroke-width="0.3"/>${text(lgx + 10, lgy + 14.8, 'Befintlig komplementbyggnad', 2.2)}`)
-  legends.forEach((a, i) => out.push(`<rect x="${lgx}" y="${f(lgy + 17 + i * 5)}" width="8" height="3.4" fill="${photoSheet ? 'none' : fillOf(a)}" stroke="${photoSheet ? '#ffe14d' : a.stroke}" stroke-width="0.3" stroke-dasharray="1.2 0.7"/>${text(lgx + 10, lgy + 19.8 + i * 5, a.legend ?? a.name, 2.0)}`))
-  out.push(text(lgx, lgy + 19 + 5 * legends.length, s.grid ? `Rutnät ${s.grid} m från sydvästra hörnet (m)` : 'Avstånd i m till fastighetsgräns', 2))
+  entries.forEach((e, i) => out.push(`${e.swatch(lgy + 17 + i * 5)}${text(lgx + 10, lgy + 19.8 + i * 5, e.label, 2.0)}`))
+  out.push(text(lgx, lgy + 19 + 5 * entries.length, s.grid ? `Rutnät ${s.grid} m från sydvästra hörnet (m)` : 'Avstånd i m till fastighetsgräns', 2))
 
   // Frame and title block.
   out.push(`<rect x="${FRAME}" y="${FRAME}" width="${L.paperW - 2 * FRAME}" height="${L.paperH - 2 * FRAME}" fill="none" stroke="#000" stroke-width="0.6"/>`)

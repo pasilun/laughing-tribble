@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 type Item = { id: string; name: string; revision: number; updatedAt: string; issued: string[] }
@@ -31,6 +32,11 @@ export function PlanList() {
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-bold">Planritningar</h1>
+      <p className="mt-1 text-sm">
+        <Link href="/plans/site" data-testid="to-sites" className="text-blue-700 underline">
+          Tomter (situationsplan, flygbild) →
+        </Link>
+      </p>
       <p className="mt-1 text-sm text-zinc-600">Planritning före och efter för anmälan om ändring inomhus – i skala, med versioner.</p>
       <form onSubmit={create} className="mt-6 flex flex-col gap-2 rounded border bg-white p-4 sm:flex-row sm:items-end">
         <label className="flex-1 text-sm">

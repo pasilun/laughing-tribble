@@ -43,8 +43,24 @@ The photo is a reference, not drawing material: it is taken at an angle to the v
 
 `sites/<property>/areas.json` (for Lövinge: `sites/strangnas-lovinge-3-2/areas.json`) holds areas to mark on both sheets: a name, a kind, a status (befintlig, idé, planerad, ansökan), colours, and a ring in **local metres** (x east, y north of the property's south-west corner, the same numbers as the photo sheet's grid). On the drawing (`situationsplan.*`) an area is a plan item like a building: grass hatching for a meadow, dots for a lawn, a dash-dot outline, a number (A1, A2), name and area (and how much of it is inside the boundary when it runs over it), and a legend line. Over the aerial photo (`flygbild.*`) it is only a yellow dashed outline, so the photo stays readable. The meadow in the file is read from the photo by brightness and smoothness (open, even ground between the dark spruce) and is an estimate, not a survey.
 
+## In the app: /plans/site
+
+`/plans/site` lists the sites; "Hämta tomten" takes a designation, looks the property up in Min karta and makes the site
+(boundary, buildings, and the areas from `sites/<property>/areas.json` if there are any). `/plans/site/<slug>` is the page:
+the property over *Ingen / Karta / Flygbild*, a 10 m grid in local metres, and a pen for what you want to say about the
+land: **yta** (click the corners, or draw round it freehand), **linje**, **punkt**. Each has a name, a sort (äng, gräsmatta,
+byggnad, odling …), a status (befintlig, idé, planerad, ansökan), a colour and a note; drag an item to move it, drag a corner
+to reshape it, click a small midpoint to add a corner, Alt-click a corner to remove it. Undo/redo, Ctrl+S saves. Every save is
+a revision; saving from an old revision (Claude has drawn in the meantime) is refused with "Läs om". The sheet
+(`/api/sites/<slug>/sheet?format=pdf|png|svg&underlay=none|karta|flyg`) shows the items as plan items: hatched areas, dashed
+lines by status, numbered A1…, L1…, P1….
+
+Claude reads and draws with `site_get` (coordinates in the page's metres, plus a picture) and `site_edit` (add, update, delete;
+a rectangle can be given as `rect {x,y,w,d,angle}`), `site_list`, `site_create`. Data lives in the private per-person store
+under `sites/<slug>/`. Tests: `e2e/site-editor.spec.ts` (API, tools, the page itself).
+
 ## Not yet
 
 New buildings and changes (a proposed building in red with its distances), roads and the road
 connection, building height and ridge, fastighetsbeteckning of the neighbours, terrain levels,
-use from the app and the MCP tools (it is a script so far).
+phone-friendly drawing with a finger (two-finger zoom), distances from new buildings to the boundary on the page (the sheet has them).

@@ -5,7 +5,9 @@ const nextConfig: NextConfig = {
   // Fonts read at runtime by the plan PNG renderer.
   outputFileTracingIncludes: {
     '/api/plans/**': ['./lib/plan/fonts/**'],
-    '/api/mcp': ['./lib/plan/fonts/**'],
+    '/api/mcp': ['./lib/plan/fonts/**', './sites/**'],
+    '/api/sites/**': ['./lib/plan/fonts/**', './sites/**'],
+    '/api/sites': ['./sites/**'],
     '/api/health': ['./lib/plan/fonts/**'],
   },
 };

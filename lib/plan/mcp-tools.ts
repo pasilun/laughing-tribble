@@ -4,6 +4,7 @@ import { finishPlan } from './finish'
 import { FIX_DOC, nextStep, verbsToOps } from './guided'
 import { BASIC_INSTRUCTIONS, GUIDE, INSTRUCTIONS } from './guide'
 import { autoTrace } from './trace'
+import { handleSiteTool, SITE_TOOLS } from '../site/mcp'
 import { describeReview, reviewPlan } from './review'
 import { comparePlans } from './compare'
 import { sheetPng } from './export'
@@ -46,7 +47,7 @@ const OPS_SHORT = `Operations (whole mm, x right, y DOWN, stable string ids). Th
 - {"op":"update","kind":"…","id":"…","patch":{…}} · {"op":"delete","kind":"…","id":"…"} · {"op":"moveVertex","from":{x,y},"to":{x,y}} · {"op":"moveWall","id","dx","dy"} · {"op":"setWallLength","id","length","fixed":"a"|"b"} · {"op":"scale","origin","fx","fy"} · {"op":"setSheet","patch":{…}} · {"op":"setTitleBlock","patch":{…}}
 Phases only when the user asks for changes (a plan of what exists is all "existing"): "demolish" = removed, "new" = added. All ops in one call succeed together or none are applied.`
 
-export const PLAN_TOOLS = [
+const BASE_TOOLS = [
   {
     name: 'plan_guide',
     description: 'The working order for making a plan that can be trusted: getting the drawing into the plan, calibrating, tracing, comparing, reviewing, filling in the sheet. Read it before drawing anything from a drawing or photo.',
@@ -363,6 +364,8 @@ const text = (t: string): { type: 'text'; text: string } => ({ type: 'text', tex
 
 export async function handlePlanTool(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
   if (!PLAN_TOOLS.some((t) => t.name === name)) return null
+  const site = await handleSiteTool(name, args)
+  if (site) return site
   const scan = await handleScanTool(name, args)
   if (scan) return scan
   const planId = String(args.plan_id ?? '')
@@ -606,6 +609,8 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
   const revs = await listRevisions(planId)
   return { content: [text(revs.map((r) => `${r.n}${r.issued ? ` (rev ${r.issued})` : ''} ${r.createdAt.slice(0, 16)} ${r.author}: ${r.message}`).join('\n') || 'Inga revisioner.')] }
 }
+
+export const PLAN_TOOLS = [...BASE_TOOLS, ...SITE_TOOLS]
 
 // What a connector lists. The default is every tool. ?tools=basic: the short surface for smaller
 // models and for people who only want the drawing made; the scan tools stay behind plan_trace,
