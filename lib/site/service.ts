@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { extractBuildings, type Building } from './buildings'
 import { cleanItems, propertyBox, slugOf, type SiteDoc, type SiteItem, type SiteRevision } from './doc'
@@ -19,6 +19,19 @@ function seedItems(slug: string): SiteItem[] {
   if (!existsSync(file)) return []
   const raw = JSON.parse(readFileSync(file, 'utf8')) as { areas: Array<{ id: string; name: string; kind?: string; status?: string; stroke?: string; ring: P[] }> }
   return cleanItems(raw.areas.map((a) => ({ id: a.id, type: 'area', name: a.name, kind: a.kind ?? 'annat', status: a.status ?? 'befintlig', color: a.stroke ?? '#2f6b1f', points: a.ring }))).items
+}
+
+// Properties the repository already knows something about (sites/<slug>/areas.json with a designation): offered
+// on the list page so that making the first site is one click.
+export function knownDesignations(): string[] {
+  const dir = path.join(process.cwd(), 'sites')
+  if (!existsSync(dir)) return []
+  return readdirSync(dir).flatMap((slug) => {
+    const file = path.join(dir, slug, 'areas.json')
+    if (!existsSync(file)) return []
+    const d = (JSON.parse(readFileSync(file, 'utf8')) as { designation?: string }).designation
+    return d ? [d] : []
+  })
 }
 
 // A new site: the property's boundary from Lantmäteriet's Min karta and the buildings read from its map.

@@ -9,6 +9,7 @@ type Item = { slug: string; designation: string; revision: number; updatedAt: st
 export function SiteList() {
   const router = useRouter()
   const [sites, setSites] = useState<Item[] | null>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
   const [designation, setDesignation] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -16,16 +17,19 @@ export function SiteList() {
   useEffect(() => {
     fetch('/api/sites')
       .then((r) => r.json())
-      .then((b) => setSites(b.sites ?? []))
+      .then((b) => {
+        setSites(b.sites ?? [])
+        setSuggestions(b.suggestions ?? [])
+      })
       .catch(() => setSites([]))
   }, [])
 
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const create = async (e: React.FormEvent | null, name = designation) => {
+    e?.preventDefault()
     setError('')
     setBusy(true)
     try {
-      const r = await fetch('/api/sites', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ designation }) })
+      const r = await fetch('/api/sites', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ designation: name }) })
       const b = await r.json()
       if (!r.ok) return setError(b.errors?.[0] ?? 'kunde inte skapa tomten')
       router.push(`/plans/site/${b.doc.slug}`)
@@ -45,7 +49,7 @@ export function SiteList() {
       </p>
       <h1 className="mt-2 text-2xl font-bold">Tomter</h1>
       <p className="mt-1 text-sm text-zinc-600">Fastighetsgräns, byggnader och det du ritar in (äng, gräsmatta, idéer) på karta eller flygbild – i meter.</p>
-      <form onSubmit={create} className="mt-6 flex flex-col gap-2 rounded border bg-white p-4 sm:flex-row sm:items-end">
+      <form onSubmit={(e) => create(e)} className="mt-6 flex flex-col gap-2 rounded border bg-white p-4 sm:flex-row sm:items-end">
         <label className="flex-1 text-sm">
           Fastighetsbeteckning
           <input data-testid="new-site-designation" required className="mt-1 w-full rounded border px-2 py-1.5" value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Strängnäs Lövinge 3:2" />
@@ -54,6 +58,18 @@ export function SiteList() {
           {busy ? 'Hämtar från Lantmäteriet…' : 'Hämta tomten'}
         </button>
       </form>
+      {suggestions.length > 0 && (
+        <div className="mt-3 rounded border border-blue-200 bg-blue-50 p-3 text-sm" data-testid="site-suggestions">
+          <p className="text-zinc-700">Tomter vi redan känner till – ett klick hämtar dem från Lantmäteriet:</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {suggestions.map((d) => (
+              <button key={d} data-testid="suggested-site" disabled={busy} className="rounded bg-blue-600 px-3 py-1.5 text-white disabled:opacity-60" onClick={() => create(null, d)}>
+                {busy ? 'Hämtar…' : `Skapa ${d}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
       <ul className="mt-6 divide-y rounded border bg-white" data-testid="site-list">
         {sites === null && <li className="p-4 text-sm text-zinc-500">Läser in…</li>}

@@ -158,3 +158,10 @@ test('the page: a change made by Claude after the page was opened is a conflict,
   await expect(page.getByTestId('item-list')).toContainText('Från Claude')
   await request.delete(`/api/sites/${slug}`)
 })
+
+test('the list page offers the properties the repository knows, so the first site is one click', async ({ page, request }) => {
+  const list = await (await request.get('/api/sites')).json()
+  expect(list.suggestions).toContain('Strängnäs Lövinge 3:2')
+  await page.goto('/plans/site')
+  await expect(page.getByTestId('suggested-site').first()).toContainText('Strängnäs Lövinge 3:2')
+})

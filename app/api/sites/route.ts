@@ -1,6 +1,7 @@
 import { secured } from '@/lib/plan/access'
 import type { SiteDoc } from '@/lib/site/doc'
-import { createSite, importSite } from '@/lib/site/service'
+import { slugOf } from '@/lib/site/doc'
+import { createSite, importSite, knownDesignations } from '@/lib/site/service'
 import { listSites } from '@/lib/site/store'
 import { author, fail, readJson } from '../plans/http'
 
@@ -9,7 +10,9 @@ export const maxDuration = 60
 
 export const GET = secured(async (): Promise<Response> => {
   try {
-    return Response.json({ sites: await listSites() })
+    const sites = await listSites()
+    const have = new Set(sites.map((x) => x.slug))
+    return Response.json({ sites, suggestions: knownDesignations().filter((d) => !have.has(slugOf(d))) })
   } catch (e) {
     return fail(e)
   }
