@@ -15,6 +15,7 @@ import { resolveSource } from './scan/raster'
 import { scanView } from './scan/view'
 import { createPlan, editPlan, loadPlan } from './service'
 import { getAsset, listPlans, listRevisions, putAsset } from './store'
+import { hasChanges } from './sheet'
 import type { Plan, Pt, View } from './types'
 
 // Claude tools for floor plans. Claude never regenerates a plan: it reads
@@ -37,13 +38,13 @@ const OPS_DOC = `Operations (all lengths in whole millimetres; x to the right, y
 - {"op":"scale","origin":{"x":..,"y":..},"fx":1.01,"fy":1.006,"sources"?:1.008}  (scales the whole drawing about a point, separately along x and y; wall thicknesses and fixture sizes stay, openings keep their size. plan_finish with fit_outer does this to match the printed outside size)
 - {"op":"setSheet","patch":{"paper":"A3"|"A4","orientation":"landscape"|"portrait","scale":50|100|150|200,"northAngle":0,"doorSwings":false}}  (doorSwings false = doors without swing arcs, for overview sheets)
 - {"op":"setTitleBlock","patch":{"project","property","address","apartments","floor","drawingNumber","author","date"}}
-Phases: "existing" = stays, "demolish" = exists today and is removed, "new" = added. Före shows today; efter marks rivs/ny.
+Phases matter only when the user asks for changes: a plan of what exists has only "existing" (and one sheet, "befintlig"). Otherwise "existing" = stays, "demolish" = exists today and is removed, "new" = added; före shows today, efter marks rivs/ny.
 All ops in one call succeed together or none are applied.`
 
 const OPS_SHORT = `Operations (whole mm, x right, y DOWN, stable string ids). The full reference with every field: plan_guide {"topic":"ops"}. For simple changes plan_fix is easier.
 - {"op":"add","kind":"wall"|"opening"|"fixture"|"room"|"dimension"|"note"|"mass","item":{…}} e.g. wall {"id":"v1","a":{"x":0,"y":0},"b":{"x":4000,"y":0},"thickness":100,"phase":"existing"}; opening {"id":"o1","wallId":"v1","kind":"door"|"opening"|"window","offset":1200,"width":900,"phase":"existing"}; room {"id":"r1","name":"Kök","at":{"x":..,"y":..}}
 - {"op":"update","kind":"…","id":"…","patch":{…}} · {"op":"delete","kind":"…","id":"…"} · {"op":"moveVertex","from":{x,y},"to":{x,y}} · {"op":"moveWall","id","dx","dy"} · {"op":"setWallLength","id","length","fixed":"a"|"b"} · {"op":"scale","origin","fx","fy"} · {"op":"setSheet","patch":{…}} · {"op":"setTitleBlock","patch":{…}}
-Phases: "existing" = stays, "demolish" = removed, "new" = added. All ops in one call succeed together or none are applied.`
+Phases only when the user asks for changes (a plan of what exists is all "existing"): "demolish" = removed, "new" = added. All ops in one call succeed together or none are applied.`
 
 export const PLAN_TOOLS = [
   {
@@ -140,7 +141,7 @@ export const PLAN_TOOLS = [
           properties: { width: { type: 'number' }, length: { type: 'number' } },
           required: ['width', 'length'],
         },
-        view: { type: 'string', enum: ['fore', 'efter'], description: 'Preview view (default efter)' },
+        view: { type: 'string', enum: ['fore', 'efter'], description: 'Only for plans with demolished/new parts: which sheet (default efter)' },
       },
       required: ['plan_id'],
     },
@@ -172,7 +173,7 @@ export const PLAN_TOOLS = [
       properties: {
         plan_id: { type: 'string' },
         revision: { type: 'number', description: 'Older revision to read (default latest)' },
-        view: { type: 'string', enum: ['fore', 'efter'], description: 'Which sheet to render (default efter)' },
+        view: { type: 'string', enum: ['fore', 'efter'], description: 'Only for plans with demolished/new parts: which sheet (default efter)' },
         with_underlay: { type: 'boolean' },
         include_json: { type: 'boolean', description: 'Also return the full plan JSON' },
         only: { type: 'array', items: { type: 'string', enum: ['sheet', 'walls', 'openings', 'fixtures', 'rooms', 'sources'] }, description: 'Only these parts (default all). Cheaper when reworking.' },
@@ -250,8 +251,12 @@ function host(): string {
       : 'http://localhost:3000'
 }
 
-function links(id: string, rev: number): string {
+// A plan with nothing demolished or new is one sheet (befintlig); före/efter only when it has changes.
+function links(plan: Plan, rev: number): string {
   const h = host()
+  const id = plan.id
+  if (!hasChanges(plan))
+    return [`Editor: ${h}/plans/${id}`, `PDF (planritning – befintlig): ${h}/api/plans/${id}/sheet?view=efter&format=pdf&rev=${rev}`, `DXF: ${h}/api/plans/${id}/sheet?view=efter&format=dxf&rev=${rev}`].join('\n')
   return [
     `Editor: ${h}/plans/${id}`,
     `PDF (före + efter): ${h}/api/plans/${id}/sheet?view=both&format=pdf&rev=${rev}`,
@@ -383,7 +388,7 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     const ask = fin.ask.length ? `\n\nFråga användaren (ett meddelande): ${fin.ask.join('; ')}. Sätt fälten med setTitleBlock. Skriv inte in egna gissningar.` : ''
     return {
       content: [
-        text(`Färdigställd, revision ${n}.\nGjort:\n${done}\n\nKvarstår att åtgärda eller förklara:\n${left}${ask}\n\n${links(planId, n)}`),
+        text(`Färdigställd, revision ${n}.\nGjort:\n${done}\n\nKvarstår att åtgärda eller förklara:\n${left}${ask}\n\n${links(plan, n)}`),
         await preview(plan, view, false),
       ],
     }
@@ -496,7 +501,7 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
   if (name === 'plan_create') {
     const res = await createPlan({ name: String(args.name ?? 'Planritning'), template: args.template === 'demo' ? 'demo' : 'empty', author: 'claude' })
     if ('errors' in res) return { content: [text(res.errors!.join('\n'))], isError: true }
-    return { content: [text(`Skapad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan.id, res.revision.n)}\n\nHar användaren en ritning eller bild att rita av? Anropa plan_upload_link nu och rita ingenting förrän ritningen är uppladdad. Rita det ritningen visar, inga ändringar om användaren inte ber om det.`), await preview(res.plan, 'efter', false)] }
+    return { content: [text(`Skapad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan, res.revision.n)}\n\nHar användaren en ritning eller bild att rita av? Anropa plan_upload_link nu och rita ingenting förrän ritningen är uppladdad. Rita det ritningen visar, inga ändringar om användaren inte ber om det.`), await preview(res.plan, 'efter', false)] }
   }
 
   if (name === 'plan_compare') {
@@ -540,10 +545,10 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
       }
       const ops: Op[] = copied.map((item) => ({ op: 'add', kind: 'source', item }))
       const ed = await editPlan(res.plan.id, ops, res.revision.n, 'claude', `Källritningar kopierade från ${from}`)
-      if (ed.status === 200) return { content: [text(`Importerad: ${res.plan.id}, revision ${ed.revision.n} (${copied.length} källritningar kopierade)\n${links(res.plan.id, ed.revision.n)}`)] }
+      if (ed.status === 200) return { content: [text(`Importerad: ${res.plan.id}, revision ${ed.revision.n} (${copied.length} källritningar kopierade)\n${links(ed.plan, ed.revision.n)}`)] }
     }
     if ('errors' in res) return { content: [text(`Kunde inte importera:\n${res.errors!.join('\n')}`)], isError: true }
-    return { content: [text(`Importerad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan.id, res.revision.n)}`), await preview(res.plan, 'efter', false)] }
+    return { content: [text(`Importerad: ${res.plan.id}, revision ${res.revision.n}\n${links(res.plan, res.revision.n)}`), await preview(res.plan, 'efter', false)] }
   }
 
   if (name === 'plan_get') {
@@ -557,7 +562,7 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
       body = changedSince(old.plan, rev.plan) || 'Inget har ändrats sedan dess.'
       body = `Ändrat sedan revision ${args.since}:\n${body}`
     } else body = summarisePlan(rev.plan, only?.length ? only : undefined)
-    const parts: Content = [text(`Revision ${rev.meta.n} (${rev.meta.message})\n${body}\n\n${links(planId, rev.meta.n)}`)]
+    const parts: Content = [text(`Revision ${rev.meta.n} (${rev.meta.message})\n${body}\n\n${links(rev.plan, rev.meta.n)}`)]
     if (args.include_json) parts.push(text(JSON.stringify({ ...rev.plan, underlay: rev.plan.underlay ? { ...rev.plan.underlay, src: '…' } : undefined })))
     const narrow = (only?.length ?? 0) > 0 || typeof args.since === 'number'
     if (args.image === true || (args.image !== false && !narrow)) parts.push(await preview(rev.plan, view, !!args.with_underlay))
@@ -594,7 +599,7 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     const rev = await loadPlan(planId)
     if (!rev) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
     const v = args.view === 'efter' ? 'efter' : 'fore'
-    return { content: [text(`Revision ${rev.meta.n}, ${v === 'fore' ? 'före' : 'efter'}:\n${describeReview(reviewPlan(rev.plan, v), rev.plan.rooms)}`)] }
+    return { content: [text(`Revision ${rev.meta.n}${hasChanges(rev.plan) ? `, ${v === 'fore' ? 'före' : 'efter'}` : ' (befintligt)'}:\n${describeReview(reviewPlan(rev.plan, v), rev.plan.rooms)}`)] }
   }
 
   // plan_revisions
@@ -608,7 +613,15 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
 const BASIC = ['plan_next', 'plan_create', 'plan_list', 'plan_upload_link', 'plan_trace', 'plan_audit', 'plan_fix', 'plan_view', 'plan_get', 'plan_finish', 'plan_guide']
 
 export function toolsFor(profile?: string | null) {
-  return profile === 'basic' ? PLAN_TOOLS.filter((t) => BASIC.includes(t.name)) : PLAN_TOOLS
+  if (profile !== 'basic') return PLAN_TOOLS
+  // The short set speaks of one sheet: no före/efter argument.
+  return PLAN_TOOLS.filter((t) => BASIC.includes(t.name)).map((t) => {
+    const props = (t.inputSchema as { properties?: Record<string, unknown> }).properties
+    if (!props || !('view' in props)) return t
+    const { view: _view, ...rest } = props
+    void _view
+    return { ...t, inputSchema: { ...t.inputSchema, properties: rest } } as typeof t
+  })
 }
 
 export const instructionsFor = (profile?: string | null) => (profile === 'basic' ? BASIC_INSTRUCTIONS : INSTRUCTIONS)

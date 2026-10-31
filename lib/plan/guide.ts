@@ -24,7 +24,7 @@ SHORTCUTS (the server does the mechanical work)
    - plan_trace: calibrate, fit walls, read openings and doors in one call – a draft. plan_audit: numbered list of where the plan differs from the drawing (walls off position or thickness, openings on solid wall, door swing, outside size), each with its fix. plan_fix: apply findings by id, or simple changes (move a wall, set a width, add a room). plan_view: one picture, optionally zoomed. The steps below are what these do; use the scan tools directly when you need finer control.
 
 0. What was asked
-   - "Make a plan of this drawing" means: draw what the drawing shows, as it is today (före, phase "existing"). Do not suggest, plan or draw changes, demolition or a new layout unless the user asks. A change is a later, separate step (walls with phase "demolish" or "new" in the same plan) and only on request.
+   - "Make a plan of this drawing" means: draw what the drawing shows, as it is today (phase "existing"). Do not suggest, plan or draw changes, demolition or a new layout unless the user asks. A change is a later, separate step (walls with phase "demolish" or "new" in the same plan) and only on request.
    - Draw with this connector's plan tools. If another plan connector with the same kind of tools is also available (an older copy), do not use it for the plan; other tools (email, documents, calendar…) are fine whenever they help.
 
 1. Get the drawing into the plan

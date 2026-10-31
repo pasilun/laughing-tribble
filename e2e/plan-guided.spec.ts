@@ -41,6 +41,24 @@ test('?tools=basic lists a short set; the default lists everything; the instruct
   expect(await init('')).not.toBe(await init('?tools=basic'))
 })
 
+test('a plan of what exists speaks of one sheet, not före and efter', async ({ request }) => {
+  const created = text(await call(request, 'plan_create', { name: 'Befintlig' }))
+  const id = /Skapad: ([a-z0-9-]+)/.exec(created)![1]
+  expect(created).toContain('befintlig')
+  expect(created).not.toContain('före + efter')
+  await call(request, 'plan_fix', { plan_id: id, set: [{ add_wall: { a: { x: 0, y: 0 }, b: { x: 4000, y: 0 }, thickness: 200 } }] })
+  const got = text(await call(request, 'plan_get', { plan_id: id, only: ['walls'] }))
+  expect(got).toContain('PDF (planritning – befintlig)')
+  expect(got).not.toContain('före + efter')
+  expect(text(await call(request, 'plan_review', { plan_id: id }))).toContain('(befintligt)')
+  // With a change in it, the pair comes back.
+  await call(request, 'plan_edit', { plan_id: id, base_revision: 2, message: 'Rivs', ops: [{ op: 'update', kind: 'wall', id: 'w1', patch: { phase: 'demolish' } }] })
+  expect(text(await call(request, 'plan_get', { plan_id: id, only: ['walls'] }))).toContain('före + efter')
+  // The short set has no view argument at all.
+  const tools = (await (await request.post('/api/mcp?tools=basic', { data: { jsonrpc: '2.0', id: 1, method: 'tools/list' } })).json()).result.tools as Array<{ name: string; inputSchema: { properties: Record<string, unknown> } }>
+  expect(tools.filter((t) => 'view' in t.inputSchema.properties)).toEqual([])
+})
+
 test('plan_next asks for the drawing first, then for calibration', async ({ request }) => {
   const id = /Skapad: ([a-z0-9-]+)/.exec(text(await call(request, 'plan_create', { name: 'Nästa-steg' })))![1]
   expect(text(await call(request, 'plan_next', { plan_id: id }))).toContain('plan_upload_link')
