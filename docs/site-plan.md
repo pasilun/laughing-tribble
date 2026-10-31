@@ -39,6 +39,10 @@ count small (about a dozen tiles per sheet) and use it for the property at hand.
 
 The photo is a reference, not drawing material: it is taken at an angle to the vertical in places, roofs overhang walls, and trees hide the ground. The building rectangles come from the map, not from the photo.
 
+## Marked areas
+
+`sites/<property>/areas.json` (for Lövinge: `sites/strangnas-lovinge-3-2/areas.json`) holds areas to mark on both sheets: a name, a kind, a status (befintlig, idé, planerad, ansökan), colours, and a ring in **local metres** (x east, y north of the property's south-west corner, the same numbers as the photo sheet's grid). They are drawn pale under the boundary and buildings with name, area and a legend line. The meadow in the file is read from the photo by brightness and smoothness (open, even ground between the dark spruce) and is an estimate, not a survey.
+
 ## Not yet
 
 New buildings and changes (a proposed building in red with its distances), roads and the road

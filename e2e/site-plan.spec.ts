@@ -44,3 +44,21 @@ test('the sheet: whole property on A3 portrait at 1:500, boundary, buildings wit
   const png = svgToPng(svg, 600)
   expect(png.subarray(1, 4).toString()).toBe('PNG')
 })
+
+test('marked areas (a meadow, an idea) are drawn with name, area and a legend line, and shown over the photo grid', () => {
+  const b = rec.property.polygons[0][0]
+  const x0 = Math.min(...b.map((p) => p.x))
+  const y0 = Math.min(...b.map((p) => p.y))
+  const ring = [{ x: 20, y: 40 }, { x: 40, y: 40 }, { x: 40, y: 70 }, { x: 20, y: 70 }].map((p) => ({ x: p.x + x0, y: p.y + y0 }))
+  const svg = renderSite({
+    polygons: rec.property.polygons,
+    buildings: rec.buildings,
+    title: { designation: rec.property.designation, municipality: rec.property.municipality },
+    grid: 10,
+    areas: [{ id: 'a1', name: 'Äng', fill: '#f2d024', stroke: '#9a7b00', legend: 'Äng (min bedömning)', status: 'idé', ring }],
+  })
+  expect(svg).toContain('>Äng<')
+  expect(svg).toContain('ca 600 m², idé')
+  expect(svg).toContain('Äng (min bedömning)')
+  expect(svg).toContain('Rutnät 10 m')
+})

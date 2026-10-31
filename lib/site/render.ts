@@ -9,7 +9,11 @@ import type { Mosaic } from './lantmateriet'
 
 export type SiteTitle = { designation: string; municipality: string; address?: string; drawingNumber?: string; author?: string; date?: string; revision?: string; note?: string }
 
+// A marked area: a meadow, a garden, a planned plot. Ring in map metres (SWEREF 99 TM).
+export type SiteArea = { id: string; name: string; kind?: string; status?: string; fill: string; stroke: string; legend?: string; ring: P[] }
+
 export type SiteSheet = {
+  areas?: SiteArea[]
   polygons: P[][][]
   buildings: Building[]
   title: SiteTitle
@@ -115,6 +119,7 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     }
     out.push(...lines)
   }
+  for (const a of s.areas ?? []) out.push(`<path d="${path(a.ring)}" fill="${a.fill}" fill-opacity="0.38" stroke="${a.stroke}" stroke-width="0.4" stroke-dasharray="1.4 0.8" stroke-linejoin="round"/>`)
   for (const r of rings) out.push(`<path d="${path(r)}" fill="none" stroke="#a40000" stroke-width="0.5" stroke-dasharray="3.5 0.9 0.6 0.9" stroke-linejoin="round"/>`)
   const main = outer.reduce((a, c) => (area(c) > area(a) ? c : a), outer[0])
   const c0 = centroid(main)
@@ -204,6 +209,11 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
     out.push(label(lx, ly - 0.6, title, 2.5, { bold: true, anchor }))
     out.push(label(lx, ly + 2.4, sub, 2.3, { anchor }))
   })
+  for (const a of s.areas ?? []) {
+    const c = centroid(a.ring)
+    out.push(label(X(c.x), Y(c.y), a.name.replace(/\s*\(.*\)$/, ''), 2.6, { anchor: 'middle', bold: true }))
+    out.push(label(X(c.x), Y(c.y) + 3.4, `ca ${thousands(area(a.ring))} m²${a.status && a.status !== 'befintlig' ? `, ${a.status}` : ''}`, 2.3, { anchor: 'middle' }))
+  }
   out.push(`</g>`)
 
   out.push(...gridLabels)
@@ -224,13 +234,15 @@ export function renderSite(s: SiteSheet, backgroundDataUri?: string): string {
 
   // Legend, bottom right of the drawing area.
   const lgx = L.map.x + L.map.w - 62
-  const lgy = L.map.y + L.map.h - 24
-  out.push(`<rect x="${lgx - 2}" y="${lgy - 4}" width="62" height="25" fill="#fff" fill-opacity="0.88" stroke="#000" stroke-width="0.15"/>`)
+  const legends = [...new Map((s.areas ?? []).map((a) => [a.legend ?? a.name, a])).values()]
+  const lgy = L.map.y + L.map.h - 24 - 5 * legends.length
+  out.push(`<rect x="${lgx - 2}" y="${lgy - 4}" width="62" height="${25 + 5 * legends.length}" fill="#fff" fill-opacity="0.88" stroke="#000" stroke-width="0.15"/>`)
   out.push(text(lgx, lgy, 'Teckenförklaring', 2.4, { bold: true }))
   out.push(`<line x1="${lgx}" y1="${lgy + 4}" x2="${lgx + 8}" y2="${lgy + 4}" stroke="#a40000" stroke-width="0.5" stroke-dasharray="3.5 0.9 0.6 0.9"/>${text(lgx + 10, lgy + 4.8, 'Fastighetsgräns', 2.2)}`)
   out.push(`<rect x="${lgx}" y="${lgy + 7}" width="8" height="3.4" fill="#8f8f8f" stroke="#000" stroke-width="0.3"/>${text(lgx + 10, lgy + 9.8, 'Befintligt bostadshus', 2.2)}`)
   out.push(`<rect x="${lgx}" y="${lgy + 12}" width="8" height="3.4" fill="#c4c4c4" stroke="#000" stroke-width="0.3"/>${text(lgx + 10, lgy + 14.8, 'Befintlig komplementbyggnad', 2.2)}`)
-  out.push(text(lgx, lgy + 19, s.grid ? `Rutnät ${s.grid} m från sydvästra hörnet (m)` : 'Avstånd i m till fastighetsgräns', 2))
+  legends.forEach((a, i) => out.push(`<rect x="${lgx}" y="${f(lgy + 17 + i * 5)}" width="8" height="3.4" fill="${a.fill}" fill-opacity="0.5" stroke="${a.stroke}" stroke-width="0.3" stroke-dasharray="1.2 0.7"/>${text(lgx + 10, lgy + 19.8 + i * 5, a.legend ?? a.name, 2.0)}`))
+  out.push(text(lgx, lgy + 19 + 5 * legends.length, s.grid ? `Rutnät ${s.grid} m från sydvästra hörnet (m)` : 'Avstånd i m till fastighetsgräns', 2))
 
   // Frame and title block.
   out.push(`<rect x="${FRAME}" y="${FRAME}" width="${L.paperW - 2 * FRAME}" height="${L.paperH - 2 * FRAME}" fill="none" stroke="#000" stroke-width="0.6"/>`)

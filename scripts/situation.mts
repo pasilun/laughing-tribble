@@ -4,14 +4,15 @@
 // Writes situationsplan.svg / .png / .pdf (pale map underlay) and flygbild.svg / .png / .pdf (aerial photo
 // underlay with a 10 m grid in local coordinates), flygbild.jpg (the photo itself, with the boundary), and
 // site.json (property, buildings).
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import sharp from 'sharp'
 import path from 'node:path'
 import { extractBuildings } from '../lib/site/buildings'
 import { backgroundUri, svgToPdf, svgToPng } from '../lib/site/export'
 import { bbox } from '../lib/site/geometry'
 import { fetchAerial, fetchMosaic, findProperty } from '../lib/site/lantmateriet'
-import { layoutSite, renderSite } from '../lib/site/render'
+import type { P } from '../lib/site/geometry'
+import { layoutSite, renderSite, type SiteArea } from '../lib/site/render'
 
 const argv = process.argv.slice(2)
 const name = argv.find((a, i) => !a.startsWith('--') && !(argv[i - 1] ?? '').startsWith('--'))
@@ -27,6 +28,7 @@ const out = opt('out') ?? '.visual/situation'
 mkdirSync(out, { recursive: true })
 
 const prop = await findProperty(name)
+const slug = prop.designation.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 const rings = prop.polygons.map((p) => p[0])
 const b = bbox(rings.flat())
 const margin = 60
@@ -37,7 +39,13 @@ const paper: 'A3' | 'A4' = opt('paper') === 'A4' ? 'A4' : 'A3'
 const scale = opt('scale') ? Number(opt('scale')) : undefined
 const L = layoutSite({ polygons: prop.polygons, paper, scale })
 const base = argv.includes('--no-map') ? undefined : await fetchMosaic(area, 'topowebb_nedtonad')
-const sheet = { polygons: prop.polygons, buildings, title: { designation: prop.designation, municipality: prop.municipality, address: opt('address'), author: opt('author') }, background: base, paper, scale }
+// Marked areas (meadow, garden, ideas): sites/<property>/areas.json, in local metres from the south-west corner.
+const areasFile = opt('areas') ?? `sites/${slug}/areas.json`
+const areas = existsSync(areasFile)
+  ? (JSON.parse(readFileSync(areasFile, 'utf8')) as { coordinates?: string; areas: Array<Omit<SiteArea, 'ring'> & { ring: P[] }> }).areas.map((a) => ({ ...a, ring: a.ring.map((p) => ({ x: p.x + b.minX, y: p.y + b.minY })) }))
+  : []
+const sheet = {
+  areas, polygons: prop.polygons, buildings, title: { designation: prop.designation, municipality: prop.municipality, address: opt('address'), author: opt('author') }, background: base, paper, scale }
 const svg = renderSite(sheet, base ? await backgroundUri(base) : undefined)
 writeFileSync(path.join(out, 'situationsplan.svg'), svg)
 writeFileSync(path.join(out, 'situationsplan.png'), svgToPng(svg, 2200))
