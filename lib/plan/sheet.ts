@@ -470,23 +470,24 @@ function faceAfter(plan: Plan, w: Wall, t: number): number {
 }
 
 // Dimensions generated from the model: each new opening (width and position)
-// and each demolished wall (length), so the changes are always measured.
+// and each demolished wall (length), so the changes are always measured. One that
+// a drawn dimension already gives (same span, either direction) is left out: the
+// drawn one is the person's, and the same figure twice is noise.
 function autoDimensions(plan: Plan, view: View, L: SheetLayout): string {
   if (view !== 'efter') return ''
-  const out: string[] = []
   const P = L.toPaper
+  const candidates: Array<{ a: Pt; b: Pt; label: string }> = []
   for (const o of plan.openings) {
     if (o.phase !== 'new') continue
     const w = plan.walls.find((x) => x.id === o.wallId)
     if (!w) continue
     const n = leftNormal(wallDir(w))
     const face = scale(n, w.thickness / 2)
-    const off = 5
     const s = add(along(w, o.offset), face)
     const e = add(along(w, o.offset + o.width), face)
-    out.push(dimension(P(s), P(e), off, fmtMm(o.width)))
+    candidates.push({ a: s, b: e, label: fmtMm(o.width) })
     const from = faceBefore(plan, w, o.offset)
-    if (o.offset - from > 1) out.push(dimension(P(add(along(w, from), face)), P(s), off, fmtMm(o.offset - from)))
+    if (o.offset - from > 1) candidates.push({ a: add(along(w, from), face), b: s, label: fmtMm(o.offset - from) })
   }
   for (const w of plan.walls) {
     if (w.phase !== 'demolish') continue
@@ -494,9 +495,26 @@ function autoDimensions(plan: Plan, view: View, L: SheetLayout): string {
     const len = wallLength(w)
     const from = faceBefore(plan, w, len / 2)
     const to = faceAfter(plan, w, len / 2)
-    out.push(dimension(P(add(along(w, from), face)), P(add(along(w, to), face)), 5, fmtMm(to - from)))
+    candidates.push({ a: add(along(w, from), face), b: add(along(w, to), face), label: fmtMm(to - from) })
   }
+  const out = candidates.filter((c) => !drawnDimensionGives(plan, c.a, c.b)).map((c) => dimension(P(c.a), P(c.b), 5, c.label))
   return `<g class="auto-dims" data-testid="auto-dims">${out.join('')}</g>`
+}
+
+// Does a dimension the person drew already measure the span a→b: parallel, the same two ends along the line
+// (within 5 mm, in either direction), and not further away across it than a wall's width plus a room's offset?
+function drawnDimensionGives(plan: Plan, a: Pt, b: Pt): boolean {
+  const len = Math.hypot(b.x - a.x, b.y - a.y)
+  if (len < 1) return false
+  const d = { x: (b.x - a.x) / len, y: (b.y - a.y) / len }
+  return plan.dimensions.some((dm) => {
+    const t1 = (dm.a.x - a.x) * d.x + (dm.a.y - a.y) * d.y
+    const t2 = (dm.b.x - a.x) * d.x + (dm.b.y - a.y) * d.y
+    const across = (p: Pt) => Math.abs((p.x - a.x) * -d.y + (p.y - a.y) * d.x)
+    const lo = Math.min(t1, t2)
+    const hi = Math.max(t1, t2)
+    return Math.abs(lo) <= 5 && Math.abs(hi - len) <= 5 && across(dm.a) <= 1000 && across(dm.b) <= 1000 && Math.abs(across(dm.a) - across(dm.b)) <= 5
+  })
 }
 
 function renderDimensions(plan: Plan, L: SheetLayout): string {

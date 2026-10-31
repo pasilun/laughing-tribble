@@ -92,6 +92,22 @@ test.describe('sheet renderer', () => {
     expect(efter).toContain('1:50 (A3)')
   })
 
+  test('a dimension the person drew replaces the automatic one for the same span: the figure is not there twice', () => {
+    const plan = demoPlan()
+    const count = (svg: string, t: string) => svg.split(t).length - 1
+    expect(count(renderSheet(plan, 'efter'), '>3225<')).toBe(1)
+    // The demolished wall a-kok runs 225 → 3450 face to face at x = 3500: drawn by hand, in the other direction too.
+    for (const [a, b] of [[225, 3450], [3450, 225]]) {
+      const drawn = { ...plan, dimensions: [...plan.dimensions, { id: 'm-egen', a: { x: 3500, y: a }, b: { x: 3500, y: b }, offset: 900 }] }
+      const efter = renderSheet(drawn, 'efter')
+      expect(count(efter, '>3225<')).toBe(1)
+      expect(efter.slice(efter.indexOf('auto-dims'))).not.toContain('>3225<')
+      // A drawn dimension of another span does not hide it.
+      const other = { ...plan, dimensions: [...plan.dimensions, { id: 'm-annan', a: { x: 3500, y: 0 }, b: { x: 3500, y: 3000 }, offset: 900 }] }
+      expect(count(renderSheet(other, 'efter'), '>3225<')).toBe(1)
+    }
+  })
+
   test('room areas are computed from polygons', () => {
     const svg = renderSheet(demoPlan(), 'fore')
     // 3225 × 3225 mm = 10,4 m²
