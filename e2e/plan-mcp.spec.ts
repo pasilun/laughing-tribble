@@ -36,8 +36,12 @@ test('Claude reads, edits against a revision and gets a preview', async ({ reque
   expect(edited.isError).toBeFalsy()
   expect(edited.content[0].text).toContain('Sparad som revision 2')
   expect(edited.content[0].text).toContain('bredd 1000')
-  expect(edited.content[1].type).toBe('image')
-  expect(Buffer.from(edited.content[1].data!, 'base64').subarray(1, 4).toString()).toBe('PNG')
+  // Small answers: no picture unless asked for, and only the findings the edit changed.
+  expect(edited.content).toHaveLength(1)
+  expect(edited.content[0].text).toContain('Nya anmärkningar')
+  const pic = await call(request, 'plan_edit', { plan_id: id, base_revision: 2, message: 'Tillbaka', image: true, ops: [{ op: 'update', kind: 'opening', id: 'ny-oppning', patch: { width: 900 } }] })
+  expect(pic.content[1].type).toBe('image')
+  expect(Buffer.from(pic.content[1].data!, 'base64').subarray(1, 4).toString()).toBe('PNG')
 
   // Stale revision: nothing saved, told to re-read.
   const stale = await call(request, 'plan_edit', { plan_id: id, base_revision: 1, message: 'x', ops: [] })
@@ -45,7 +49,7 @@ test('Claude reads, edits against a revision and gets a preview', async ({ reque
   expect(stale.content[0].text).toContain('plan_get')
 
   // Invalid op: rejected as a whole.
-  const bad = await call(request, 'plan_edit', { plan_id: id, base_revision: 2, message: 'x', ops: [{ op: 'delete', kind: 'wall', id: 'finns-inte' }] })
+  const bad = await call(request, 'plan_edit', { plan_id: id, base_revision: 3, message: 'x', ops: [{ op: 'delete', kind: 'wall', id: 'finns-inte' }] })
   expect(bad.isError).toBe(true)
 
   const revs = await call(request, 'plan_revisions', { plan_id: id })

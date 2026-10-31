@@ -63,7 +63,7 @@ function envelope(plan: Plan) {
 }
 
 // The printed pair may be given in either order; the pairing that fits the plan best.
-function pairPrinted(w: number, l: number, printed: { width: number; length: number }): [number, number] {
+export function pairPrinted(w: number, l: number, printed: { width: number; length: number }): [number, number] {
   const straight = Math.abs(w - printed.width) + Math.abs(l - printed.length)
   const swapped = Math.abs(w - printed.length) + Math.abs(l - printed.width)
   return straight <= swapped ? [printed.width, printed.length] : [printed.length, printed.width]

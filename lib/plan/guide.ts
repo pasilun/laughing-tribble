@@ -5,9 +5,23 @@ export const INSTRUCTIONS = `Planstudio draws floor plans (planritningar) for bu
 1. Draw what the drawing shows (the existing state). Do not suggest or make changes, demolition or a new layout unless the user asks for one.
 2. If the user mentions or has attached a drawing or photo, the first step is plan_create and then plan_upload_link: you cannot pass a chat attachment to a tool, so the user opens the link and picks the file. Draw nothing until the source exists.
 3. Call plan_guide for the working order (calibrate against the dimensions printed on the drawing, trace walls, openings, fixtures and rooms with the scan tools, compare the render with the source, run plan_review and plan_check and fix every finding, fill in the title block, pick a scale that fills the sheet).
-4. If another connector also offers plan tools (an older copy of this one), draw with this connector's plan tools only; other tools such as email or documents are fine to use. Report what is measured and what is estimated.`
+4. plan_next says where a plan stands and what to call next; plan_trace makes a first draft from the uploaded drawing; plan_audit lists where the plan differs from the drawing and plan_fix mends it. Use them before doing the same by hand with the scan tools.
+5. If another connector also offers plan tools (an older copy of this one), draw with this connector's plan tools only; other tools such as email or documents are fine to use. Report what is measured and what is estimated.`
+
+// The short surface (connector address ?tools=basic): for smaller models and for people who
+// only want the drawing made. The server does the mechanical work and says what to do next.
+export const BASIC_INSTRUCTIONS = `Planstudio draws floor plans (planritningar) for building permit applications from a scanned drawing.
+Work like this, and nothing else:
+1. plan_create, then plan_upload_link: give the link to the user, who picks the drawing file (you cannot pass a chat attachment to a tool). Draw nothing before it is uploaded. Draw what the drawing shows (the existing state), no changes unless the user asks.
+2. After every step call plan_next: it says where the plan stands and gives the next call with its arguments filled in. Follow it.
+3. Never guess a measurement. Numbers come from the drawing (plan_trace, plan_audit); the user answers what only they know. Say at the end what was measured, what was estimated and what could not be read.
+Use only this connector's plan tools for the plan; email and documents are fine to use.`
 
 export const GUIDE = `WORKING ORDER FOR A PLAN TRACED FROM A DRAWING
+
+SHORTCUTS (the server does the mechanical work)
+   - plan_next: where the plan stands and the next call, arguments filled in.
+   - plan_trace: calibrate, fit walls, read openings and doors in one call – a draft. plan_audit: numbered list of where the plan differs from the drawing (walls off position or thickness, openings on solid wall, door swing, outside size), each with its fix. plan_fix: apply findings by id, or simple changes (move a wall, set a width, add a room). plan_view: one picture, optionally zoomed. The steps below are what these do; use the scan tools directly when you need finer control.
 
 0. What was asked
    - "Make a plan of this drawing" means: draw what the drawing shows, as it is today (före, phase "existing"). Do not suggest, plan or draw changes, demolition or a new layout unless the user asks. A change is a later, separate step (walls with phase "demolish" or "new" in the same plan) and only on request.

@@ -1,6 +1,9 @@
+import { auditPlan, describeAudit, sourceIdOf } from './audit'
 import { checkPlan } from './checks'
 import { finishPlan } from './finish'
-import { GUIDE } from './guide'
+import { FIX_DOC, nextStep, verbsToOps } from './guided'
+import { BASIC_INSTRUCTIONS, GUIDE, INSTRUCTIONS } from './guide'
+import { autoTrace } from './trace'
 import { describeReview, reviewPlan } from './review'
 import { comparePlans } from './compare'
 import { sheetPng } from './export'
@@ -8,9 +11,11 @@ import { wallLength } from './geometry'
 import type { Op } from './ops'
 import { describeDoor } from './scan/doors'
 import { handleScanTool, SCAN_TOOLS } from './scan/tools'
+import { resolveSource } from './scan/raster'
+import { scanView } from './scan/view'
 import { createPlan, editPlan, loadPlan } from './service'
 import { getAsset, listPlans, listRevisions, putAsset } from './store'
-import type { Plan, View } from './types'
+import type { Plan, Pt, View } from './types'
 
 // Claude tools for floor plans. Claude never regenerates a plan: it reads
 // it, then sends small operations against a known revision, and gets a
@@ -35,11 +40,82 @@ const OPS_DOC = `Operations (all lengths in whole millimetres; x to the right, y
 Phases: "existing" = stays, "demolish" = exists today and is removed, "new" = added. Före shows today; efter marks rivs/ny.
 All ops in one call succeed together or none are applied.`
 
+const OPS_SHORT = `Operations (whole mm, x right, y DOWN, stable string ids). The full reference with every field: plan_guide {"topic":"ops"}. For simple changes plan_fix is easier.
+- {"op":"add","kind":"wall"|"opening"|"fixture"|"room"|"dimension"|"note"|"mass","item":{…}} e.g. wall {"id":"v1","a":{"x":0,"y":0},"b":{"x":4000,"y":0},"thickness":100,"phase":"existing"}; opening {"id":"o1","wallId":"v1","kind":"door"|"opening"|"window","offset":1200,"width":900,"phase":"existing"}; room {"id":"r1","name":"Kök","at":{"x":..,"y":..}}
+- {"op":"update","kind":"…","id":"…","patch":{…}} · {"op":"delete","kind":"…","id":"…"} · {"op":"moveVertex","from":{x,y},"to":{x,y}} · {"op":"moveWall","id","dx","dy"} · {"op":"setWallLength","id","length","fixed":"a"|"b"} · {"op":"scale","origin","fx","fy"} · {"op":"setSheet","patch":{…}} · {"op":"setTitleBlock","patch":{…}}
+Phases: "existing" = stays, "demolish" = removed, "new" = added. All ops in one call succeed together or none are applied.`
+
 export const PLAN_TOOLS = [
   {
     name: 'plan_guide',
     description: 'The working order for making a plan that can be trusted: getting the drawing into the plan, calibrating, tracing, comparing, reviewing, filling in the sheet. Read it before drawing anything from a drawing or photo.',
-    inputSchema: { type: 'object', properties: {} },
+    inputSchema: { type: 'object', properties: { topic: { type: 'string', enum: ['ops'], description: 'ops = the full reference for plan_edit operations' } } },
+  },
+  {
+    name: 'plan_next',
+    description: 'Where the plan stands and the one thing to do now, with the next call and its arguments filled in. Call it after every step; follow it.',
+    inputSchema: { type: 'object', properties: { plan_id: { type: 'string' } }, required: ['plan_id'] },
+  },
+  {
+    name: 'plan_trace',
+    description:
+      'A first draft of the plan from the uploaded drawing in one call: calibrates against the printed outside size (printed_outer_mm), finds and fits the walls, marks the facade, reads openings, windows and doors. Returns what it did and a short list of what needs your judgement, with one picture. It is a draft: run plan_audit next. If the house cannot be found safely it says so; then give dimensions (end points of the printed dimension lines). Calling it again on a plan that has walls only reads openings and doors.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        source_id: { type: 'string', description: 'Default: the drawing that was uploaded' },
+        printed_outer_mm: { type: 'object', description: 'Overall outside size printed on the drawing, e.g. {"width":6080,"length":10500}', properties: { width: { type: 'number' }, length: { type: 'number' } }, required: ['width', 'length'] },
+        dimensions: { type: 'array', description: 'Printed dimension lines: [{a:{x,y}, b:{x,y}, mm}] with rough end points in plan mm (plan_view shows a mm grid)', items: { type: 'object' } },
+      },
+      required: ['plan_id'],
+    },
+  },
+  {
+    name: 'plan_audit',
+    description:
+      'Checks the plan against the drawing it was traced from and lists what differs, as numbered findings: walls off their drawn position or thickness, openings where the drawing shows solid wall, doors with the wrong swing, outside size against the printed size, plus the review and permit checks. Findings that can be mended carry the exact fix; plan_fix applies them by id. Read this instead of hunting for differences in pictures.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        source_id: { type: 'string' },
+        printed_outer_mm: { type: 'object', properties: { width: { type: 'number' }, length: { type: 'number' } }, required: ['width', 'length'] },
+        image: { type: 'boolean', description: 'Also a picture of the plan over the drawing' },
+      },
+      required: ['plan_id'],
+    },
+  },
+  {
+    name: 'plan_fix',
+    description: `Mends the plan and saves one revision. apply: finding ids from plan_audit (e.g. ["wall:w3","door:o4"]) or "alla" for every finding that has a fix. set: simple changes by id.\n${FIX_DOC}`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        base_revision: { type: 'number', description: 'Default: the latest revision' },
+        apply: { description: 'Finding ids from plan_audit, or "alla"' },
+        set: { type: 'array', items: { type: 'object' } },
+        printed_outer_mm: { type: 'object', properties: { width: { type: 'number' }, length: { type: 'number' } } },
+        message: { type: 'string' },
+      },
+      required: ['plan_id'],
+    },
+  },
+  {
+    name: 'plan_view',
+    description: 'One picture. what: "overlay" (default) the plan drawn on the source drawing, "source" the drawing alone, "plan" the plan sheet. rect {x,y,w,h} in plan mm zooms in (the grid is in mm: read coordinates off it). Without rect: the whole drawing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan_id: { type: 'string' },
+        what: { type: 'string', enum: ['overlay', 'source', 'plan'] },
+        rect: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, w: { type: 'number' }, h: { type: 'number' } }, required: ['x', 'y', 'w', 'h'] },
+        source_id: { type: 'string' },
+        view: { type: 'string', enum: ['fore', 'efter'] },
+      },
+      required: ['plan_id'],
+    },
   },
   {
     name: 'plan_upload_link',
@@ -99,13 +175,16 @@ export const PLAN_TOOLS = [
         view: { type: 'string', enum: ['fore', 'efter'], description: 'Which sheet to render (default efter)' },
         with_underlay: { type: 'boolean' },
         include_json: { type: 'boolean', description: 'Also return the full plan JSON' },
+        only: { type: 'array', items: { type: 'string', enum: ['sheet', 'walls', 'openings', 'fixtures', 'rooms', 'sources'] }, description: 'Only these parts (default all). Cheaper when reworking.' },
+        since: { type: 'number', description: 'Only what changed since this revision' },
+        image: { type: 'boolean', description: 'Picture of the sheet (default yes, but not with only/since)' },
       },
       required: ['plan_id'],
     },
   },
   {
     name: 'plan_edit',
-    description: `Changes a floor plan with small operations and saves them as a new revision. Pass base_revision from plan_get; if the user has saved since, the call is rejected — read the plan again and redo the change. Returns the new revision, the permit checklist and a preview image: look at it and fix mistakes with another edit.\n\n${OPS_DOC}`,
+    description: `Changes a floor plan with small operations and saves them as a new revision. Pass base_revision from plan_get; if the user has saved since, the call is rejected — read the plan again and redo the change. Returns the new revision and only the findings that are new (plan_check lists all); add image:true for a preview picture.\n\n${OPS_SHORT}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -114,6 +193,7 @@ export const PLAN_TOOLS = [
         message: { type: 'string', description: 'What changed, in Swedish, e.g. "Breddade öppningen till 1000 mm"' },
         ops: { type: 'array', items: { type: 'object' } },
         view: { type: 'string', enum: ['fore', 'efter'] },
+        image: { type: 'boolean', description: 'Also return a picture of the sheet (default no)' },
       },
       required: ['plan_id', 'base_revision', 'message', 'ops'],
     },
@@ -179,11 +259,17 @@ function links(id: string, rev: number): string {
   ].join('\n')
 }
 
-export function summarisePlan(plan: Plan): string {
+export const SECTIONS = ['sheet', 'walls', 'openings', 'fixtures', 'rooms', 'sources'] as const
+export type Section = (typeof SECTIONS)[number]
+
+// only: just these parts (a review or a rework rarely needs all of the plan again).
+export function summarisePlan(plan: Plan, only?: Section[]): string {
+  const want = (k: Section) => !only || only.includes(k)
   const tb = plan.sheet.titleBlock
   const lines: string[] = []
   lines.push(`Plan "${plan.name}" (${plan.id}) – ${plan.sheet.paper} 1:${plan.sheet.scale}`)
-  lines.push(`Ritningshuvud: ${JSON.stringify(tb)}`)
+  if (want('sheet')) lines.push(`Ritningshuvud: ${JSON.stringify(tb)}`)
+  if (want('walls')) {
   lines.push(`Väggar (${plan.walls.length}):`)
   for (const w of plan.walls) {
     const flags = [w.loadBearing && 'bärande', w.fireRating && `brand ${w.fireRating}${w.fireRatingAfter !== undefined ? `→${w.fireRatingAfter || 'ingen'}` : ''}`, w.apartmentBoundary && 'lgh-skiljande']
@@ -195,25 +281,66 @@ export function summarisePlan(plan: Plan): string {
     lines.push(`Massor (${plan.masses.length}):`)
     for (const m of plan.masses) lines.push(`- ${m.id}: ${m.points.map((p) => `(${p.x},${p.y})`).join(' ')} ${m.phase}${m.loadBearing ? ' [bärande]' : ''}`)
   }
+  }
+  if (want('openings')) {
   lines.push(`Öppningar (${plan.openings.length}):`)
   for (const o of plan.openings) {
     const w = plan.walls.find((x) => x.id === o.wallId)
     const swing = o.kind === 'door' && w ? `, ${describeDoor(w, o)}` : ''
     lines.push(`- ${o.id}: ${o.kind} i ${o.wallId} offset ${o.offset} bredd ${o.width}${o.height ? ` höjd ${o.height}` : ''} ${o.phase}${swing}${o.through ? ', genomgång (rummen går ihop)' : ''}${o.beam ? `, balk ${o.beam}` : ''}`)
   }
+  }
+  if (want('fixtures')) {
   lines.push(`Inredning (${plan.fixtures.length}):`)
   for (const f of plan.fixtures) lines.push(`- ${f.id}: ${f.kind} @(${f.x},${f.y}) ${f.w}×${f.d} ${f.phase}${f.label ? ` "${f.label}"` : ''}`)
+  }
+  if (want('rooms')) {
   lines.push(`Rum: ${plan.rooms.map((r) => `${r.id} "${r.name}${r.renamed ? `→${r.renamed}` : ''}" @(${r.at.x},${r.at.y})`).join('; ') || '–'}`)
   if (plan.dimensions.length) lines.push(`Mått: ${plan.dimensions.map((d) => `${d.id} (${d.a.x},${d.a.y})–(${d.b.x},${d.b.y})`).join('; ')}`)
+  }
+  if (want('sources'))
   for (const src of plan.sources ?? [])
     lines.push(`Källa ${src.id} (${src.role}) "${src.name}": ${src.widthPx}×${src.heightPx} px, ${src.mmPerPx.toFixed(4)} mm/px vid (${src.x},${src.y})${src.calibration ? `, kalibrerad: ${src.calibration}` : ', ej kalibrerad'}`)
-  if (plan.underlay) lines.push(`Underlag: ${plan.underlay.widthPx}×${plan.underlay.heightPx} px, ${plan.underlay.mmPerPx.toFixed(3)} mm/px vid (${plan.underlay.x},${plan.underlay.y})`)
+  if (want('sources') && plan.underlay) lines.push(`Underlag: ${plan.underlay.widthPx}×${plan.underlay.heightPx} px, ${plan.underlay.mmPerPx.toFixed(3)} mm/px vid (${plan.underlay.x},${plan.underlay.y})`)
   const sources = plan.sources ?? []
   if (plan.walls.length && !sources.length && !plan.underlay)
     lines.push('OBS: planen har ingen källritning – måtten är uppskattade, inte avritade. Be användaren ladda upp ritningen (plan_upload_link) och läs plan_guide.')
   else if (sources.length && !sources.some((x) => x.calibration))
     lines.push('OBS: ingen källa är kalibrerad mot angivna mått – kalibrera med plan_scan_calibrate innan du ritar av den.')
   return lines.join('\n')
+}
+
+// What differs between two revisions, by id: added, changed, removed.
+export function changedSince(old: Plan, now: Plan): string {
+  const out: string[] = []
+  const lists: Array<[string, Array<{ id: string }>, Array<{ id: string }>]> = [
+    ['vägg', old.walls, now.walls],
+    ['öppning', old.openings, now.openings],
+    ['inredning', old.fixtures, now.fixtures],
+    ['rum', old.rooms, now.rooms],
+    ['mått', old.dimensions, now.dimensions],
+  ]
+  for (const [label, a, b] of lists) {
+    const was = new Map(a.map((x) => [x.id, JSON.stringify(x)]))
+    for (const x of b) {
+      const w = was.get(x.id)
+      if (w === undefined) out.push(`+ ${label} ${x.id}: ${brief(x)}`)
+      else if (w !== JSON.stringify(x)) out.push(`~ ${label} ${x.id}: ${brief(x)}`)
+    }
+    for (const x of a) if (!b.some((y) => y.id === x.id)) out.push(`- ${label} ${x.id}`)
+  }
+  if (JSON.stringify(old.sheet) !== JSON.stringify(now.sheet)) out.push('~ blad/ritningshuvud ändrat')
+  return out.slice(0, 40).join('\n') + (out.length > 40 ? `\n… och ${out.length - 40} till` : '')
+}
+
+function brief(x: unknown): string {
+  const o = x as Record<string, unknown>
+  const p = (v: unknown) => (v && typeof v === 'object' ? `(${(v as Pt).x},${(v as Pt).y})` : '')
+  if (o.a && o.b) return `${p(o.a)}→${p(o.b)} tj ${o.thickness}`
+  if (o.wallId) return `${o.kind} i ${o.wallId} offset ${o.offset} bredd ${o.width}`
+  if (o.at) return `"${o.name}" ${p(o.at)}`
+  if (typeof o.x === 'number') return `${o.kind} @(${o.x},${o.y})`
+  return ''
 }
 
 async function preview(plan: Plan, view: View, withUnderlay: boolean): Promise<{ type: 'image'; data: string; mimeType: string }> {
@@ -262,7 +389,93 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     }
   }
 
-  if (name === 'plan_guide') return { content: [text(GUIDE)] }
+  if (name === 'plan_guide') return { content: [text(args.topic === 'ops' ? OPS_DOC : GUIDE)] }
+
+  if (name === 'plan_next') {
+    const rev = await loadPlan(planId)
+    if (!rev) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
+    const p = rev.plan
+    const sources = (p.sources ?? []).filter((x) => x.view !== 'elevation')
+    let open: number | undefined
+    if (p.walls.length && p.openings.length && sources.some((x) => x.calibration)) open = (await auditPlan(planId, p)).filter((i) => i.level !== 'info').length
+    const st = nextStep(p, { openIssues: open })
+    return { content: [text(`Revision ${rev.meta.n}. Klart hittills: ${st.done.join(', ') || 'inget'}.\nNästa: ${st.next}${st.why ? `\n(${st.why})` : ''}`)] }
+  }
+
+  if (name === 'plan_trace') {
+    const po = args.printed_outer_mm as { width?: unknown; length?: unknown } | undefined
+    const printed = po && typeof po.width === 'number' && typeof po.length === 'number' ? { width: po.width, length: po.length } : undefined
+    const dims = Array.isArray(args.dimensions) ? (args.dimensions as Array<{ a: { x: number; y: number }; b: { x: number; y: number }; mm: number; label?: string }>) : undefined
+    const out = await autoTrace(planId, { sourceId: typeof args.source_id === 'string' ? args.source_id : undefined, printed, dimensions: dims })
+    return { content: [text(out.text), ...(out.png ? [{ type: 'image' as const, data: out.png.toString('base64'), mimeType: 'image/png' }] : [])], ...(out.isError ? { isError: true } : {}) }
+  }
+
+  if (name === 'plan_audit' || name === 'plan_fix' || name === 'plan_view') {
+    const rev = await loadPlan(planId)
+    if (!rev) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
+    const po = args.printed_outer_mm as { width?: unknown; length?: unknown } | undefined
+    const printed = po && typeof po.width === 'number' && typeof po.length === 'number' ? { width: po.width, length: po.length } : undefined
+    const sourceId = typeof args.source_id === 'string' ? args.source_id : undefined
+    const overlay = async (plan: Plan, rect?: { x: number; y: number; w: number; h: number }, what: 'overlay' | 'source' = 'overlay') => {
+      const sid = sourceIdOf(plan, sourceId)
+      if (!sid) return null
+      const r = resolveSource(plan, sid)
+      const area = rect ?? { x: r.x, y: r.y, w: r.widthPx * r.mmPerPx, h: r.heightPx * r.mmPerPx }
+      const v = await scanView(planId, plan, r, area, { overlay: what === 'overlay', view, maxPx: 1400 })
+      return { type: 'image' as const, data: v.png.toString('base64'), mimeType: 'image/png' }
+    }
+
+    if (name === 'plan_view') {
+      const what = args.what === 'plan' ? 'plan' : args.what === 'source' ? 'source' : 'overlay'
+      if (what === 'plan') return { content: [text(`Revision ${rev.meta.n}`), await preview(rev.plan, view, false)] }
+      const r = args.rect as { x?: unknown; y?: unknown; w?: unknown; h?: unknown } | undefined
+      const rect = r && [r.x, r.y, r.w, r.h].every((n) => typeof n === 'number') && (r.w as number) > 0 && (r.h as number) > 0 ? (r as { x: number; y: number; w: number; h: number }) : undefined
+      const img = await overlay(rev.plan, rect, what)
+      if (!img) return { content: [text('Planen har ingen källritning. Visar planbladet.'), await preview(rev.plan, view, false)] }
+      return { content: [text(`Revision ${rev.meta.n}, ${what === 'overlay' ? 'planen över ritningen' : 'ritningen'}; rutnätet är i mm${rect ? '' : ' (hela ritningen)'}.`), img] }
+    }
+
+    if (name === 'plan_audit') {
+      const items = await auditPlan(planId, rev.plan, { sourceId, printed })
+      const content: ToolResult['content'] = [text(`Revision ${rev.meta.n}.\n${describeAudit(items)}`)]
+      if (args.image) {
+        const img = await overlay(rev.plan)
+        if (img) content.push(img)
+      }
+      return { content }
+    }
+
+    // plan_fix
+    const apply = args.apply
+    const set = Array.isArray(args.set) ? (args.set as Array<Record<string, unknown>>) : []
+    if (!apply && !set.length) return { content: [text('Ange apply (id från plan_audit, eller "alla") och/eller set (lista med ändringar).')], isError: true }
+    const ops: Op[] = []
+    const notes: string[] = []
+    if (apply) {
+      const items = await auditPlan(planId, rev.plan, { sourceId, printed })
+      const wanted = apply === 'alla' || apply === 'all' ? items.filter((i) => i.fix).map((i) => i.id) : (Array.isArray(apply) ? apply : [apply]).map(String)
+      for (const id of wanted) {
+        const it = items.find((i) => i.id === id)
+        if (!it) notes.push(`${id}: finns inte (längre) i granskningen`)
+        else if (!it.fix) notes.push(`${id}: har ingen automatisk rättning – ändra med set eller plan_edit`)
+        else {
+          ops.push(...it.fix)
+          notes.push(`${id}: ${it.fixText ?? 'rättad'}`)
+        }
+      }
+    }
+    if (set.length) {
+      const v = verbsToOps(rev.plan, set)
+      if (v.errors.length) return { content: [text(`Ingen ändring sparades:\n${v.errors.join('\n')}`)], isError: true }
+      ops.push(...v.ops)
+      notes.push(`${set.length} ändringar`)
+    }
+    if (!ops.length) return { content: [text(`Inget att ändra.\n${notes.join('\n')}`)], isError: true }
+    const res = await editPlan(planId, ops, typeof args.base_revision === 'number' ? args.base_revision : rev.meta.n, 'claude', String(args.message ?? 'Rättat (plan_fix)'))
+    if (res.status !== 200) return { content: [text(`Ingen ändring sparades:\n${res.errors.join('\n')}${res.status === 409 ? '\nLäs planen igen (plan_get) och försök mot senaste revisionen.' : ''}`)], isError: true }
+    const left = (await auditPlan(planId, res.plan, { sourceId, printed })).filter((i) => i.level !== 'info')
+    return { content: [text(`Sparad som revision ${res.revision.n}.\n${notes.map((n) => `- ${n}`).join('\n')}\nKvar: ${left.length ? `${left.length} anmärkningar (${left.slice(0, 5).map((i) => i.id).join(', ')}${left.length > 5 ? ', …' : ''}) – plan_audit visar dem.` : 'inga anmärkningar mot ritningen.'}`)] }
+  }
 
   if (name === 'plan_upload_link') {
     if (!(await loadPlan(planId))) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
@@ -336,24 +549,38 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
   if (name === 'plan_get') {
     const rev = await loadPlan(planId, typeof args.revision === 'number' ? args.revision : undefined)
     if (!rev) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
-    const parts: Content = [text(`Revision ${rev.meta.n} (${rev.meta.message})\n${summarisePlan(rev.plan)}\n\n${links(planId, rev.meta.n)}`)]
+    const only = Array.isArray(args.only) ? (args.only.filter((x): x is Section => (SECTIONS as readonly string[]).includes(String(x))) as Section[]) : undefined
+    let body: string
+    if (typeof args.since === 'number') {
+      const old = await loadPlan(planId, args.since)
+      if (!old) return { content: [text(`Revision ${args.since} finns inte`)], isError: true }
+      body = changedSince(old.plan, rev.plan) || 'Inget har ändrats sedan dess.'
+      body = `Ändrat sedan revision ${args.since}:\n${body}`
+    } else body = summarisePlan(rev.plan, only?.length ? only : undefined)
+    const parts: Content = [text(`Revision ${rev.meta.n} (${rev.meta.message})\n${body}\n\n${links(planId, rev.meta.n)}`)]
     if (args.include_json) parts.push(text(JSON.stringify({ ...rev.plan, underlay: rev.plan.underlay ? { ...rev.plan.underlay, src: '…' } : undefined })))
-    parts.push(await preview(rev.plan, view, !!args.with_underlay))
+    const narrow = (only?.length ?? 0) > 0 || typeof args.since === 'number'
+    if (args.image === true || (args.image !== false && !narrow)) parts.push(await preview(rev.plan, view, !!args.with_underlay))
     return { content: parts }
   }
 
   if (name === 'plan_edit') {
     if (!Array.isArray(args.ops) || typeof args.base_revision !== 'number') return { content: [text('ops (lista) och base_revision (nummer) krävs')], isError: true }
+    const before = await loadPlan(planId)
     const res = await editPlan(planId, args.ops as Op[], args.base_revision, 'claude', String(args.message ?? 'Ändring av Claude'))
     if (res.status !== 200) {
       const hint = res.status === 409 ? '\nLäs planen igen med plan_get och gör om ändringen mot den senaste revisionen.' : ''
       return { content: [text(`Ingen ändring sparades:\n${res.errors.join('\n')}${hint}`)], isError: true }
     }
-    const findings = checkPlan(res.plan)
-    const checks = findings.length ? findings.map((f) => `- [${f.level}] ${f.message}`).join('\n') : '- inga anmärkningar'
-    return {
-      content: [text(`Sparad som revision ${res.revision.n}.\nKontroll:\n${checks}\n\n${summarisePlan(res.plan)}`), await preview(res.plan, view, false)],
-    }
+    // Only what this edit changed in the findings: the model already knows the rest.
+    const key = (f: { level: string; message: string }) => `${f.level}|${f.message}`
+    const was = new Set(before ? checkPlan(before.plan).map(key) : [])
+    const now = checkPlan(res.plan)
+    const fresh = now.filter((f) => !was.has(key(f)))
+    const gone = (before ? checkPlan(before.plan) : []).filter((f) => !now.some((n) => key(n) === key(f))).length
+    const changes = changedSince(before?.plan ?? res.plan, res.plan)
+    const text1 = `Sparad som revision ${res.revision.n}.\n${changes ? `Ändrat:\n${changes}\n` : ''}Nya anmärkningar: ${fresh.length ? `\n${fresh.map((f) => `- [${f.level}] ${f.message}`).join('\n')}` : 'inga'}${gone ? `\n${gone} tidigare anmärkningar är borta.` : ''}\nTotalt ${now.length} anmärkningar (plan_check listar alla).`
+    return { content: args.image === true ? [text(text1), await preview(res.plan, view, false)] : [text(text1)] }
   }
 
   if (name === 'plan_check') {
@@ -374,3 +601,14 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
   const revs = await listRevisions(planId)
   return { content: [text(revs.map((r) => `${r.n}${r.issued ? ` (rev ${r.issued})` : ''} ${r.createdAt.slice(0, 16)} ${r.author}: ${r.message}`).join('\n') || 'Inga revisioner.')] }
 }
+
+// What a connector lists. The default is every tool. ?tools=basic: the short surface for smaller
+// models and for people who only want the drawing made; the scan tools stay behind plan_trace,
+// plan_audit and plan_fix.
+const BASIC = ['plan_next', 'plan_create', 'plan_list', 'plan_upload_link', 'plan_trace', 'plan_audit', 'plan_fix', 'plan_view', 'plan_get', 'plan_finish', 'plan_guide']
+
+export function toolsFor(profile?: string | null) {
+  return profile === 'basic' ? PLAN_TOOLS.filter((t) => BASIC.includes(t.name)) : PLAN_TOOLS
+}
+
+export const instructionsFor = (profile?: string | null) => (profile === 'basic' ? BASIC_INSTRUCTIONS : INSTRUCTIONS)

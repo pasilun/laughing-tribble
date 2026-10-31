@@ -80,6 +80,7 @@ Plan tools:
   `plan_upload_link` (a link where the user drops the drawing; a chat attachment
   cannot be passed to a tool). The server also sends a short version of the guide as
   its MCP `instructions` when a client connects.
+- The short surface (see below): `plan_next`, `plan_trace`, `plan_audit`, `plan_fix`, `plan_view`
 - Plans: `plan_list`, `plan_create`, `plan_get`, `plan_edit`, `plan_check`,
   `plan_review`, `plan_finish`, `plan_revisions`, `plan_import`, `plan_compare`
 - Scanning: `plan_source_add`, `plan_scan_view`, `plan_scan_profile`,
@@ -87,6 +88,17 @@ Plan tools:
   `plan_scan_snap_walls`, `plan_scan_openings`, `plan_scan_elevation`,
   `plan_openings_report`, `plan_scan_doors`, `plan_scan_register`,
   `plan_scan_diff`
+
+**Two sizes of connector.** The address above lists every tool (31). Add `&tools=basic`
+(`https://<host>/api/mcp?key=<key>&tools=basic`) for 11: `plan_next` says where the plan stands
+and what to call next, `plan_trace` makes a first draft from the uploaded drawing,
+`plan_audit` lists where the plan differs from the drawing (each finding with its fix),
+`plan_fix` applies findings by id or simple changes (move a wall, set a width, add a room),
+plus `plan_create`, `plan_list`, `plan_upload_link`, `plan_view`, `plan_get`, `plan_finish`,
+`plan_guide`. Smaller models and people who only want the drawing made should use it; it
+costs about a third of the tool definitions. Answers are kept short: `plan_edit` reports only
+new findings and no picture unless `image: true`; `plan_get` takes `only` and `since`.
+How well a model does with either is measured by `npm run eval:agent` ([docs/agents.md](docs/agents.md)).
 
 `plan_edit` takes a `base_revision`; if the plan has changed since, the edit is
 rejected and the plan must be read again.

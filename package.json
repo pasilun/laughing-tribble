@@ -11,7 +11,8 @@
     "test": "playwright test",
     "user:add": "tsx scripts/user-add.ts",
     "smoke": "node scripts/smoke.mjs",
-    "migrate:users": "tsx scripts/migrate-to-users.ts"
+    "migrate:users": "tsx scripts/migrate-to-users.ts",
+    "eval:agent": "tsx scripts/eval-agent.mts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",
