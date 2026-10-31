@@ -317,11 +317,9 @@ function renderOpening(plan: Plan, o: Opening, view: View, L: SheetLayout): stri
     const pl = P(leafEnd)
     const pf = P(free)
     out.push(`<path d="M ${f(pl.x)} ${f(pl.y)} A ${f(r)} ${f(r)} 0 0 ${sweep} ${f(pf.x)} ${f(pf.y)}" fill="none" stroke="${INK}" stroke-width="0.18"/>`)
-  } else {
-    // Opening without a door: thin lines across the gap at both faces.
-    out.push(line(P(add(s, scale(n, half))), P(add(e, scale(n, half))), 0.13, DASH))
-    out.push(line(P(add(s, scale(n, -half))), P(add(e, scale(n, -half))), 0.13, DASH))
   }
+  // An opening without a door (or a window) is the gap in the wall and nothing more: no lines across it.
+  // Thin dashes there read as a demolished wall, and the dashed outline is for what is demolished.
   // A beam over the opening: dash-dot along the wall's centre line, as on a K-ritning.
   if (o.beam) out.push(line(P(s), P(e), 0.25, DASHDOT))
   return `<g data-opening="${esc(o.id)}" data-phase="${st}">${out.join('')}</g>`

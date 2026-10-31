@@ -141,6 +141,19 @@ test.describe('sheet renderer', () => {
     expect(without.slice(without.indexOf('auto-dims'))).not.toContain('>2000<')
   })
 
+  test('an opening without a door is only the gap in the wall: no dashed lines across it (dashes mean demolished)', () => {
+    const plan = demoPlan()
+    const wall = plan.walls.find((w) => w.id === 'yt-n')!
+    const open = { ...plan, openings: [...plan.openings, { id: 'passage', wallId: wall.id, kind: 'opening' as const, offset: 2000, width: 1000, phase: 'existing' as const }] }
+    const svg = renderSheet(open, 'fore')
+    const group = svg.slice(svg.indexOf('data-opening="passage"'))
+    const body = group.slice(0, group.indexOf('</g>'))
+    expect(body).not.toContain('stroke-dasharray')
+    expect(body).not.toContain('<line')
+    // The wall is cut there: the gap is real.
+    expect(svg).toContain('data-opening="passage"')
+  })
+
   test('room areas are computed from polygons', () => {
     const svg = renderSheet(demoPlan(), 'fore')
     // 3225 × 3225 mm = 10,4 m²
