@@ -171,6 +171,15 @@ test.describe('sheet renderer', () => {
     expect(applyOps(plan, [{ op: 'add', kind: 'zone', item: { id: 'x', points: [{ x: 0, y: 0 }] } }]).errors.length).toBeGreaterThan(0)
   })
 
+  test('a dimension can be limited to one sheet', () => {
+    const { plan, errors } = applyOps(demoPlan(), [
+      { op: 'add', kind: 'dimension', item: { id: 'only-efter', a: { x: 0, y: 0 }, b: { x: 1234, y: 0 }, offset: 400, views: ['efter'] } },
+    ])
+    expect(errors).toEqual([])
+    expect(renderSheet(plan, 'efter')).toContain('>1234<')
+    expect(renderSheet(plan, 'fore')).not.toContain('>1234<')
+  })
+
   test('room areas are computed from polygons', () => {
     const svg = renderSheet(demoPlan(), 'fore')
     // 3225 × 3225 mm = 10,4 m²

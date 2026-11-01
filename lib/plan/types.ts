@@ -103,6 +103,7 @@ export type Dimension = {
   a: Pt
   b: Pt
   offset: number             // perpendicular offset of the dimension line (positive = left of a → b)
+  views?: View[]             // only on these sheets (e.g. a measure of what is demolished: efter); default both
 }
 
 export type Note = {

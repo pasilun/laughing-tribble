@@ -517,17 +517,17 @@ function autoDimensions(plan: Plan, view: View, L: SheetLayout): string {
     const to = faceAfter(plan, w, len / 2)
     candidates.push({ a: add(along(w, from), face), b: add(along(w, to), face), label: fmtMm(to - from) })
   }
-  const out = candidates.filter((c) => !drawnDimensionGives(plan, c.a, c.b)).map((c) => dimension(P(c.a), P(c.b), 5, c.label))
+  const out = candidates.filter((c) => !drawnDimensionGives(plan, view, c.a, c.b)).map((c) => dimension(P(c.a), P(c.b), 5, c.label))
   return `<g class="auto-dims" data-testid="auto-dims">${out.join('')}</g>`
 }
 
 // Does a dimension the person drew already measure the span a→b: parallel, the same two ends along the line
 // (within 5 mm, in either direction), and not further away across it than a wall's width plus a room's offset?
-function drawnDimensionGives(plan: Plan, a: Pt, b: Pt): boolean {
+function drawnDimensionGives(plan: Plan, view: View, a: Pt, b: Pt): boolean {
   const len = Math.hypot(b.x - a.x, b.y - a.y)
   if (len < 1) return false
   const d = { x: (b.x - a.x) / len, y: (b.y - a.y) / len }
-  return plan.dimensions.some((dm) => {
+  return dimensionsIn(plan, view).some((dm) => {
     const t1 = (dm.a.x - a.x) * d.x + (dm.a.y - a.y) * d.y
     const t2 = (dm.b.x - a.x) * d.x + (dm.b.y - a.y) * d.y
     const across = (p: Pt) => Math.abs((p.x - a.x) * -d.y + (p.y - a.y) * d.x)
@@ -537,8 +537,13 @@ function drawnDimensionGives(plan: Plan, a: Pt, b: Pt): boolean {
   })
 }
 
-function renderDimensions(plan: Plan, L: SheetLayout): string {
-  return plan.dimensions
+// The dimensions drawn on a sheet: those without `views` are on both.
+export function dimensionsIn(plan: Plan, view: View): Plan['dimensions'] {
+  return plan.dimensions.filter((dm) => !dm.views || dm.views.includes(view))
+}
+
+function renderDimensions(plan: Plan, view: View, L: SheetLayout): string {
+  return dimensionsIn(plan, view)
     .map((dm) => {
       const a = L.toPaper(dm.a)
       const b = L.toPaper(dm.b)
@@ -716,7 +721,7 @@ export function renderSheet(plan: Plan, view: View, opts: RenderOptions = {}): s
   body.push(`<g data-testid="plan-fixtures">${plan.fixtures.map((fx) => renderFixture(plan, fx, view, L)).join('')}</g>`)
   body.push(renderFireLines(plan, view, L))
   body.push(`<g data-testid="plan-rooms">${renderRooms(plan, view, L)}</g>`)
-  body.push(`<g data-testid="dims">${renderDimensions(plan, L)}${autoDimensions(plan, view, L)}</g>`)
+  body.push(`<g data-testid="dims">${renderDimensions(plan, view, L)}${autoDimensions(plan, view, L)}</g>`)
   body.push(renderNotes(plan, view, L))
   body.push(northArrow(plan, L))
   body.push(scaleBar(plan, L))
