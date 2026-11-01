@@ -1,5 +1,5 @@
 import { dist, wallDir, wallLength } from './geometry'
-import type { Dimension, Fixture, Mass, Note, Opening, Plan, Pt, Room, Sheet, Source, TitleBlock, Underlay, Wall } from './types'
+import type { Dimension, Fixture, Mass, Note, Opening, Plan, Pt, Room, Sheet, Source, TitleBlock, Underlay, Wall, Zone } from './types'
 
 // Small, targeted edits. Claude and the editor both change a plan only
 // through these, so an edit never regenerates parts it doesn't touch.
@@ -7,6 +7,7 @@ import type { Dimension, Fixture, Mass, Note, Opening, Plan, Pt, Room, Sheet, So
 type Kinds = {
   wall: Wall
   mass: Mass
+  zone: Zone
   opening: Opening
   fixture: Fixture
   room: Room
@@ -16,9 +17,10 @@ type Kinds = {
 }
 export type Kind = keyof Kinds
 
-const COLLECTION: { [K in Kind]: 'walls' | 'masses' | 'openings' | 'fixtures' | 'rooms' | 'dimensions' | 'notes' | 'sources' } = {
+const COLLECTION: { [K in Kind]: 'walls' | 'masses' | 'zones' | 'openings' | 'fixtures' | 'rooms' | 'dimensions' | 'notes' | 'sources' } = {
   wall: 'walls',
   mass: 'masses',
+  zone: 'zones',
   opening: 'openings',
   fixture: 'fixtures',
   room: 'rooms',
@@ -129,6 +131,9 @@ export function validatePlan(plan: Plan): string[] {
     if (!Array.isArray(m.points) || m.points.length < 3) errors.push(`massa ${m.id}: behöver minst tre hörn`)
     else if (!convex(m.points)) errors.push(`massa ${m.id}: hörnen måste bilda en konvex form i ordning runt om – dela upp en annan form i flera`)
   }
+  for (const z of plan.zones ?? []) {
+    if (!Array.isArray(z.points) || z.points.length < 3) errors.push(`yta ${z.id}: behöver minst tre hörn`)
+  }
   for (const o of plan.openings) {
     const w = walls.get(o.wallId)
     if (!w) {
@@ -214,6 +219,7 @@ function applyOne(plan: Plan, op: Op): Plan {
         walls,
         openings,
         masses: plan.masses?.map((m) => ({ ...m, points: m.points.map(mv) })),
+        ...(plan.zones ? { zones: plan.zones.map((z) => ({ ...z, points: z.points.map(mv) })) } : {}),
         fixtures: plan.fixtures.map((x) => ({ ...x, ...mv({ x: x.x, y: x.y }) })),
         rooms: plan.rooms.map((r) => ({ ...r, at: mv(r.at), ...(r.polygon ? { polygon: r.polygon.map(mv) } : {}) })),
         dimensions: plan.dimensions.map((d) => ({ ...d, a: mv(d.a), b: mv(d.b) })),

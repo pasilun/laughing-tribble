@@ -154,6 +154,23 @@ test.describe('sheet renderer', () => {
     expect(svg).toContain('data-opening="passage"')
   })
 
+  test('a zone is a light grey area under the walls with a row in the legend, on the sheets it is meant for', () => {
+    const plan = demoPlan()
+    const { plan: shaded, errors } = applyOps(plan, [
+      { op: 'add', kind: 'zone', item: { id: 'lgh', points: [{ x: 0, y: 0 }, { x: 3000, y: 0 }, { x: 3000, y: 3000 }, { x: 0, y: 3000 }], label: 'Lgh Z (slås samman)', views: ['fore'] } },
+    ])
+    expect(errors).toEqual([])
+    const fore = renderSheet(shaded, 'fore')
+    expect(fore).toContain('data-zone="lgh"')
+    expect(fore.indexOf('data-zone="lgh"')).toBeLessThan(fore.indexOf('data-testid="plan-walls"') + 1000) // under the walls
+    expect(fore).toContain('Lgh Z (slås samman)')
+    const efter = renderSheet(shaded, 'efter')
+    expect(efter).not.toContain('data-zone="lgh"')
+    expect(efter).not.toContain('Lgh Z (slås samman)')
+    // A zone needs an outline.
+    expect(applyOps(plan, [{ op: 'add', kind: 'zone', item: { id: 'x', points: [{ x: 0, y: 0 }] } }]).errors.length).toBeGreaterThan(0)
+  })
+
   test('room areas are computed from polygons', () => {
     const svg = renderSheet(demoPlan(), 'fore')
     // 3225 × 3225 mm = 10,4 m²

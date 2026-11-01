@@ -31,6 +31,16 @@ export type Mass = {
   loadBearing?: boolean
 }
 
+// A shaded area on the drawing, e.g. the apartment that is merged into another:
+// a light grey under the walls, with a row in the legend. Any simple outline,
+// corners in order; the walls cover its edges. `views` limits it to one sheet.
+export type Zone = {
+  id: string
+  points: Pt[]
+  label?: string
+  views?: View[]
+}
+
 export type OpeningKind = 'door' | 'window' | 'opening'
 
 export type Opening = {
@@ -163,6 +173,7 @@ export type Plan = {
   sheet: Sheet
   walls: Wall[]
   masses?: Mass[]
+  zones?: Zone[]
   openings: Opening[]
   fixtures: Fixture[]
   rooms: Room[]

@@ -1,6 +1,6 @@
 import { add, along, bounds, dist, leftNormal, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
 import { roomSpaces } from './rooms'
-import type { Fixture, Mass, Opening, Phase, Plan, Pt, SheetScale, View, Wall } from './types'
+import type { Fixture, Mass, Opening, Phase, Plan, Pt, SheetScale, View, Wall, Zone } from './types'
 
 // Renders a plan as a printable drawing sheet. All output coordinates are
 // paper millimetres, so the SVG prints at true scale at 100%.
@@ -201,6 +201,19 @@ export function wallPieces(plan: Plan, view: View): WallPiece[] {
     }
   }
   return out
+}
+
+// Shaded areas (an apartment that is merged into another) in the view: a light
+// grey, under the walls.
+const ZONE_FILL = '#e4e4e4'
+export function zonesIn(plan: Plan, view: View): Zone[] {
+  return (plan.zones ?? []).filter((z) => !z.views || z.views.includes(view))
+}
+
+function renderZones(plan: Plan, view: View, L: SheetLayout): string {
+  return zonesIn(plan, view)
+    .map((z) => `<g data-zone="${esc(z.id)}">${poly(z.points.map(L.toPaper), `fill="${ZONE_FILL}" stroke="${ZONE_FILL}" stroke-width="0.15" stroke-linejoin="round"`)}</g>`)
+    .join('')
 }
 
 export type MassPiece = { mass: Mass; poly: Pt[]; style: Phase }
@@ -607,6 +620,8 @@ function legend(view: View, L: SheetLayout, plan: Plan): string {
   const fixtures = plan.fixtures.filter((fx) => visibleIn(fx.phase, view))
   if (plan.walls.some((w) => w.loadBearing) || (plan.masses ?? []).some((m) => m.loadBearing))
     rows.push([(px, py) => sw(EXISTING_FILL)(px, py) + hatchConvex([{ x: px, y: py - 2 }, { x: px + 8, y: py - 2 }, { x: px + 8, y: py + 0.4 }, { x: px, y: py + 0.4 }], 0.8), 'Bärande vägg'])
+  const zoneLabels = [...new Set(zonesIn(plan, view).map((z) => z.label).filter((l): l is string => !!l))]
+  for (const label of zoneLabels) rows.push([(px, py) => `<rect x="${f(px)}" y="${f(py - 2)}" width="8" height="2.4" fill="${ZONE_FILL}" stroke="${INK}" stroke-width="0.25"/>`, label])
   if (view === 'efter') {
     const has = (ph: Phase) => plan.walls.some((w) => w.phase === ph) || plan.openings.some((o) => o.phase === ph) || plan.fixtures.some((fx) => fx.phase === ph)
     const infill = plan.openings.some((o) => o.phase === 'demolish' && plan.walls.find((w) => w.id === o.wallId)?.phase !== 'demolish')
@@ -695,6 +710,7 @@ export function renderSheet(plan: Plan, view: View, opts: RenderOptions = {}): s
       `<image href="${esc(u.src)}" x="${f(p.x)}" y="${f(p.y)}" width="${f(u.widthPx * u.mmPerPx * L.k)}" height="${f(u.heightPx * u.mmPerPx * L.k)}" transform="rotate(${f(u.rotation)} ${f(p.x)} ${f(p.y)})" opacity="${u.opacity}" preserveAspectRatio="none"/>`,
     )
   }
+  body.push(`<g data-testid="plan-zones">${renderZones(plan, view, L)}</g>`)
   body.push(`<g data-testid="plan-walls">${renderWalls(plan, view, L)}</g>`)
   body.push(`<g data-testid="plan-openings">${plan.openings.map((o) => renderOpening(plan, o, view, L)).join('')}</g>`)
   body.push(`<g data-testid="plan-fixtures">${plan.fixtures.map((fx) => renderFixture(plan, fx, view, L)).join('')}</g>`)
