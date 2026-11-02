@@ -278,6 +278,21 @@ test('ops: moving a wall start keeps its openings where they were drawn', () => 
   expect(across.openings[0].offset).toBe(1500)
 })
 
+test('a new opening is not blocked by a wall that is demolished where it goes (and a demolished one not by a new wall)', () => {
+  const W: Wall = { id: 'W', a: { x: 0, y: 0 }, b: { x: 4000, y: 0 }, thickness: 200, phase: 'existing' }
+  const gone: Wall = { id: 'gone', a: { x: 1000, y: 0 }, b: { x: 2000, y: 0 }, thickness: 200, phase: 'demolish' }
+  const added: Wall = { id: 'added', a: { x: 3000, y: -1000 }, b: { x: 3000, y: 1000 }, thickness: 200, phase: 'new' }
+  const plan: Plan = { ...demoPlan(), walls: [W, gone, added], openings: [] }
+  // Where the wall is torn out, the new door is fine; the same door as an existing one runs into the wall that is there before.
+  expect(clashes(plan, W, 1050, 900, 'new')).toEqual([])
+  expect(clashes(plan, W, 1050, 900, 'existing')).toEqual(['gone'])
+  // The mirror: something that exists only before is not blocked by a wall that comes later.
+  expect(clashes(plan, W, 2900, 300, 'demolish')).toEqual([])
+  expect(clashes(plan, W, 2900, 300, 'new')).toEqual(['added'])
+  const ok: Plan = { ...plan, openings: [{ id: 'dorr', kind: 'door', wallId: 'W', offset: 1050, width: 900, phase: 'new' }] }
+  expect(checkPlan(ok).some((f) => f.code === 'opening-in-wall')).toBe(false)
+})
+
 test('openings clear of the walls they meet: a window through a corner is cut back, a door against a wall moves', () => {
   const W: Wall = { id: 'W', a: { x: 0, y: 0 }, b: { x: 4000, y: 0 }, thickness: 200, phase: 'existing' }
   const P: Wall = { id: 'P', a: { x: 1000, y: -1000 }, b: { x: 1000, y: 1000 }, thickness: 200, phase: 'existing' }

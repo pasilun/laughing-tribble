@@ -51,7 +51,7 @@ export function checkPlan(plan: Plan): Finding[] {
   for (const o of plan.openings) {
     const w = walls.get(o.wallId)
     if (!w) continue
-    const hit = clashes(plan, w, o.offset, o.width)
+    const hit = clashes(plan, w, o.offset, o.width, o.phase)
     if (hit.length)
       out.push({ level: 'error', code: 'opening-in-wall', ref: o.id, message: `${KIND[o.kind]} ${o.id} går in i ${hit.join(', ')} – flytta eller beskär öppningen` })
   }

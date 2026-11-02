@@ -1,5 +1,5 @@
 import { leftNormal, wallDir, wallLength, wallQuad } from './geometry'
-import type { Plan, Wall } from './types'
+import type { Phase, Plan, Wall } from './types'
 
 // An opening stays clear of the walls it meets: a window must not run into a
 // corner wall, and a door must not sit against a stair wall. Positions are
@@ -9,14 +9,17 @@ export const CLEAR_MM = 100
 
 // Other walls (and masses) whose outline lies inside this wall's band, as
 // spans along it. Outlines are sampled, so oblique walls work too.
-export function blockers(plan: Plan, wall: Wall): Array<{ id: string; a: number; b: number }> {
+// `phase` is the opening's: one that exists only after the change (new) is not blocked by a wall that is
+// demolished (it is gone by then), and one that exists only before (demolish) is not blocked by a new wall.
+export function blockers(plan: Plan, wall: Wall, phase?: Phase): Array<{ id: string; a: number; b: number }> {
+  const present = (p: Phase) => !(phase === 'new' && p === 'demolish') && !(phase === 'demolish' && p === 'new')
   const d = wallDir(wall)
   const n = leftNormal(d)
   const h = wall.thickness / 2
   const out: Array<{ id: string; a: number; b: number }> = []
   const others = [
-    ...plan.walls.filter((o) => o.id !== wall.id).map((o) => ({ id: o.id, q: wallQuad(o) })),
-    ...(plan.masses ?? []).map((m) => ({ id: m.id, q: m.points })),
+    ...plan.walls.filter((o) => o.id !== wall.id && present(o.phase)).map((o) => ({ id: o.id, q: wallQuad(o) })),
+    ...(plan.masses ?? []).filter((m) => present(m.phase)).map((m) => ({ id: m.id, q: m.points })),
   ]
   for (const { id, q } of others) {
     let lo = Infinity
@@ -40,8 +43,8 @@ export function blockers(plan: Plan, wall: Wall): Array<{ id: string; a: number;
 }
 
 // Walls whose outline an opening of this span runs into (10 mm tolerance).
-export function clashes(plan: Plan, wall: Wall, offset: number, width: number): string[] {
-  return blockers(plan, wall)
+export function clashes(plan: Plan, wall: Wall, offset: number, width: number, phase?: Phase): string[] {
+  return blockers(plan, wall, phase)
     .filter((b) => Math.min(b.b, offset + width - 10) - Math.max(b.a, offset + 10) > 0)
     .map((b) => b.id)
 }
