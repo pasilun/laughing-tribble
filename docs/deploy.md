@@ -42,7 +42,8 @@ Friends can join with an invitation link instead of you editing `PLAN_USERS`.
 2. Open `/plans/people` (there is a link on the plan list when you are an admin),
    write who it is for and press *Skapa länk*. The link is shown once.
 3. Send it to the friend. They open it, choose a user name, and get their own key
-   (shown once, never stored) and a connector URL. They are signed in at once.
+   (shown once, never stored) and the plain connector address (no key; Claude signs them in
+   with OAuth). They are signed in here at once.
    A link works once and expires after 1, 7 or 30 days.
 4. To remove someone, press *Ta bort* on the same page. They are signed out within
    half a minute (sign-ins are remembered for 30 s per server instance). Their

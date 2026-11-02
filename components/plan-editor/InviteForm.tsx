@@ -35,7 +35,7 @@ export function InviteForm({ token, label, expiresAt }: { token: string; label: 
         </div>
         <div>
           <p className="font-medium">Claude-koppling (valfritt)</p>
-          <p className="text-zinc-700">I Claude: Inställningar → Connectors → Lägg till anpassad connector, och klistra in adressen. Den innehåller din nyckel, så dela den inte.</p>
+          <p className="text-zinc-700">I Claude: Inställningar → Connectors → Lägg till anpassad connector, klistra in adressen och logga in när Claude ber om det (med nyckeln ovan eller redan inloggad här). Adressen innehåller ingen nyckel.</p>
           <input data-testid="invite-connector" readOnly className="mt-2 w-full rounded border bg-white px-2 py-1.5 font-mono text-xs" value={done.connector} onFocus={(e) => e.currentTarget.select()} />
         </div>
         <Link href="/plans" className="inline-block rounded bg-blue-600 px-4 py-1.5 text-white" data-testid="invite-continue">

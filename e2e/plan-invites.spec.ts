@@ -70,7 +70,7 @@ test('an invitation link becomes a person with a key, a login cookie and their o
   const body = await res.json()
   expect(body.id).toBe('cecilia-1')
   expect(body.key).toMatch(/^pk_/)
-  expect(body.connector).toBe(`http://x/api/mcp?key=${body.key}`)
+  expect(body.connector).toBe('http://x/api/mcp')  // no key in the address: Claude signs in with OAuth
   const cookie = /plan_access=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')![1]
 
   // The key works as a key, a bearer token and in the connector URL; the cookie works too.
@@ -191,7 +191,7 @@ test.describe('pages', () => {
     await fp.getByTestId('invite-id').fill(name)
     await fp.getByTestId('invite-submit').click()
     await expect(fp.getByTestId('invite-key')).toHaveValue(/^pk_/)
-    await expect(fp.getByTestId('invite-connector')).toHaveValue(/\/api\/mcp\?key=pk_/)
+    await expect(fp.getByTestId('invite-connector')).toHaveValue(/\/api\/mcp$/)
 
     // The link is spent.
     await fp.goto(link)
