@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
+import { AppNav } from '@/components/AppNav'
 import { useRouter } from 'next/navigation'
 
 type Item = { id: string; name: string; revision: number; updatedAt: string; issued: string[]; tags?: string[] }
@@ -49,7 +49,6 @@ export function PlanList() {
   const [tag, setTag] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
-  const [admin, setAdmin] = useState(false)
   const [loadError, setLoadError] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
 
@@ -66,9 +65,6 @@ export function PlanList() {
 
   useEffect(() => {
     load()
-    fetch('/api/plans/people')
-      .then((r) => setAdmin(r.ok))
-      .catch(() => setAdmin(false))
   }, [])
 
   const create = async (e: React.FormEvent) => {
@@ -113,26 +109,15 @@ export function PlanList() {
   const showCreate = creating || empty
   const filtered = !!(q || tag)
   const btn = 'rounded border bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-40 disabled:hover:bg-white'
-  const nav = 'rounded-full border px-3 py-1 text-sm hover:bg-zinc-50'
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:pt-12">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Planstudio</h1>
         <p className="mt-1 text-sm text-zinc-600">Planritningar för bygglov och anmälan – före och efter, i skala, med versioner.</p>
-        <nav className="mt-4 flex flex-wrap gap-2" aria-label="Avsnitt">
-          <span className="rounded-full border border-zinc-900 bg-zinc-900 px-3 py-1 text-sm text-white" aria-current="page">
-            Planer
-          </span>
-          <Link href="/plans/site" data-testid="to-sites" className={nav}>
-            Tomter
-          </Link>
-          {admin && (
-            <Link href="/plans/people" data-testid="to-people" className={nav}>
-              Personer
-            </Link>
-          )}
-        </nav>
+        <div className="mt-4">
+          <AppNav current="planer" />
+        </div>
       </header>
 
       <div className="mt-6 flex items-center gap-2">

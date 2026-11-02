@@ -50,6 +50,7 @@ export function Editor({ id }: { id: string }) {
   const [messages, setMessages] = useState<string[]>([])
   const [tool, setTool] = useState<Tool>('select')
   const [view, setView] = useState<View>('efter')
+  const [zoomed, setZoomed] = useState(false)
   const [mode, setMode] = useState<'draw' | 'sheet'>('draw')
   const [tab, setTab] = useState<Tab>('props')
   const [selection, setSelection] = useState<Selection>(null)
@@ -227,14 +228,27 @@ export function Editor({ id }: { id: string }) {
     <div className="flex h-[100dvh] flex-col bg-zinc-50 text-zinc-900">
       {/* Phones: read-only sheet; editing needs a mouse and a big screen. */}
       <div className="p-4 md:hidden" data-testid="mobile-notice">
-        <h1 className="text-lg font-semibold">{plan.name}</h1>
+        <Link href="/plans" className="text-sm text-blue-700 underline">
+          ← Planer
+        </Link>
+        <h1 className="mt-2 text-lg font-semibold">{plan.name}</h1>
         <p className="mt-1 text-sm text-zinc-600">Ritverktyget kräver en dator. Här kan du se och ladda ner ritningen.</p>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <a className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white" href={exportUrl('pdf', 'both')}>
             Ladda ner PDF
           </a>
+          {(['fore', 'efter'] as const).map((v) => (
+            <button key={v} type="button" aria-pressed={view === v} className={`rounded border px-3 py-1.5 text-sm ${view === v ? 'border-zinc-900 bg-zinc-100 font-medium' : 'bg-white'}`} onClick={() => setView(v)}>
+              {v === 'fore' ? 'Före' : 'Efter'}
+            </button>
+          ))}
+          <button type="button" aria-pressed={zoomed} className="rounded border bg-white px-3 py-1.5 text-sm" onClick={() => setZoomed((z) => !z)}>
+            {zoomed ? 'Anpassa till skärmen' : 'Zooma in'}
+          </button>
         </div>
-        <div className="mt-3 w-full overflow-hidden border bg-white" dangerouslySetInnerHTML={{ __html: renderSheet(plan, view).replace(/width="[\d.]+mm" height="[\d.]+mm"/, 'width="100%"') }} />
+        <div className={`mt-3 w-full border bg-white ${zoomed ? 'overflow-auto' : 'overflow-hidden'}`} style={zoomed ? { maxHeight: '70dvh' } : undefined} data-testid="mobile-sheet">
+          <div style={{ width: zoomed ? '300%' : '100%' }} dangerouslySetInnerHTML={{ __html: renderSheet(plan, view).replace(/width="[\d.]+mm" height="[\d.]+mm"/, 'width="100%"') }} />
+        </div>
       </div>
 
       <header className="hidden items-center gap-3 border-b bg-white px-3 py-2 md:flex">

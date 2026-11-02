@@ -45,7 +45,7 @@ export function InviteForm({ token, label, expiresAt }: { token: string; label: 
     )
 
   return (
-    <form onSubmit={submit} className="mt-6 space-y-3">
+    <form onSubmit={submit} className="mt-6 space-y-3 rounded-lg border bg-white p-4 shadow-sm">
       <p className="text-sm text-zinc-700">
         Du är inbjuden som <strong>{label}</strong>. Länken gäller till {new Date(expiresAt).toLocaleDateString('sv-SE')} och kan användas en gång.
       </p>

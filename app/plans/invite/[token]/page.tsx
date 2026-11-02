@@ -8,8 +8,9 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   const { token } = await params
   const info = await inviteInfo(token)
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-16">
-      <h1 className="text-xl font-bold">Planritningar</h1>
+    <main className="mx-auto w-full max-w-md px-4 py-16 sm:py-24">
+      <h1 className="text-2xl font-bold tracking-tight">Planstudio</h1>
+      <p className="mt-1 text-sm text-zinc-600">Du har blivit inbjuden att använda planritningsverktyget.</p>
       {info ? (
         <InviteForm token={token} label={info.label} expiresAt={info.expiresAt} />
       ) : (

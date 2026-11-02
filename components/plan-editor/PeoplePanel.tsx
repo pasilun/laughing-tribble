@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import { AppNav } from '@/components/AppNav'
 
 type Person = { id: string; label?: string; createdAt: string }
 type Invite = { id: string; label: string; createdAt: string; expiresAt: string }
@@ -60,12 +60,8 @@ export function PeoplePanel() {
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-8">
-      <p className="text-sm">
-        <Link href="/plans" className="text-blue-700 underline">
-          ← Planritningar
-        </Link>
-      </p>
-      <h1 className="mt-2 text-2xl font-bold">Personer och inbjudningar</h1>
+      <AppNav current="personer" />
+      <h1 className="mt-5 text-2xl font-bold tracking-tight">Personer och inbjudningar</h1>
       {denied && (
         <p className="mt-4 rounded border border-amber-400 bg-amber-50 p-3 text-sm text-zinc-900" data-testid="people-denied">
           {denied}

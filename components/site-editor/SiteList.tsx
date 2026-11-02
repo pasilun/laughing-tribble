@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { AppNav } from '@/components/AppNav'
 import { useRouter } from 'next/navigation'
 
 type Item = { slug: string; designation: string; revision: number; updatedAt: string }
@@ -42,12 +42,8 @@ export function SiteList() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8">
-      <p className="text-sm">
-        <Link href="/plans" className="text-blue-700 underline">
-          ← Planritningar
-        </Link>
-      </p>
-      <h1 className="mt-2 text-2xl font-bold">Tomter</h1>
+      <AppNav current="tomter" />
+      <h1 className="mt-5 text-2xl font-bold tracking-tight">Tomter</h1>
       <p className="mt-1 text-sm text-zinc-600">Fastighetsgräns, byggnader och det du ritar in (äng, gräsmatta, idéer) på karta eller flygbild – i meter.</p>
       <form onSubmit={(e) => create(e)} className="mt-6 flex flex-col gap-2 rounded border bg-white p-4 sm:flex-row sm:items-end">
         <label className="flex-1 text-sm">

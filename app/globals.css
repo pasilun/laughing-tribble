@@ -24,3 +24,21 @@ input::placeholder,
 textarea::placeholder {
   color: #6b7280;
 }
+
+/* Tailwind draws borders in the text colour; panels and dividers are softer, but a field's edge must
+   still be visible (3:1 against white). In the base layer, so a utility such as border-red-300 still wins. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #d4d4d8;
+  }
+
+  input,
+  select,
+  textarea {
+    border-color: #71717a;
+  }
+}
