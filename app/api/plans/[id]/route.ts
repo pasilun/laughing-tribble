@@ -1,7 +1,7 @@
 import { secured } from '@/lib/plan/access'
 import { validatePlan } from '@/lib/plan/ops'
 import { loadPlan } from '@/lib/plan/service'
-import { deletePlan, saveRevision } from '@/lib/plan/store'
+import { deletePlan, saveRevision, setTags } from '@/lib/plan/store'
 import type { Plan } from '@/lib/plan/types'
 import { author, fail, readJson, revParam, type Ctx } from '../http'
 
@@ -30,6 +30,20 @@ export const PUT = secured(async (req: Request, { params }: Ctx): Promise<Respon
   try {
     const revision = await saveRevision(plan, { author: author(body.author), message: String(body.message ?? 'Ändrad i editorn') }, body.baseRevision)
     return Response.json({ revision })
+  } catch (e) {
+    return fail(e)
+  }
+})
+
+// Sets the plan's tags: { tags: ["Gnejsen", "förslag B"] }. Not a revision.
+export const PATCH = secured(async (req: Request, { params }: Ctx): Promise<Response> => {
+  const { id } = await params
+  const body = await readJson(req)
+  if (!body || !Array.isArray(body.tags)) return Response.json({ errors: ['tags (lista) krävs'] }, { status: 400 })
+  try {
+    const tags = await setTags(id, body.tags)
+    if (!tags) return Response.json({ errors: ['planen finns inte'] }, { status: 404 })
+    return Response.json({ tags })
   } catch (e) {
     return fail(e)
   }

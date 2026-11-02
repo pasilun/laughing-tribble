@@ -14,7 +14,20 @@ import { currentUser, scopeOf } from './user'
 // their own prefix (u/<id>/…); see backend().
 
 export type StoredRevision = { plan: Plan; meta: Revision }
-export type Head = { revision: number; name: string; updatedAt: string; issued: string[] }
+// `tags` group plans in the list (a project, a proposal). They are list metadata, not drawing
+// content: changing them makes no revision, and saving a revision keeps them.
+export type Head = { revision: number; name: string; updatedAt: string; issued: string[]; tags?: string[] }
+
+// Trimmed, no empty or duplicate (any case) tags, at most 10 of at most 30 characters.
+export function cleanTags(input: unknown): string[] {
+  if (!Array.isArray(input)) return []
+  const out: string[] = []
+  for (const t of input) {
+    const s = String(t ?? '').trim().replace(/\s+/g, ' ').slice(0, 30)
+    if (s && !out.some((o) => o.toLowerCase() === s.toLowerCase())) out.push(s)
+  }
+  return out.slice(0, 10)
+}
 
 export class ConflictError extends Error {
   constructor(public head: number) {
@@ -274,9 +287,24 @@ export async function saveRevision(
     name: plan.name,
     updatedAt: rev.createdAt,
     issued: [...(head?.issued ?? []), ...(meta.issued ? [meta.issued] : [])],
+    ...(head?.tags?.length ? { tags: head.tags } : {}),
   }
   await b.write(headKey(plan.id), JSON.stringify(next), 'application/json')
   return rev
+}
+
+// Sets a plan's tags (replacing them). No revision: tags are not part of the drawing.
+export async function setTags(id: string, tags: unknown): Promise<string[] | null> {
+  assertId(id)
+  const b = backend()
+  const head = await readJson<Head>(b, headKey(id))
+  if (!head) return null
+  const clean = cleanTags(tags)
+  const next: Head = { ...head }
+  if (clean.length) next.tags = clean
+  else delete next.tags
+  await b.write(headKey(id), JSON.stringify(next), 'application/json')
+  return clean
 }
 
 // Deletes a plan with all its revisions and assets. Returns false if it doesn't exist.

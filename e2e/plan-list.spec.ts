@@ -36,3 +36,40 @@ test('plan list: search, pages of ten, delete with a confirmation step', async (
   const all = await (await request.get('/api/plans')).json()
   for (const p of all.plans.filter((x: { name: string }) => x.name.startsWith(tag))) await request.delete(`/api/plans/${p.id}`)
 })
+
+test('plan list: tags are set per plan, shown as filters, searchable and kept when the plan is saved', async ({ page, request }) => {
+  const tag = `Tagtest${Date.now()}`
+  const a = (await (await request.post('/api/plans', { data: { name: `${tag} A` } })).json()).plan.id as string
+  const b = (await (await request.post('/api/plans', { data: { name: `${tag} B` } })).json()).plan.id as string
+
+  // The API cleans them: trimmed, no duplicates in any case, no empty ones.
+  const set = await request.patch(`/api/plans/${a}`, { data: { tags: ['  Projekt X ', 'projekt x', '', 'förslag B'] } })
+  expect((await set.json()).tags).toEqual(['Projekt X', 'förslag B'])
+  expect((await request.patch(`/api/plans/${a}`, { data: { tags: 'nej' } })).status()).toBe(400)
+  expect((await request.patch(`/api/plans/nej-finns-inte`, { data: { tags: ['x'] } })).status()).toBe(404)
+
+  // A saved revision keeps them.
+  const cur = await (await request.get(`/api/plans/${a}`)).json()
+  await request.put(`/api/plans/${a}`, { data: { plan: cur.plan, baseRevision: cur.revision.n } })
+  const listed = (await (await request.get('/api/plans')).json()).plans.find((p: { id: string }) => p.id === a)
+  expect(listed.tags).toEqual(['Projekt X', 'förslag B'])
+
+  // In the list: add a tag to B in the page, filter on it, search on it.
+  await page.goto('/plans')
+  await page.getByTestId('plan-filter').fill(tag)
+  const rowB = page.getByTestId('plan-row').filter({ hasText: `${tag} B` })
+  await rowB.getByTestId('edit-tags').click()
+  await rowB.getByTestId('tag-input').fill('Projekt X')
+  await rowB.getByTestId('tag-save').click()
+  await expect(rowB.getByTestId('row-tag')).toHaveText('Projekt X')
+
+  await page.getByTestId('plan-filter').fill('')
+  await page.getByTestId('tag-chip').filter({ hasText: 'förslag B' }).click()
+  await expect(page.getByTestId('plan-row')).toHaveCount(1)
+  await expect(page.getByTestId('plan-row')).toContainText(`${tag} A`)
+  await page.getByTestId('tag-chip').filter({ hasText: 'förslag B' }).click()
+  await page.getByTestId('plan-filter').fill('projekt x')
+  await expect(page.getByTestId('plan-row').filter({ hasText: tag })).toHaveCount(2)
+
+  for (const id of [a, b]) await request.delete(`/api/plans/${id}`)
+})

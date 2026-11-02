@@ -15,7 +15,7 @@ import { handleScanTool, SCAN_TOOLS } from './scan/tools'
 import { resolveSource } from './scan/raster'
 import { scanView } from './scan/view'
 import { createPlan, editPlan, loadPlan } from './service'
-import { getAsset, listPlans, listRevisions, putAsset } from './store'
+import { getAsset, listPlans, listRevisions, putAsset, setTags } from './store'
 import { hasChanges } from './sheet'
 import type { Plan, Pt, View } from './types'
 
@@ -150,8 +150,13 @@ const BASE_TOOLS = [
   },
   {
     name: 'plan_list',
-    description: 'Lists saved floor plans (planritningar) with their latest revision.',
+    description: 'Lists saved floor plans (planritningar) with their latest revision and tags.',
     inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'plan_tags',
+    description: 'Sets the tags of a plan (replaces them), e.g. ["Gnejsen 152–154", "förslag B"]: the project or proposal it belongs to, shown and searchable in the plan list. Not a revision of the drawing. Pass [] to clear.',
+    inputSchema: { type: 'object', properties: { plan_id: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } } }, required: ['plan_id', 'tags'] },
   },
   {
     name: 'plan_create',
@@ -503,7 +508,14 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
 
   if (name === 'plan_list') {
     const plans = await listPlans()
-    return { content: [text(plans.length ? plans.map((p) => `${p.id}: ${p.name} (rev ${p.revision}${p.issued.length ? `, utfärdad ${p.issued.at(-1)}` : ''})`).join('\n') : 'Inga planer.')] }
+    return { content: [text(plans.length ? plans.map((p) => `${p.id}: ${p.name} (rev ${p.revision}${p.issued.length ? `, utfärdad ${p.issued.at(-1)}` : ''})${p.tags?.length ? ` [${p.tags.join(', ')}]` : ''}`).join('\n') : 'Inga planer.')] }
+  }
+
+  if (name === 'plan_tags') {
+    if (!Array.isArray(args.tags)) return { content: [text('tags måste vara en lista')], isError: true }
+    const tags = await setTags(planId, args.tags)
+    if (!tags) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
+    return { content: [text(tags.length ? `Taggar: ${tags.join(', ')}` : 'Taggarna är borttagna.')] }
   }
 
   if (name === 'plan_create') {
