@@ -18,7 +18,7 @@ test('plan list: search, pages of ten, delete with a confirmation step', async (
 
   // Delete asks first: Avbryt leaves the plan, the second click removes it for good.
   const first = page.getByTestId('plan-row').first()
-  const label = (await first.locator('a span').first().textContent())!
+  const label = (await first.getByTestId('plan-name').textContent())!
   await first.getByTestId('delete-plan').click()
   await first.getByRole('button', { name: 'Avbryt' }).click()
   await expect(page.getByTestId('plan-row')).toHaveCount(2)
@@ -39,12 +39,14 @@ test('plan list: search, pages of ten, delete with a confirmation step', async (
 
 test('plan list: tags are set per plan, shown as filters, searchable and kept when the plan is saved', async ({ page, request }) => {
   const tag = `Tagtest${Date.now()}`
+  const proj = `Projekt ${tag}`
+  const prop = `förslag ${tag}`
   const a = (await (await request.post('/api/plans', { data: { name: `${tag} A` } })).json()).plan.id as string
   const b = (await (await request.post('/api/plans', { data: { name: `${tag} B` } })).json()).plan.id as string
 
   // The API cleans them: trimmed, no duplicates in any case, no empty ones.
-  const set = await request.patch(`/api/plans/${a}`, { data: { tags: ['  Projekt X ', 'projekt x', '', 'förslag B'] } })
-  expect((await set.json()).tags).toEqual(['Projekt X', 'förslag B'])
+  const set = await request.patch(`/api/plans/${a}`, { data: { tags: [`  ${proj} `, proj.toLowerCase(), '', prop] } })
+  expect((await set.json()).tags).toEqual([proj, prop])
   expect((await request.patch(`/api/plans/${a}`, { data: { tags: 'nej' } })).status()).toBe(400)
   expect((await request.patch(`/api/plans/nej-finns-inte`, { data: { tags: ['x'] } })).status()).toBe(404)
 
@@ -52,23 +54,23 @@ test('plan list: tags are set per plan, shown as filters, searchable and kept wh
   const cur = await (await request.get(`/api/plans/${a}`)).json()
   await request.put(`/api/plans/${a}`, { data: { plan: cur.plan, baseRevision: cur.revision.n } })
   const listed = (await (await request.get('/api/plans')).json()).plans.find((p: { id: string }) => p.id === a)
-  expect(listed.tags).toEqual(['Projekt X', 'förslag B'])
+  expect(listed.tags).toEqual([proj, prop])
 
   // In the list: add a tag to B in the page, filter on it, search on it.
   await page.goto('/plans')
   await page.getByTestId('plan-filter').fill(tag)
   const rowB = page.getByTestId('plan-row').filter({ hasText: `${tag} B` })
   await rowB.getByTestId('edit-tags').click()
-  await rowB.getByTestId('tag-input').fill('Projekt X')
+  await rowB.getByTestId('tag-input').fill(proj)
   await rowB.getByTestId('tag-save').click()
-  await expect(rowB.getByTestId('row-tag')).toHaveText('Projekt X')
+  await expect(rowB.getByTestId('row-tag')).toHaveText(proj)
 
   await page.getByTestId('plan-filter').fill('')
-  await page.getByTestId('tag-chip').filter({ hasText: 'förslag B' }).click()
+  await page.getByTestId('tag-chip').filter({ hasText: prop }).click()
   await expect(page.getByTestId('plan-row')).toHaveCount(1)
   await expect(page.getByTestId('plan-row')).toContainText(`${tag} A`)
-  await page.getByTestId('tag-chip').filter({ hasText: 'förslag B' }).click()
-  await page.getByTestId('plan-filter').fill('projekt x')
+  await page.getByTestId('tag-chip').filter({ hasText: prop }).click()
+  await page.getByTestId('plan-filter').fill(proj.toLowerCase())
   await expect(page.getByTestId('plan-row').filter({ hasText: tag })).toHaveCount(2)
 
   for (const id of [a, b]) await request.delete(`/api/plans/${id}`)

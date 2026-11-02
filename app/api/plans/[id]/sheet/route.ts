@@ -30,7 +30,10 @@ export const GET = secured(async (req: Request, { params }: Ctx): Promise<Respon
     }
     if (format === 'png') {
       const width = Math.min(4000, Math.max(400, Number(q.get('width') ?? 2000)))
-      return new Response(new Uint8Array(sheetPng(plan, single, width)), { headers: { 'Content-Type': 'image/png' } })
+      // A revision never changes, so a picture asked for by revision can be kept by the browser (list thumbnails).
+      const headers: Record<string, string> = { 'Content-Type': 'image/png' }
+      if (q.get('rev')) headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+      return new Response(new Uint8Array(sheetPng(plan, single, width)), { headers })
     }
     if (format === 'dxf') {
       return new Response(new Uint8Array(planDxf(plan, single)), { headers: { 'Content-Type': 'application/dxf', 'Content-Disposition': disposition('dxf') } })

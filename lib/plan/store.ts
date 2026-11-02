@@ -85,11 +85,16 @@ class FsBackend implements Backend {
   }
   async keys(prefix: string) {
     const dir = this.file(prefix)
-    try {
-      const entries = await fs.readdir(dir, { recursive: true, withFileTypes: true })
-      return entries.filter((e) => e.isFile() && !e.name.endsWith('.tmp')).map((e) => path.relative(this.root, path.join(e.parentPath, e.name)))
-    } catch {
-      return []
+    // A folder deleted while it is being walked makes the walk fail halfway; walk again rather than
+    // report an empty store (a plan list that suddenly shows nothing).
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const entries = await fs.readdir(dir, { recursive: true, withFileTypes: true })
+        return entries.filter((e) => e.isFile() && !e.name.endsWith('.tmp')).map((e) => path.relative(this.root, path.join(e.parentPath, e.name)))
+      } catch (e) {
+        const gone = (e as NodeJS.ErrnoException).code === 'ENOENT'
+        if (!gone || attempt >= 3 || !(await fs.stat(dir).then(() => true, () => false))) return []
+      }
     }
   }
 }
