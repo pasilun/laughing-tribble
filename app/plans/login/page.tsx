@@ -16,6 +16,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           Logga in
         </button>
       </form>
+      <p className="mt-6 text-xs text-zinc-600">Har du fått en inbjudningslänk? Öppna den i stället – då får du en egen nyckel.</p>
     </main>
   )
 }

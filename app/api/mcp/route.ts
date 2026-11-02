@@ -1,5 +1,5 @@
 import { PLAN_TOOLS, handlePlanTool, instructionsFor, toolsFor } from '@/lib/plan/mcp-tools'
-import { authenticate } from '@/lib/plan/access'
+import { resolveRequest } from '@/lib/plan/access'
 import { runAs } from '@/lib/plan/user'
 
 export const runtime = 'nodejs'
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       try {
         // Plan tools need the plan password (connector URL ?key=… or bearer token).
         if (PLAN_TOOLS.some((t) => t.name === name)) {
-          const user = authenticate(request)
+          const user = await resolveRequest(request)
           if (!user)
             return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'Planverktygen kräver din personliga nyckel: lägg till ?key=<din nyckel> i MCP-adressen.' }], isError: true } })
           const planResult = await runAs(user, () => handlePlanTool(name, args))

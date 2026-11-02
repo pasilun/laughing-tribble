@@ -1,9 +1,13 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { ACCESS_COOKIE, accessMode, userFromCookie } from '@/lib/plan/access'
+import { ACCESS_COOKIE, accessMode, resolveCookie } from '@/lib/plan/access'
+import type { User } from '@/lib/plan/user'
 
-export async function requireAccess(next: string) {
-  if (accessMode() === 'open') return
+// The signed-in person, or a redirect to the login page.
+export async function requireAccess(next: string): Promise<User | null> {
+  if (accessMode() === 'open') return null
   const jar = await cookies()
-  if (!userFromCookie(jar.get(ACCESS_COOKIE)?.value)) redirect(`/plans/login?next=${encodeURIComponent(next)}`)
+  const user = await resolveCookie(jar.get(ACCESS_COOKIE)?.value)
+  if (!user) redirect(`/plans/login?next=${encodeURIComponent(next)}`)
+  return user
 }

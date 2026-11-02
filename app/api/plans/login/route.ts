@@ -1,4 +1,4 @@
-import { ACCESS_COOKIE, accessMode, cookieFor, userFromKey } from '@/lib/plan/access'
+import { ACCESS_COOKIE, accessMode, cookieForAny, resolveKey } from '@/lib/plan/access'
 import { allowed, fail, ok } from './limit'
 
 export const runtime = 'nodejs'
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const back = (code: string, status = 303) => Response.redirect(new URL(`/plans/login?fel=${code}&next=${encodeURIComponent(safeNext)}`, req.url), status)
   if (accessMode() === 'open') return Response.redirect(new URL(safeNext, req.url), 303)
   if (!allowed(ip)) return back('for-manga')
-  const user = userFromKey(String(form.get('password') ?? '').trim())
+  const user = await resolveKey(String(form.get('password') ?? '').trim())
   if (!user) {
     fail(ip)
     return back('1')
@@ -21,6 +21,6 @@ export async function POST(req: Request) {
   ok(ip)
   const headers = new Headers({ Location: new URL(safeNext, req.url).toString() })
   const secure = new URL(req.url).protocol === 'https:' ? '; Secure' : ''
-  headers.append('Set-Cookie', `${ACCESS_COOKIE}=${cookieFor(user)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}`)
+  headers.append('Set-Cookie', `${ACCESS_COOKIE}=${await cookieForAny(user)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}`)
   return new Response(null, { status: 303, headers })
 }

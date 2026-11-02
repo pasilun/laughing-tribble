@@ -33,7 +33,27 @@ with their own key, their own plans and their own storage.
    `smoke` and `smoke2`, add them to `PLAN_USERS`, and put their keys in GitHub as
    secrets `SMOKE_KEY` and `SMOKE_KEY_OTHER`.
 
-## Adding or removing a person
+## Inviting people (no redeploy)
+
+Friends can join with an invitation link instead of you editing `PLAN_USERS`.
+
+1. **Once:** set `PLAN_ADMINS` in Vercel to your own id (the one in `PLAN_USERS`, e.g.
+   `anna`), for Production, and redeploy. Without it nobody may invite.
+2. Open `/plans/people` (there is a link on the plan list when you are an admin),
+   write who it is for and press *Skapa länk*. The link is shown once.
+3. Send it to the friend. They open it, choose a user name, and get their own key
+   (shown once, never stored) and a connector URL. They are signed in at once.
+   A link works once and expires after 1, 7 or 30 days.
+4. To remove someone, press *Ta bort* on the same page. They are signed out within
+   half a minute (sign-ins are remembered for 30 s per server instance). Their
+   plans stay in the store under `u/<id>/`.
+
+People who joined this way are kept in the store under `system/` (hashes of keys and
+links only), next to the plans. `PLAN_USERS` people still work as before and are
+not shown on the page; they are removed in Vercel. Their ids cannot be reused.
+The page only exists while `PLAN_USERS` is set.
+
+## Adding or removing a person by hand
 
 - Add: `npm run user:add <id> https://<host>`, append the printed `id:hash` to
   `PLAN_USERS`, redeploy, give the person the key. They sign in at `/plans` with it,

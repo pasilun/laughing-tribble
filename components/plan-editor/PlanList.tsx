@@ -20,12 +20,16 @@ export function PlanList() {
   const [tag, setTag] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [admin, setAdmin] = useState(false)
 
   useEffect(() => {
     fetch('/api/plans')
       .then((r) => r.json())
       .then((b) => setPlans(b.plans ?? []))
       .catch(() => setPlans([]))
+    fetch('/api/plans/people')
+      .then((r) => setAdmin(r.ok))
+      .catch(() => setAdmin(false))
   }, [])
 
   const create = async (e: React.FormEvent) => {
@@ -76,6 +80,14 @@ export function PlanList() {
         <Link href="/plans/site" data-testid="to-sites" className="text-blue-700 underline">
           Tomter (situationsplan, flygbild) →
         </Link>
+        {admin && (
+          <>
+            {' · '}
+            <Link href="/plans/people" data-testid="to-people" className="text-blue-700 underline">
+              Personer och inbjudningar →
+            </Link>
+          </>
+        )}
       </p>
       <p className="mt-1 text-sm text-zinc-600">Planritning före och efter för anmälan om ändring inomhus – i skala, med versioner.</p>
       <form onSubmit={create} className="mt-6 flex flex-col gap-2 rounded border bg-white p-4 sm:flex-row sm:items-end">
