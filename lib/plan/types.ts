@@ -112,6 +112,7 @@ export type Note = {
   at: Pt
   text: string
   phase?: Phase
+  badge?: boolean            // a number or short mark in a circle, centred on `at` (to number walls in a list)
 }
 
 export type TitleBlock = {

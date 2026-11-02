@@ -31,7 +31,7 @@ const OPS_DOC = `Operations (all lengths in whole millimetres; x to the right, y
 - {"op":"add","kind":"fixture","item":{"id":"i1","kind":"kitchen"|"stove"|"sink"|"radiator"|"exhaust"|"shaft"|"wc"|"shower"|"bath"|"plug"|"box"|"balcony","x":..,"y":..,"w":..,"d":..,"rotation"?:0,"phase":"existing","label"?:"..."}}  (x,y = centre; a balcony: w along the facade, d out from its outer face)
 - {"op":"add","kind":"room","item":{"id":"r1","name":"Kök","renamed"?:"Rum","goneAfter"?:true,"newAfter"?:true,"at":{"x":..,"y":..},"polygon"?:[{x,y},...]}}
 - {"op":"add","kind":"dimension","item":{"id":"m1","a":{..},"b":{..},"offset":500,"views"?:["fore"|"efter"]}}  (offset: positive puts the line to the left of a→b, i.e. north of an eastward line; "views" limits it to one sheet, e.g. a measure of a demolished wall only on efter)
-- {"op":"add","kind":"note","item":{"id":"n1","at":{..},"text":"..."}}
+- {"op":"add","kind":"note","item":{"id":"n1","at":{..},"text":"...","phase"?:"existing"|"demolish"|"new","badge"?:true}}  (badge: the text, e.g. "U1", in a circle centred on the point, for numbering walls)
 - {"op":"update","kind":"wall|mass|zone|opening|fixture|room|dimension|note","id":"…","patch":{…fields to change…}}
 - {"op":"delete","kind":"…","id":"…"}  (deleting a wall deletes its openings)
 - {"op":"moveVertex","from":{x,y},"to":{x,y}}  (moves every wall end at that point — joined walls follow)

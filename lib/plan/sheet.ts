@@ -584,7 +584,12 @@ function renderRooms(plan: Plan, view: View, L: SheetLayout): string {
 function renderNotes(plan: Plan, view: View, L: SheetLayout): string {
   return plan.notes
     .filter((n) => visibleIn(n.phase ?? 'existing', view))
-    .map((n) => text(L.toPaper(n.at), n.text, TEXT, { anchor: 'start' }))
+    .map((n) => {
+      const p = L.toPaper(n.at)
+      if (!n.badge) return text(p, n.text, TEXT, { anchor: 'start' })
+      const r = Math.max(3.2, n.text.length * TEXT * 0.34 + 1.4)
+      return `<g data-badge="${esc(n.id)}"><circle cx="${f(p.x)}" cy="${f(p.y)}" r="${f(r)}" fill="#fff" stroke="${INK}" stroke-width="0.35"/>${text({ x: p.x, y: p.y + TEXT * 0.35 }, n.text, TEXT, { weight: 'bold' })}</g>`
+    })
     .join('')
 }
 

@@ -154,7 +154,15 @@ test.describe('sheet renderer', () => {
     expect(svg).toContain('data-opening="passage"')
   })
 
-  test('a zone is a light grey area under the walls with a row in the legend, on the sheets it is meant for', () => {
+  test('a note can be a badge: a short number in a circle', () => {
+  const { plan, errors } = applyOps(demoPlan(), [{ op: 'add', kind: 'note', item: { id: 'u1', at: { x: 2000, y: 1000 }, text: 'U1', badge: true } }])
+  expect(errors).toEqual([])
+  const svg = renderSheet(plan, 'fore')
+  expect(svg).toContain('data-badge="u1"')
+  expect(svg).toContain('>U1<')
+})
+
+test('a zone is a light grey area under the walls with a row in the legend, on the sheets it is meant for', () => {
     const plan = demoPlan()
     const { plan: shaded, errors } = applyOps(plan, [
       { op: 'add', kind: 'zone', item: { id: 'lgh', points: [{ x: 0, y: 0 }, { x: 3000, y: 0 }, { x: 3000, y: 3000 }, { x: 0, y: 3000 }], label: 'Lgh Z (slås samman)', views: ['fore'] } },
