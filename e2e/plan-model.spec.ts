@@ -256,6 +256,12 @@ test('a room marked goneAfter has no label in efter', () => {
   expect(renderSheet(plan, 'efter')).not.toContain('data-room="r-a-kok"')
 })
 
+test('a room marked newAfter has a label in efter only', () => {
+  const { plan } = applyOps(demoPlan(), [{ op: 'update', kind: 'room', id: 'r-a-kok', patch: { newAfter: true } }])
+  expect(renderSheet(plan, 'fore')).not.toContain('data-room="r-a-kok"')
+  expect(renderSheet(plan, 'efter')).toContain('data-room="r-a-kok"')
+})
+
 test('ops: moving a wall start keeps its openings where they were drawn', () => {
   const plan: Plan = {
     ...demoPlan(),

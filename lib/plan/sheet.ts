@@ -1,5 +1,5 @@
 import { add, along, bounds, dist, leftNormal, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
-import { roomSpaces } from './rooms'
+import { roomShownIn, roomSpaces } from './rooms'
 import type { Fixture, Mass, Opening, Phase, Plan, Pt, SheetScale, View, Wall, Zone } from './types'
 
 // Renders a plan as a printable drawing sheet. All output coordinates are
@@ -561,7 +561,7 @@ function renderRooms(plan: Plan, view: View, L: SheetLayout): string {
   const { name: NAME, text: T } = planText(plan.sheet.scale)
   const { areas, includes, clear } = roomSpaces(plan, view)
   return plan.rooms
-    .filter((r) => !(view === 'efter' && r.goneAfter))
+    .filter((r) => roomShownIn(r, view))
     .map((r) => {
       const p = L.toPaper(r.at)
       const name = view === 'efter' && r.renamed ? r.renamed : r.name
@@ -662,7 +662,7 @@ export function hasChanges(plan: Plan): boolean {
     plan.openings.some((o) => o.phase !== 'existing') ||
     plan.fixtures.some((x) => x.phase !== 'existing') ||
     plan.notes.some((n) => n.phase && n.phase !== 'existing') ||
-    plan.rooms.some((r) => r.goneAfter || r.renamed)
+    plan.rooms.some((r) => r.goneAfter || r.newAfter || r.renamed)
   )
 }
 

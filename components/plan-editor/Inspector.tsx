@@ -198,6 +198,7 @@ export function Inspector({ plan, selection, onOps, onDelete }: Props) {
         <Text label="Namn" value={r.name} testid="room-name" onChange={(v) => upd('room', r.id, 'name', { name: v }, 'Ändrade rumsnamn')} />
         <Text label="Namn efter ändring (tomt = samma)" value={r.renamed ?? ''} onChange={(v) => upd('room', r.id, 'renamed', { renamed: v || undefined }, 'Ändrade rumsnamn efter')} />
         <Check label="Rummet försvinner efter ändringen" value={!!r.goneAfter} onChange={(v) => upd('room', r.id, 'gone', { goneAfter: v || undefined }, v ? 'Rummet tas bort efter' : 'Rummet finns kvar efter')} />
+        <Check label="Rummet finns bara efter ändringen" value={!!r.newAfter} onChange={(v) => upd('room', r.id, 'new', { newAfter: v || undefined }, v ? 'Rummet tillkommer efter' : 'Rummet finns även före')} />
         <Text label="Lägenhet" value={r.apartment ?? ''} onChange={(v) => upd('room', r.id, 'apt', { apartment: v || undefined }, 'Ändrade lägenhet')} />
         {r.polygon && <p className="text-xs text-zinc-500">Area {(polygonArea(r.polygon) / 1e6).toFixed(1).replace('.', ',')} m²</p>}
         {del}

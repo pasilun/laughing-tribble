@@ -3,6 +3,7 @@ import PDFDocument from 'pdfkit'
 import SVGtoPDF from 'svg-to-pdfkit'
 import path from 'path'
 import { add, along, leftNormal, scale, wallDir } from './geometry'
+import { roomShownIn } from './rooms'
 import { dimensionsIn, fireRatingIn, hasChanges, layoutSheet, massPieces, renderSheet, viewTitle, visibleIn, wallPieces } from './sheet'
 import type { Plan, Pt, View } from './types'
 
@@ -158,7 +159,7 @@ export function planDxf(plan: Plan, view: View): Buffer {
     lineE('A-BRAND', add(w.a, off), add(w.b, off))
     textE('A-TEXT', add(scale(add(w.a, w.b), 0.5), scale(off, 4)), rating)
   }
-  for (const r of plan.rooms.filter((x) => !(view === 'efter' && x.goneAfter))) textE('A-TEXT', r.at, view === 'efter' && r.renamed ? r.renamed : r.name, textH * 1.2)
+  for (const r of plan.rooms.filter((x) => roomShownIn(x, view))) textE('A-TEXT', r.at, view === 'efter' && r.renamed ? r.renamed : r.name, textH * 1.2)
   for (const dm of dimensionsIn(plan, view)) {
     const n = leftNormal(wallDir({ id: '', a: dm.a, b: dm.b, thickness: 0, phase: 'existing' }))
     const a = add(dm.a, scale(n, dm.offset))

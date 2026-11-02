@@ -23,6 +23,11 @@ function insideConvex(p: Pt, q: Pt[]): boolean {
   return true
 }
 
+// A room label is on the sheet of a view unless it is gone after (efter) or only there after (före).
+export function roomShownIn(r: Room, view: View): boolean {
+  return view === 'efter' ? !r.goneAfter : !r.newAfter
+}
+
 export function roomAreas(plan: Plan, view: View): Map<string, number> {
   return roomSpaces(plan, view).areas
 }
@@ -42,7 +47,7 @@ export function roomSpaces(plan: Plan, view: View): { areas: Map<string, number>
 
 function spaces(plan: Plan, view: View, includes: Map<string, string[]>, clear: Map<string, Clear>): Map<string, number> {
   const out = new Map<string, number>()
-  const rooms = plan.rooms.filter((r) => !r.polygon && !(view === 'efter' && r.goneAfter))
+  const rooms = plan.rooms.filter((r) => !r.polygon && roomShownIn(r, view))
   for (const r of plan.rooms) if (r.polygon && r.polygon.length >= 3) out.set(r.id, polygonArea(r.polygon))
   const walls = plan.walls.filter((w) => (view === 'fore' ? w.phase !== 'new' : w.phase !== 'demolish'))
   if (rooms.length === 0 || walls.length === 0) return out
@@ -187,7 +192,7 @@ export function spaceGrid(plan: Plan, view: View): SpaceGrid | null {
     // past the edge of the grid is outside: the space of the (always free) corner cell
     return i < 0 || j < 0 || i >= nx || j >= ny ? id[0] : id[j * nx + i]
   }
-  for (const r of plan.rooms.filter((r) => !(view === 'efter' && r.goneAfter))) {
+  for (const r of plan.rooms.filter((r) => roomShownIn(r, view))) {
     const k = at(r.at)
     if (k >= 0) spaces[k].rooms.push(r.id)
   }
