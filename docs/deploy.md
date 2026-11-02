@@ -53,6 +53,27 @@ links only), next to the plans. `PLAN_USERS` people still work as before and are
 not shown on the page; they are removed in Vercel. Their ids cannot be reused.
 The page only exists while `PLAN_USERS` is set.
 
+## Connecting Claude with sign-in (OAuth)
+
+The connector no longer needs a key in the URL. Add the plain address
+`https://<host>/api/mcp` in Claude (Settings → Connectors → Add custom connector). Claude
+answers the 401 by registering itself and opening `/oauth/authorize` in the browser:
+the person signs in with their key (or is already signed in), presses *Godkänn*, and Claude
+gets a token that lasts an hour and renews itself (90 days, rotating). Connectors with
+`?key=` in the URL keep working.
+
+- Endpoints: `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`,
+  `/oauth/register` (Dynamic Client Registration), `/oauth/authorize`, `/oauth/token`.
+- Public clients with PKCE (S256) only. Registration accepts Claude's callbacks
+  (`https://claude.ai/api/mcp/auth_callback`, the `claude.com` one) and `localhost` addresses
+  (Claude Code); other addresses can be allowed with `PLAN_OAUTH_REDIRECTS` (comma separated).
+- Tokens are random, kept hashed under `system/oauth/` next to the people. Removing someone
+  from `/plans/people` (or from `PLAN_USERS`) ends their tokens within about 30 seconds.
+- Needs `PLAN_USERS`; with sign-in off, nobody can authorize.
+- A connector entered with a URL that has `?tools=basic` is a different resource than the one
+  the discovery document names. If Claude refuses that, use the plain address and keep the key
+  form for the short tool list.
+
 ## Adding or removing a person by hand
 
 - Add: `npm run user:add <id> https://<host>`, append the printed `id:hash` to

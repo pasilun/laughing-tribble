@@ -23,13 +23,13 @@ const tokenHashOf = (token: string) => sha(`plan-invite:${token}`)
 const RESERVED = new Set(['legacy', 'local', 'system'])
 const MAX_DAYS = 30
 
-const store = () => systemBackend()
+export const store = () => systemBackend()
 const kKey = (h: string) => `system/keys/${h}.json`
 const kUser = (id: string) => `system/users/${id}.json`
 const kInvite = (h: string) => `system/invites/${h}.json`
 const kClaim = (h: string) => `system/claims/${h}.json`
 
-async function readJson<T>(key: string): Promise<T | null> {
+export async function readJson<T>(key: string): Promise<T | null> {
   const buf = await store().read(key)
   if (!buf) return null
   try {
@@ -38,13 +38,13 @@ async function readJson<T>(key: string): Promise<T | null> {
     return null
   }
 }
-const writeJson = (key: string, v: unknown, createOnly = false) => store().write(key, JSON.stringify(v), 'application/json', { createOnly })
+export const writeJson = (key: string, v: unknown, createOnly = false) => store().write(key, JSON.stringify(v), 'application/json', { createOnly })
 
 // A sign-in reads the store, so the answer is remembered for a short while per
 // instance. Removing a person therefore takes up to this long to bite.
 const TTL_MS = 30_000
 const cache = new Map<string, { v: unknown; until: number }>()
-async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+export async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   const hit = cache.get(key)
   if (hit && hit.until > Date.now()) return hit.v as T
   const v = await load()

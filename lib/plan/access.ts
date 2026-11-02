@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'crypto'
+import { userFromAccessToken } from './oauth'
 import { personById, personByKey } from './people'
 import { runAs, USER_ID, type User } from './user'
 
@@ -156,7 +157,9 @@ export async function resolveRequest(req: Request): Promise<User | null> {
   if (mode === 'locked') return null
   const auth = req.headers.get('authorization') ?? ''
   if (auth.startsWith('Bearer ')) {
-    const u = await resolveKey(auth.slice(7))
+    const t = auth.slice(7)
+    // OAuth access tokens (from the Claude connector) look different from keys.
+    const u = t.startsWith('at_') ? await userFromAccessToken(t, takenByEnv) : await resolveKey(t)
     if (u) return u
   }
   const key = new URL(req.url).searchParams.get('key')
@@ -165,6 +168,11 @@ export async function resolveRequest(req: Request): Promise<User | null> {
     if (u) return u
   }
   return resolveCookie(cookieOf(req))
+}
+
+// A request that carried a credential which did not work (for the WWW-Authenticate error).
+export function presentedCredential(req: Request): boolean {
+  return (req.headers.get('authorization') ?? '').startsWith('Bearer ') || !!new URL(req.url).searchParams.get('key')
 }
 
 export function isAdmin(user: User): boolean {

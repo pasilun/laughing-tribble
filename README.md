@@ -59,6 +59,7 @@ npx tsx scripts/render-plan.ts demo .visual/plan   # render example sheets to PN
 | --- | --- |
 | `PLAN_USERS` | One access key per person: `anna:<hash>, bo:<hash>` (made by `npm run user:add <id>`). Each person has their own plans and files. Without any sign-in variable everything is open locally and refused on Vercel. See [docs/deploy.md](docs/deploy.md). |
 | `PLAN_ADMINS` | Who may invite people (ids from `PLAN_USERS`, comma separated). Friends then join with a link from `/plans/people`, no redeploy. See [docs/deploy.md](docs/deploy.md). |
+| `PLAN_OAUTH_REDIRECTS` | Extra OAuth redirect addresses to accept at registration, besides Claude's own and `localhost`. Rarely needed. |
 | `PLAN_PASSWORD` | Older single-password mode, used only when `PLAN_USERS` is not set: everyone shares the same plans. |
 | `PLANS_READ_WRITE_TOKEN` | Token of a **private** Vercel Blob store connected with the prefix `PLANS`. Tried first. |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob token. Plans are stored in a private Blob store; when the project holds several store tokens (`PLANS_`, `BLOB_`, `public_`), the app uses the first that is private. |

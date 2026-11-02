@@ -1,5 +1,5 @@
 import { PLAN_TOOLS, handlePlanTool, instructionsFor, toolsFor } from '@/lib/plan/mcp-tools'
-import { resolveRequest } from '@/lib/plan/access'
+import { presentedCredential, resolveRequest } from '@/lib/plan/access'
 import { runAs } from '@/lib/plan/user'
 
 export const runtime = 'nodejs'
@@ -9,7 +9,8 @@ export const maxDuration = 60
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Mcp-Session-Id',
+  'Access-Control-Allow-Headers': 'Content-Type, Mcp-Session-Id, Authorization',
+  'Access-Control-Expose-Headers': 'WWW-Authenticate',
 }
 
 export async function OPTIONS() {
@@ -26,7 +27,17 @@ export async function GET() {
   return mcpResp({ name: 'plan-studio', version: '1.0.0', transport: 'streamable-http' })
 }
 
+// Without a signed-in person the answer is 401 with a pointer to where Claude finds the sign-in
+// (RFC 9728); a 200 would not start it. A key in the URL or a bearer token still works as before.
+function unauthorized(request: Request) {
+  const origin = new URL(request.url).origin
+  const error = presentedCredential(request) ? ', error="invalid_token"' : ''
+  return mcpResp({ error: 'unauthorized' }, 401, { 'WWW-Authenticate': `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"${error}` })
+}
+
 export async function POST(request: Request) {
+  const person = await resolveRequest(request)
+  if (!person) return unauthorized(request)
   let body: { id?: string | number | null; method?: string; params?: Record<string, unknown> }
   try {
     body = await request.json()
@@ -67,10 +78,7 @@ export async function POST(request: Request) {
       try {
         // Plan tools need the plan password (connector URL ?key=… or bearer token).
         if (PLAN_TOOLS.some((t) => t.name === name)) {
-          const user = await resolveRequest(request)
-          if (!user)
-            return mcpResp({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'Planverktygen kräver din personliga nyckel: lägg till ?key=<din nyckel> i MCP-adressen.' }], isError: true } })
-          const planResult = await runAs(user, () => handlePlanTool(name, args))
+          const planResult = await runAs(person, () => handlePlanTool(name, args))
           if (planResult) return mcpResp({ jsonrpc: '2.0', id, result: planResult })
         }
       } catch (err) {
