@@ -1,7 +1,7 @@
-import { dist, pointSegmentDistance } from '@/lib/plan/geometry'
+import { dist, pointSegmentDistance, wallQuad } from '@/lib/plan/geometry'
 import type { Plan, Pt } from '@/lib/plan/types'
 
-export type SnapKind = 'endpoint' | 'onwall' | 'axis' | 'align' | 'grid'
+export type SnapKind = 'endpoint' | 'corner' | 'onwall' | 'face' | 'axis' | 'align' | 'grid'
 export type Snap = { pt: Pt; kind: SnapKind; wallId?: string; guide?: { from: Pt; to: Pt } }
 
 export type SnapOptions = {
@@ -10,6 +10,7 @@ export type SnapOptions = {
   grid: number       // mm
   orthoAngle?: number // degrees
   exclude?: string   // wall id to ignore (the one being dragged)
+  faces?: boolean    // also snap to the visible corners and the surfaces of walls, not only the centre line (measuring)
 }
 
 // Snapping in priority order, like SketchUp's inference: wall ends, then the
@@ -21,6 +22,7 @@ export function snapPoint(raw: Pt, plan: Plan, opts: SnapOptions): Snap {
   const ends = walls.flatMap((w) => [w.a, w.b])
 
   let best: Pt | null = null
+  let bestKind: SnapKind = 'endpoint'
   let bestD = tol
   for (const p of ends) {
     const d = dist(p, raw)
@@ -29,7 +31,36 @@ export function snapPoint(raw: Pt, plan: Plan, opts: SnapOptions): Snap {
       bestD = d
     }
   }
-  if (best) return { pt: { ...best }, kind: 'endpoint' }
+  // Measuring: the visible corners of the wall bodies compete with the centre-line ends; the nearer wins,
+  // and a corner wins a tie.
+  const quads = opts.faces ? walls.map((w) => ({ id: w.id, q: wallQuad(w) })) : []
+  const near = quads.filter(({ q }) => {
+    const xs = q.map((p) => p.x)
+    const ys = q.map((p) => p.y)
+    return raw.x >= Math.min(...xs) - tol && raw.x <= Math.max(...xs) + tol && raw.y >= Math.min(...ys) - tol && raw.y <= Math.max(...ys) + tol
+  })
+  const corners: Pt[] = []
+  for (const { q } of near) corners.push(...q)
+  // Where the surfaces of two walls cross (a T-junction or an L-corner) is a visible corner too.
+  for (let i = 0; i < near.length; i++) {
+    for (let j = i + 1; j < near.length; j++) {
+      for (let a = 0; a < 4; a++) {
+        for (let b = 0; b < 4; b++) {
+          const hit = segmentCross(near[i].q[a], near[i].q[(a + 1) % 4], near[j].q[b], near[j].q[(b + 1) % 4])
+          if (hit) corners.push(hit)
+        }
+      }
+    }
+  }
+  for (const p of corners) {
+    const d = dist(p, raw)
+    if (d > bestD) continue
+    if (quads.some((o) => insideStrict(p, o.q))) continue
+    best = p
+    bestD = d
+    bestKind = 'corner'
+  }
+  if (best) return { pt: bestKind === 'corner' ? round1(best) : { ...best }, kind: bestKind }
 
   const roundG = (v: number) => Math.round(v / grid) * grid
 
@@ -51,15 +82,27 @@ export function snapPoint(raw: Pt, plan: Plan, opts: SnapOptions): Snap {
 
   // Onto an existing wall's axis (T-junctions). On an axis-constrained line,
   // take the intersection with the wall instead of the perpendicular foot.
+  // When measuring, the two surfaces of a wall are lines to snap to as well; the nearest line wins.
   for (const w of walls) {
-    const { d, t } = pointSegmentDistance(pt, w.a, w.b)
-    if (d > tol) continue
+    const q = opts.faces ? wallQuad(w) : null
+    const lines: Array<{ a: Pt; b: Pt; kind: SnapKind }> = [{ a: w.a, b: w.b, kind: 'onwall' }]
+    if (q) lines.push({ a: q[0], b: q[1], kind: 'face' }, { a: q[3], b: q[2], kind: 'face' })
+    let pick: { a: Pt; b: Pt; kind: SnapKind; t: number } | null = null
+    let pickD = tol
+    for (const l of lines) {
+      const { d, t } = pointSegmentDistance(pt, l.a, l.b)
+      if (d <= pickD) {
+        pick = { ...l, t }
+        pickD = d
+      }
+    }
+    if (!pick) continue
     if (kind === 'axis' && opts.from) {
-      const hit = intersectAxis(opts.from, pt, w.a, w.b)
-      if (hit) return { pt: round1(hit), kind: 'onwall', wallId: w.id }
+      const hit = intersectAxis(opts.from, pt, pick.a, pick.b)
+      if (hit) return { pt: round1(hit), kind: pick.kind, wallId: w.id }
       continue
     }
-    return { pt: round1({ x: w.a.x + (w.b.x - w.a.x) * t, y: w.a.y + (w.b.y - w.a.y) * t }), kind: 'onwall', wallId: w.id }
+    return { pt: round1({ x: pick.a.x + (pick.b.x - pick.a.x) * pick.t, y: pick.a.y + (pick.b.y - pick.a.y) * pick.t }), kind: pick.kind, wallId: w.id }
   }
 
   // Alignment with other wall ends (free coordinate only).
@@ -89,6 +132,34 @@ export function snapPoint(raw: Pt, plan: Plan, opts: SnapOptions): Snap {
     y: kind === 'axis' && opts.from && pt.y === opts.from.y ? pt.y : guide && pt.y === guide.from.y ? pt.y : roundG(pt.y),
   }
   return { pt: out, kind: kind ?? 'grid', guide }
+}
+
+// Proper crossing of two segments (null when parallel or not touching).
+function segmentCross(a1: Pt, a2: Pt, b1: Pt, b2: Pt): Pt | null {
+  const d = { x: a2.x - a1.x, y: a2.y - a1.y }
+  const e = { x: b2.x - b1.x, y: b2.y - b1.y }
+  const den = d.x * e.y - d.y * e.x
+  if (Math.abs(den) < 1e-9) return null
+  const t = ((b1.x - a1.x) * e.y - (b1.y - a1.y) * e.x) / den
+  const u = ((b1.x - a1.x) * d.y - (b1.y - a1.y) * d.x) / den
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null
+  return { x: a1.x + d.x * t, y: a1.y + d.y * t }
+}
+
+// Strictly inside a convex wall body (more than 2 mm from its edge): a corner there is hidden by another wall.
+function insideStrict(p: Pt, q: Pt[]): boolean {
+  let sign = 0
+  for (let i = 0; i < q.length; i++) {
+    const a = q[i]
+    const b = q[(i + 1) % q.length]
+    const len = dist(a, b) || 1
+    const cross = ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) / len
+    if (Math.abs(cross) <= 2) return false
+    const sg = cross > 0 ? 1 : -1
+    if (sign === 0) sign = sg
+    else if (sg !== sign) return false
+  }
+  return true
 }
 
 function round1(p: Pt): Pt {

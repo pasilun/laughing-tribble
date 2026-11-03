@@ -160,7 +160,7 @@ export function Canvas(props: Props) {
     if (!res.errors.length) props.onDraft(res.plan)
   }
 
-  const snapAt = (raw: Pt, from?: Pt, exclude?: string) => snapPoint(raw, plan, { from, tolerance: tol, grid, exclude })
+  const snapAt = (raw: Pt, from?: Pt, exclude?: string) => snapPoint(raw, plan, { from, tolerance: tol, grid, exclude, faces: tool === 'dimension' })
 
   // Finishes a wall/dimension segment at `end`.
   const finishSegment = (target: Pt) => {
@@ -669,5 +669,5 @@ const FIXTURE_SHORT: Record<FixtureKind, string> = {
   balcony: 'Balkong',
 }
 
-const SNAP_COLOR: Record<Snap['kind'], string> = { endpoint: '#16a34a', onwall: '#0891b2', axis: '#dc2626', align: '#d946ef', grid: '#6b7280' }
-const SNAP_LABEL: Record<Snap['kind'], string> = { endpoint: 'Ände', onwall: 'På vägg', axis: 'Rät vinkel', align: 'I linje', grid: 'Rutnät' }
+const SNAP_COLOR: Record<Snap['kind'], string> = { endpoint: '#16a34a', corner: '#16a34a', face: '#0891b2', onwall: '#0891b2', axis: '#dc2626', align: '#d946ef', grid: '#6b7280' }
+const SNAP_LABEL: Record<Snap['kind'], string> = { endpoint: 'Ände', corner: 'Väggens hörn', face: 'På väggytan', onwall: 'Mitt i vägg', axis: 'Rät vinkel', align: 'I linje', grid: 'Rutnät' }
