@@ -16,6 +16,15 @@ async function newPlan(request: APIRequestContext) {
   return /Skapad: ([a-z0-9-]+)/.exec(created.content[0].text!)![1]
 }
 
+// Noise does not compress: about 9 MB of PNG, too big for one request.
+const bigPng = () => {
+  const w = 2000
+  const h = 1500
+  const raw = Buffer.alloc(w * h * 3)
+  for (let i = 0; i < raw.length; i++) raw[i] = (i * 2654435761) >>> 24
+  return sharp(raw, { raw: { width: w, height: h, channels: 3 } }).png({ compressionLevel: 0 }).toBuffer()
+}
+
 const png = () => sharp({ create: { width: 600, height: 400, channels: 3, background: '#ffffff' } }).png().toBuffer()
 
 test('a connecting Claude is told how to work, and can read the guide', async ({ request }) => {
@@ -80,4 +89,45 @@ test('the page: pick a file, it uploads at once and says what to tell Claude', a
   await expect(result).toContainText('Ritningen är uppladdad som källa kallare-')
   const got = await call(request, 'plan_get', { plan_id: id })
   expect(got.content[0].text).toMatch(/Källa kallare-[a-z0-9]{4} \(archive\)/)
+})
+
+test('a drawing over the request limit is sent in pieces and put together', async ({ request }) => {
+  const id = await newPlan(request)
+  const big = await bigPng()
+  expect(big.length).toBeGreaterThan(8_000_000)
+  const PART = 4_000_000
+  const parts = Math.ceil(big.length / PART)
+  for (let i = 0; i < parts; i++) {
+    const r = await request.post(`/api/plans/${id}/sources/parts?upload=abc123xyz&part=${i}`, { data: big.subarray(i * PART, (i + 1) * PART) })
+    expect(r.status()).toBe(201)
+  }
+  const res = await request.post(`/api/plans/${id}/sources?id=stor&filename=stor.png&name=Stor&role=archive&scale=100&dpi=300&upload=abc123xyz&parts=${parts}`)
+  expect(res.status(), await res.text()).toBe(201)
+  expect((await res.json()).source).toMatchObject({ id: 'stor', widthPx: 2000, heightPx: 1500 })
+  // The pieces are removed once the drawing is in.
+  const again = await request.post(`/api/plans/${id}/sources?id=stor2&filename=stor.png&upload=abc123xyz&parts=${parts}`)
+  expect(again.status()).toBe(400)
+})
+
+test('pieces: bad ids, a missing piece and an oversized piece are refused', async ({ request }) => {
+  const id = await newPlan(request)
+  expect((await request.post(`/api/plans/${id}/sources/parts?upload=Fel&part=0`, { data: Buffer.alloc(10) })).status()).toBe(400)
+  expect((await request.post(`/api/plans/${id}/sources/parts?upload=abc123xyz&part=10`, { data: Buffer.alloc(10) })).status()).toBe(400)
+  expect((await request.post(`/api/plans/${id}/sources/parts?upload=abc123xyz&part=0`, { data: Buffer.alloc(0) })).status()).toBe(400)
+  expect((await request.post(`/api/plans/${id}/sources/parts?upload=abc123xyz&part=0`, { data: Buffer.alloc(4_500_000) })).status()).toBe(413)
+  expect((await request.post(`/api/plans/finns-inte/sources/parts?upload=abc123xyz&part=0`, { data: Buffer.alloc(10) })).status()).toBe(404)
+  await request.post(`/api/plans/${id}/sources/parts?upload=abc123xyz&part=0`, { data: Buffer.alloc(10) })
+  const missing = await request.post(`/api/plans/${id}/sources?id=a&filename=a.png&upload=abc123xyz&parts=2`)
+  expect(missing.status()).toBe(400)
+  expect((await request.post(`/api/plans/${id}/sources?id=a&filename=a.png&upload=abc123xyz&parts=9`)).status()).toBe(400)
+})
+
+test('the page: a file over 4.5 MB is uploaded as it is, in pieces', async ({ page, request }) => {
+  const id = await newPlan(request)
+  await page.goto(`/plans/${id}/upload`)
+  await page.getByTestId('upload-file').setInputFiles({ name: 'stor ritning.png', mimeType: 'image/png', buffer: await bigPng() })
+  const result = page.getByTestId('upload-result')
+  await expect(result).toContainText('Klart', { timeout: 60_000 })
+  const got = await call(request, 'plan_get', { plan_id: id })
+  expect(got.content[0].text).toMatch(/Källa stor-ritning-[a-z0-9]{4} \(archive\)/)
 })

@@ -331,6 +331,12 @@ export async function putAsset(id: string, name: string, data: Buffer, contentTy
   return `/api/plans/${id}/assets/${encodeURIComponent(name)}`
 }
 
+export async function deleteAsset(id: string, name: string): Promise<void> {
+  assertId(id)
+  if (!/^[a-z0-9][a-z0-9._-]{0,80}$/i.test(name)) return
+  await backend().remove([`plans/${id}/assets/${name}`])
+}
+
 export async function getAsset(id: string, name: string): Promise<Buffer | null> {
   assertId(id)
   if (!/^[a-z0-9][a-z0-9._-]{0,80}$/i.test(name)) return null

@@ -4,9 +4,10 @@ import { useState } from 'react'
 
 // One button: pick the drawing, it is uploaded and becomes a source of the plan.
 // Claude calibrates it afterwards from the dimensions printed on it, so no scale or
-// resolution is asked for. Vercel takes at most 4.5 MB per request, so a bigger
-// PNG/JPG is re-encoded smaller here and its dpi lowered to match.
-const LIMIT = 4_300_000
+// resolution is asked for. Vercel takes at most 4.5 MB per request, so a bigger file
+// (a PDF, TIF, PNG or JPG, as it is) is sent in pieces and put together on the server.
+const PART = 4_000_000
+const MAX_PARTS = 8
 
 const slug = (s: string) =>
   s
@@ -17,19 +18,13 @@ const slug = (s: string) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 28) || 'ritning'
 
-async function shrink(file: File): Promise<{ blob: Blob; dpi: number; filename: string }> {
-  const bmp = await createImageBitmap(file)
-  let f = Math.min(1, Math.sqrt(LIMIT / file.size) * 1.1)
-  for (let i = 0; i < 6; i++) {
-    const c = document.createElement('canvas')
-    c.width = Math.round(bmp.width * f)
-    c.height = Math.round(bmp.height * f)
-    c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height)
-    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.92))
-    if (blob && blob.size <= LIMIT) return { blob, dpi: 300 * f, filename: file.name.replace(/\.[a-z]+$/i, '') + '.jpg' }
-    f *= 0.8
+async function errorOf(res: Response): Promise<string> {
+  try {
+    const j = await res.json()
+    return (j.errors ?? ['Uppladdningen misslyckades']).join('\n')
+  } catch {
+    return res.status === 413 ? 'Filen är för stor.' : 'Uppladdningen misslyckades'
   }
-  throw new Error('Bilden går inte att förminska tillräckligt – välj en mindre fil.')
 }
 
 export function UploadForm({ planId }: { planId: string }) {
@@ -41,24 +36,30 @@ export function UploadForm({ planId }: { planId: string }) {
     setBusy(true)
     setMsg(null)
     try {
-      let body: Blob = file
-      let filename = file.name
       const q = new URLSearchParams({ role: 'archive', scale: '100' })
-      if (file.size > LIMIT) {
-        if (!/\.(png|jpe?g)$/i.test(file.name)) throw new Error('Filen är större än 4,3 MB. TIF och PDF kan inte förminskas här – spara den som PNG eller JPG först.')
-        const s = await shrink(file)
-        body = s.blob
-        filename = s.filename
-        q.set('dpi', String(s.dpi))
-      }
       const label = file.name.replace(/\.[a-z]+$/i, '')
       const id = `${slug(label)}-${Math.random().toString(36).slice(2, 6)}`
       q.set('id', id)
-      q.set('filename', filename)
+      q.set('filename', file.name)
       q.set('name', label)
+      let body: Blob | undefined = file
+      if (file.size > PART) {
+        const parts = Math.ceil(file.size / PART)
+        if (parts > MAX_PARTS) throw new Error('Filen är större än ca 30 MB. Välj en mindre fil.')
+        const upload = Math.random().toString(36).slice(2, 12).replace(/[^a-z0-9]/g, 'x').padEnd(8, 'x')
+        for (let i = 0; i < parts; i++) {
+          setMsg({ ok: true, text: `Laddar upp del ${i + 1} av ${parts}…` })
+          const r = await fetch(`/api/plans/${planId}/sources/parts?upload=${upload}&part=${i}`, { method: 'POST', body: file.slice(i * PART, (i + 1) * PART) })
+          if (!r.ok) throw new Error(await errorOf(r))
+        }
+        q.set('upload', upload)
+        q.set('parts', String(parts))
+        body = undefined
+        setMsg({ ok: true, text: 'Läser in ritningen…' })
+      }
       const res = await fetch(`/api/plans/${planId}/sources?${q}`, { method: 'POST', body })
+      if (!res.ok) throw new Error(await errorOf(res))
       const j = await res.json()
-      if (!res.ok) throw new Error((j.errors ?? ['Uppladdningen misslyckades']).join('\n'))
       setMsg({ ok: true, text: `Klart. Gå tillbaka till chatten och skriv: "Ritningen är uppladdad som källa ${j.source.id}".` })
     } catch (err) {
       setMsg({ ok: false, text: (err as Error).message })
