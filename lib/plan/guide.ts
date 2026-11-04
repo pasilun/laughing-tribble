@@ -28,7 +28,7 @@ SHORTCUTS (the server does the mechanical work)
    - Draw with this connector's plan tools. If another plan connector with the same kind of tools is also available (an older copy), do not use it for the plan; other tools (email, documents, calendar…) are fine whenever they help.
 
 1. Get the drawing into the plan
-   - plan_create (or plan_list to continue one), then plan_upload_link straight away, before drawing anything. Give the link to the user: they open it and pick the file (PNG, JPG, TIF or PDF; at most about 4 MB) – you cannot pass a chat attachment to a tool. Wait for them to say it is uploaded. Do not draw walls from the picture in the chat first: that gives positions that have to be redone.
+   - plan_create (or plan_list to continue one), then plan_upload_link straight away, before drawing anything. Give the link to the user: they open it and pick the file (PNG, JPG, TIF or PDF; at most about 30 MB) – you cannot pass a chat attachment to a tool. Wait for them to say it is uploaded. Do not draw walls from the picture in the chat first: that gives positions that have to be redone.
    - Read the plan again (plan_get) and look at the source with plan_scan_view before measuring anything.
    - If there is no drawing, say so and mark every dimension as estimated. Do not present an estimate as a measurement.
 

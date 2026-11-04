@@ -123,7 +123,7 @@ const BASE_TOOLS = [
   {
     name: 'plan_upload_link',
     description:
-      'Returns a link where the user drops a drawing (PNG, JPG, TIF or PDF, up to about 4 MB) so it becomes a source of the plan. A chat attachment cannot be passed to a tool, so use this whenever the user has a drawing or photo to trace. Afterwards read the plan (plan_get), view the source (plan_scan_view) and calibrate it (plan_scan_calibrate).',
+      'Returns a link where the user drops a drawing (PNG, JPG, TIF or PDF, up to about 30 MB) so it becomes a source of the plan. A chat attachment cannot be passed to a tool, so use this whenever the user has a drawing or photo to trace. Afterwards read the plan (plan_get), view the source (plan_scan_view) and calibrate it (plan_scan_calibrate).',
     inputSchema: { type: 'object', properties: { plan_id: { type: 'string' } }, required: ['plan_id'] },
   },
   {
