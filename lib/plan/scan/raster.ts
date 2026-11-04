@@ -1,3 +1,4 @@
+import path from 'path'
 import sharp from 'sharp'
 import { getAsset } from '../store'
 import type { Plan, Pt, Source, Underlay } from '../types'
@@ -25,7 +26,15 @@ export async function convertToPng(data: Buffer, filename: string): Promise<Conv
 async function pdfToPng(data: Buffer): Promise<Converted> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const { createCanvas } = await import('@napi-rs/canvas')
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(data), isEvalSupported: false }).promise
+  // Font and cmap files are read by path (they are traced into the deployment by next.config.ts).
+  const pdfDir = path.join(process.cwd(), 'node_modules/pdfjs-dist')
+  const doc = await pdfjs.getDocument({
+    data: new Uint8Array(data),
+    isEvalSupported: false,
+    standardFontDataUrl: path.join(pdfDir, 'standard_fonts') + path.sep,
+    cMapUrl: path.join(pdfDir, 'cmaps') + path.sep,
+    cMapPacked: true,
+  }).promise
   const page = await doc.getPage(1)
   const vp = page.getViewport({ scale: PDF_DPI / 72 })
   const canvas = createCanvas(Math.round(vp.width), Math.round(vp.height))
