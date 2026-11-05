@@ -1,9 +1,20 @@
 import { ACCESS_COOKIE, cookieForAny, takenByEnv } from '@/lib/plan/access'
-import { redeemInvite } from '@/lib/plan/people'
+import { inviteInfo, redeemInvite } from '@/lib/plan/people'
 import { allowed, fail, ok } from '../login/limit'
 import { readJson } from '../http'
 
 export const runtime = 'nodejs'
+
+// GET ?token=… says whether an invitation is still live: { label, expiresAt, forUser? }.
+// No claim, no cookie: the login page uses it to check a pasted link before sending the
+// person on to /plans/invite/<token>. The token is the credential, so this tells a
+// holder nothing the invite page would not.
+export async function GET(req: Request) {
+  const token = new URL(req.url).searchParams.get('token') ?? ''
+  const info = await inviteInfo(token)
+  if (!info) return Response.json({ errors: ['Inbjudan finns inte längre, har redan använts eller har gått ut.'] }, { status: 404 })
+  return Response.json(info)
+}
 
 // Turns an invitation link into a person: { token, id }. Public (the link is the credential).
 // Returns the new key once (for signing in elsewhere; it is not stored) and the plain connector address:

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { AppNav } from '@/components/AppNav'
+import { Keep } from './clipboard'
 
 type Person = { id: string; label?: string; createdAt: string }
 type Invite = { id: string; label: string; createdAt: string; expiresAt: string }
@@ -14,7 +15,6 @@ export function PeoplePanel() {
   const [label, setLabel] = useState('')
   const [days, setDays] = useState(7)
   const [link, setLink] = useState('')
-  const [copied, setCopied] = useState(false)
 
   const apply = useCallback((res: { status: number; ok: boolean; body: { errors?: string[] } & Partial<State> }) => {
     if (res.status === 403) return setDenied(res.body.errors?.[0] ?? 'Ingen behörighet.')
@@ -31,7 +31,6 @@ export function PeoplePanel() {
   const invite = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setCopied(false)
     const r = await fetch('/api/plans/people', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ label, days }) })
     const b = await r.json().catch(() => ({}))
     if (!r.ok) return setError(b.errors?.[0] ?? 'Kunde inte skapa inbjudan.')
@@ -44,7 +43,6 @@ export function PeoplePanel() {
   const rekey = async (id: string) => {
     if (!window.confirm(`Skapa en länk som ger ${id} en ny nyckel? Den gamla nyckeln slutar fungera när länken används. Planerna blir kvar.`)) return
     setError('')
-    setCopied(false)
     const r = await fetch('/api/plans/people', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ resetFor: id, days: 7 }) })
     const b = await r.json().catch(() => ({}))
     if (!r.ok) return setError(b.errors?.[0] ?? 'Kunde inte skapa länken.')
@@ -59,15 +57,6 @@ export function PeoplePanel() {
     if (!r.ok) return setError(b.errors?.[0] ?? 'Det gick inte.')
     setError('')
     load()
-  }
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(link)
-      setCopied(true)
-    } catch {
-      setCopied(false)
-    }
   }
 
   return (
@@ -102,10 +91,7 @@ export function PeoplePanel() {
           {link && (
             <div className="mt-3 rounded border border-amber-400 bg-amber-50 p-3 text-sm" data-testid="invite-link-box">
               <p className="font-medium text-zinc-900">Skicka den här länken till personen. Den visas bara nu och kan användas en gång.</p>
-              <input data-testid="invite-link" readOnly className="mt-2 w-full rounded border bg-white px-2 py-1.5 font-mono text-xs" value={link} onFocus={(e) => e.currentTarget.select()} />
-              <button type="button" className="mt-2 rounded border bg-white px-3 py-1 text-xs" onClick={copy}>
-                {copied ? 'Kopierad' : 'Kopiera'}
-              </button>
+              <Keep value={link} testid="invite-link" what="länken" />
             </div>
           )}
 

@@ -9,7 +9,7 @@ import { createInvite, forgetPeople, inviteInfo, redeemInvite } from '@/lib/plan
 import { runAs } from '@/lib/plan/user'
 import { takenByEnv } from '@/lib/plan/access'
 import { DELETE as peopleDELETE, GET as peopleGET, POST as peoplePOST } from '../app/api/plans/people/route'
-import { POST as invitePOST } from '../app/api/plans/invite/route'
+import { GET as inviteGET, POST as invitePOST } from '../app/api/plans/invite/route'
 import { resetLimits } from '../app/api/plans/login/limit'
 
 // Invitation links: an admin makes a link, a friend turns it into a person with a key, no redeploy.
@@ -196,6 +196,16 @@ test('a person who lost their key gets a new one from the admin: the old key die
   expect((await (await redeem(tokenOf(stale), 'x1')).json()).errors[0]).toContain('finns inte')
 })
 
+test('the login page can check an invitation without spending it', async () => {
+  const token = tokenOf(await invite('Hanna'))
+  const res = await inviteGET(new Request(`http://x/api/plans/invite?token=${token}`))
+  expect(res.status).toBe(200)
+  expect(await res.json()).toMatchObject({ label: 'Hanna' })
+  // The lookup does not claim the link: it can still be redeemed.
+  expect(await inviteInfo(token)).not.toBeNull()
+  expect((await inviteGET(new Request('http://x/api/plans/invite?token=inv_hittepa-hittepa-hittepa'))).status).toBe(404)
+})
+
 test('too many bad invitations from one address lock it out for a while', async () => {
   for (let i = 0; i < 5; i++) expect((await redeem('inv_fel-fel-fel-fel-fel-fel', 'x1')).status).toBe(400)
   expect((await redeem('inv_fel-fel-fel-fel-fel-fel', 'x1')).status).toBe(429)
@@ -216,7 +226,7 @@ test.describe('pages', () => {
     await page.getByTestId('invite-create').click()
     const link = await page.getByTestId('invite-link').inputValue()
     expect(link).toContain('/plans/invite/inv_')
-    await expect(page.getByTestId('invite-row')).toContainText('Testvän')
+    await expect(page.getByTestId('invite-row').filter({ hasText: 'Testvän' })).toBeVisible()
 
     // The friend opens the link in a fresh browser: no sign-in needed to see it.
     const friend = await browser.newContext()
@@ -228,14 +238,18 @@ test.describe('pages', () => {
     await expect(fp.getByTestId('invite-error')).toBeVisible()
     await fp.getByTestId('invite-id').fill(name)
     await fp.getByTestId('invite-submit').click()
-    await expect(fp.getByTestId('invite-key')).toHaveValue(/^pk_/)
+    // The connector leads: the address, the copy button and the way on are there at once.
     await expect(fp.getByTestId('invite-connector')).toHaveValue(/\/api\/mcp$/)
-    // The key can be copied, and the way on is locked until the person says it is saved.
-    await expect(fp.getByTestId('invite-key-copy')).toBeVisible()
-    await expect(fp.getByTestId('invite-continue-locked')).toBeVisible()
-    await expect(fp.getByTestId('invite-continue')).toHaveCount(0)
-    await fp.getByTestId('invite-saved').check()
+    await expect(fp.getByTestId('invite-connector-copy')).toBeVisible()
+    await expect(fp.getByTestId('invite-open-claude')).toBeVisible()
     await expect(fp.getByTestId('invite-continue')).toBeVisible()
+    await expect(fp.getByTestId('invite-saved')).toHaveCount(0)
+    // The key waits in the collapsed disclosure.
+    await expect(fp.getByTestId('invite-key')).toBeHidden()
+    await fp.getByText('Bytte du enhet? Din nyckel').click()
+    await expect(fp.getByTestId('invite-key')).toBeVisible()
+    await expect(fp.getByTestId('invite-key')).toHaveValue(/^pk_/)
+    await expect(fp.getByTestId('invite-key-copy')).toBeVisible()
 
     // The link is spent.
     await fp.goto(link)
@@ -261,5 +275,24 @@ test.describe('pages', () => {
     page.once('dialog', (d) => d.accept())
     await row.getByTestId('person-remove').click()
     await expect(page.getByTestId('person-row').filter({ hasText: name })).toHaveCount(0)
+  })
+
+  test('the login page takes a pasted invitation link', async ({ page, browser }) => {
+    await page.goto('/plans/people')
+    await page.getByTestId('invite-label').fill('Klistra')
+    await page.getByTestId('invite-create').click()
+    const link = await page.getByTestId('invite-link').inputValue()
+    const friend = await browser.newContext()
+    const fp = await friend.newPage()
+    await fp.goto('/plans/login')
+    await fp.getByTestId('invite-lookup').fill(link)
+    await fp.getByTestId('invite-lookup-submit').click()
+    await fp.waitForURL(/\/plans\/invite\/inv_/)
+    await expect(fp.getByText('Du är inbjuden som')).toBeVisible()
+    await friend.close()
+    // Leave no pending invitation behind: the tests in this file run in order and share the list.
+    page.once('dialog', (d) => d.accept())
+    await page.getByTestId('invite-row').filter({ hasText: 'Klistra' }).getByRole('button', { name: 'Dra tillbaka' }).click()
+    await expect(page.getByTestId('invite-row').filter({ hasText: 'Klistra' })).toHaveCount(0)
   })
 })
