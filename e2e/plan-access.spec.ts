@@ -1,11 +1,16 @@
 import { test, expect } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { accessMode, authenticate, cookieFor, denied, hashKey, userFromKey } from '@/lib/plan/access'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { accessMode, authenticate, cookieFor, cookieValue, denied, hashKey, resolveCookie, resolveKey, userFromKey } from '@/lib/plan/access'
+import { bumpSessionVersion, createInvite, forgetPeople, redeemInvite } from '@/lib/plan/people'
+import { takenByEnv } from '@/lib/plan/access'
 import { allowed, fail, ok, resetLimits } from '../app/api/plans/login/limit'
 
 test.describe.configure({ mode: 'serial' })
 
-const ENV = ['PLAN_USERS', 'PLAN_PASSWORD', 'VERCEL']
+const ENV = ['PLAN_USERS', 'PLAN_PASSWORD', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
 const saved: Record<string, string | undefined> = {}
 test.beforeEach(() => {
   for (const k of ENV) {
@@ -98,4 +103,33 @@ test('npm run user:add makes a key whose hash the app accepts', () => {
   process.env.PLAN_USERS = line
   expect(userFromKey(key)?.id).toBe('cecilia')
   expect(out).toContain(`https://exempel.vercel.app/api/mcp?key=${key}`)
+})
+
+test('a session version changes the cookie format: bumping it ends sessions, the key survives', async () => {
+  process.env.PLAN_USERS = users()
+  const dir = mkdtempSync(path.join(tmpdir(), 'plan-access-'))
+  process.env.PLAN_DATA_DIR = dir
+  process.env.PLAN_STORE = 'fs'
+  try {
+    const { token } = await createInvite('Version', 'anna', 7)
+    const res = await redeemInvite(token, 'version', takenByEnv)
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    const { person, key } = res
+    // No version yet: the cookie in the old derivation resolves.
+    const oldCookie = cookieValue({ id: person.id, hash: person.keyHash })
+    expect(oldCookie).not.toContain(':')
+    expect((await resolveCookie(oldCookie))?.id).toBe(person.id)
+    // Bump: the old cookie stops resolving, the new format resolves, the key still works.
+    expect(await bumpSessionVersion(person.id)).toBe(1)
+    forgetPeople()
+    expect(await resolveCookie(oldCookie)).toBeNull()
+    expect((await resolveCookie(cookieValue({ id: person.id, hash: person.keyHash, sessionVersion: 1 })))?.id).toBe(person.id)
+    expect((await resolveKey(key))?.id).toBe(person.id)
+    // The wrong version is somebody else's guess: it does not resolve either.
+    expect(await resolveCookie(cookieValue({ id: person.id, hash: person.keyHash, sessionVersion: 2 }))).toBeNull()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+    forgetPeople()
+  }
 })

@@ -24,7 +24,7 @@ import { runAs, USER_ID, type User } from './user'
 
 export const ACCESS_COOKIE = 'plan_access'
 
-type Entry = { id: string; hash: string }
+type Entry = { id: string; hash: string; sessionVersion?: number }
 export type AccessMode = 'users' | 'legacy' | 'open' | 'locked'
 
 export function hashKey(key: string): string {
@@ -67,8 +67,15 @@ const userOf = (e: Entry): User => (e.id === 'legacy' ? { id: 'legacy', legacy: 
 
 // The cookie holds an id and a hash derived from the stored key hash, never
 // the key. Removing a person from PLAN_USERS ends their sessions.
+//
+// A person record can carry a session version: when it is set, the cookie ends
+// with it, so bumping it (rekey, or the "log out everywhere" endpoint) ends
+// every signed-in session while the key keeps working. Without a version the
+// old derivation is used, so cookies issued before the version existed keep
+// working through a deploy.
 export function cookieValue(e: Entry): string {
-  return `${e.id}.${createHash('sha256').update(`plan-access:${e.hash}`).digest('hex')}`
+  const base = createHash('sha256').update(`plan-access:${e.hash}`).digest('hex')
+  return e.sessionVersion ? `${e.id}.${base}:${e.sessionVersion}` : `${e.id}.${base}`
 }
 
 export function userFromKey(key: string): User | null {
@@ -118,7 +125,8 @@ export function hasAccess(req: Request): boolean {
 
 // ── PLAN_USERS first, then the people who joined by invitation ─────────────
 
-const cookieOf = (req: Request) =>
+// The value of the access cookie on a request (undefined when there is none).
+export const cookieOf = (req: Request) =>
   (req.headers.get('cookie') ?? '')
     .split(';')
     .map((c) => c.trim())
@@ -140,7 +148,7 @@ export async function resolveCookie(cookie: string | undefined): Promise<User | 
   const u = userFromCookie(cookie)
   if (u || accessMode() !== 'users' || !cookie) return u
   const p = await personById(cookie.split('.')[0])
-  return p && !takenByEnv(p.id) && same(cookie, cookieValue({ id: p.id, hash: p.keyHash })) ? { id: p.id } : null
+  return p && !takenByEnv(p.id) && same(cookie, cookieValue({ id: p.id, hash: p.keyHash, sessionVersion: p.sessionVersion })) ? { id: p.id } : null
 }
 
 // The login cookie for a person who joined by invitation (the key is not needed again).
@@ -148,7 +156,7 @@ export async function cookieForAny(user: User): Promise<string> {
   const c = cookieFor(user)
   if (c || accessMode() !== 'users') return c
   const p = await personById(user.id)
-  return p ? cookieValue({ id: p.id, hash: p.keyHash }) : ''
+  return p ? cookieValue({ id: p.id, hash: p.keyHash, sessionVersion: p.sessionVersion }) : ''
 }
 
 export async function resolveRequest(req: Request): Promise<User | null> {

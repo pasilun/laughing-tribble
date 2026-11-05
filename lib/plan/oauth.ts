@@ -131,7 +131,12 @@ export async function refreshTokens(p: { refreshToken: string; clientId: string 
   const h = tokenHash(p.refreshToken)
   const rec = await readJson<{ userId: string; clientId: string; expiresAt: number; accessHash: string }>(refreshKey(h))
   if (!rec || rec.expiresAt < Date.now() || rec.clientId !== p.clientId) return bad('invalid_grant', 'Förnyelsetoken gäller inte längre')
-  // Rotation: the old pair is gone before the new one is handed out, so a reused token fails.
+  // Rotation with a single-use claim: whoever creates the marker first spends the token, so two
+  // concurrent refreshes with the same token cannot both succeed (the same pattern as the code
+  // exchange above).
+  const spent = await writeJson(`system/oauth/used/rt/${h}.json`, { at: Date.now() }, true)
+  if (!spent) return bad('invalid_grant', 'Förnyelsetoken är redan använd')
+  // The old pair is gone before the new one is handed out, so a reused token fails.
   await store().remove([refreshKey(h), accessKey(rec.accessHash)])
   forgetPeople()
   return { ok: true, tokens: await issueTokens(rec.userId, rec.clientId) }

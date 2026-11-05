@@ -14,7 +14,7 @@ import { USER_ID } from './user'
 // Only hashes of keys and tokens are stored. Each fact is its own file, so two
 // people joining at once never overwrite each other.
 
-export type Person = { id: string; keyHash: string; createdAt: string; label?: string }
+export type Person = { id: string; keyHash: string; createdAt: string; label?: string; sessionVersion?: number }
 export type Invite = { id: string; label: string; createdBy: string; createdAt: string; expiresAt: string; forUser?: string }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex')
@@ -168,16 +168,32 @@ export async function redeemInvite(token: string, wanted: string, takenByEnv: (i
 
 // A new key for a person who lost theirs: the link was made by an admin for that person. The old
 // key stops working at once (up to the 30 s sign-in memory), the plans stay with the person.
+// Every signed-in session ends too: the cookie is derived from the session version, which the
+// bump changes (lib/plan/access.ts cookieValue).
 async function rekey(invite: Invite, id: string): Promise<Redeemed> {
   const old = await readJson<Person>(kUser(id))
   if (!old) return { ok: false, error: 'Personen finns inte längre. Be om en ny inbjudan.' }
   const claimed = await writeJson(kClaim(invite.id), { at: new Date().toISOString() }, true)
   if (!claimed) return { ok: false, error: 'Inbjudan är redan använd.' }
   const key = `pk_${randomBytes(32).toString('base64url')}`
-  const person: Person = { ...old, keyHash: keyHashOf(key) }
+  const person: Person = { ...old, keyHash: keyHashOf(key), sessionVersion: (old.sessionVersion ?? 0) + 1 }
   await writeJson(kKey(person.keyHash), { id })
   await writeJson(kUser(id), person)
   await store().remove([kKey(old.keyHash), kInvite(invite.id)])
   forgetPeople()
   return { ok: true, person, key }
+}
+
+// Ends every signed-in session for a person without touching their key: the cookie holds the
+// session version, so bumping it invalidates the cookies on all devices. Takes effect at once
+// in this instance and within the 30 s sign-in memory in others. The key keeps working, and so
+// do Claude connectors (OAuth tokens are checked against the person, not the cookie).
+export async function bumpSessionVersion(id: string): Promise<number | null> {
+  if (!USER_ID.test(id)) return null
+  const p = await readJson<Person>(kUser(id))
+  if (!p) return null
+  const sessionVersion = (p.sessionVersion ?? 0) + 1
+  await writeJson(kUser(id), { ...p, sessionVersion })
+  forgetPeople()
+  return sessionVersion
 }
