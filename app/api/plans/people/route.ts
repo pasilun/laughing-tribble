@@ -1,5 +1,5 @@
 import { isAdmin, secured, takenByEnv } from '@/lib/plan/access'
-import { createInvite, listInvites, listPeople, removePerson, revokeInvite } from '@/lib/plan/people'
+import { createInvite, listInvites, listPeople, personById, removePerson, revokeInvite } from '@/lib/plan/people'
 import { currentUser } from '@/lib/plan/user'
 import { readJson } from '../http'
 
@@ -24,7 +24,13 @@ export const POST = secured(async (req: Request): Promise<Response> => {
   const no = gate()
   if (no) return no
   const body = await readJson(req)
-  const { token, invite } = await createInvite(String(body?.label ?? ''), currentUser()!.id, Number(body?.days ?? 7))
+  // resetFor: a link that gives a person who lost their key a new one (they keep their plans).
+  const resetFor = typeof body?.resetFor === 'string' ? body.resetFor : ''
+  if (resetFor) {
+    if (takenByEnv(resetFor)) return Response.json({ errors: ['Den personen står i PLAN_USERS i Vercel; nyckeln byts där.'] }, { status: 400 })
+    if (!(await personById(resetFor))) return Response.json({ errors: ['personen finns inte'] }, { status: 404 })
+  }
+  const { token, invite } = await createInvite(resetFor ? `Ny nyckel till ${resetFor}` : String(body?.label ?? ''), currentUser()!.id, Number(body?.days ?? 7), resetFor || undefined)
   return Response.json({ link: `${new URL(req.url).origin}/plans/invite/${token}`, invite }, { status: 201 })
 })
 

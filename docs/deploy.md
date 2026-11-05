@@ -49,6 +49,11 @@ Friends can join with an invitation link instead of you editing `PLAN_USERS`.
    half a minute (sign-ins are remembered for 30 s per server instance). Their
    plans stay in the store under `u/<id>/`.
 
+5. **A lost key** is not shown again. Press *Ny nyckel* on the same page for that person: it makes
+   a one-time link that gives them a new key (shown with a Copy button and, on phones, a share
+   sheet; the way on is locked until they tick that they saved it). The old key stops working when
+   the link is used, the plans stay. People in `PLAN_USERS` get a new key in Vercel instead.
+
 People who joined this way are kept in the store under `system/` (hashes of keys and
 links only), next to the plans. `PLAN_USERS` people still work as before and are
 not shown on the page; they are removed in Vercel. Their ids cannot be reused.

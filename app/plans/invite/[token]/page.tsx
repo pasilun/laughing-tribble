@@ -10,9 +10,9 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   return (
     <main className="mx-auto w-full max-w-md px-4 py-16 sm:py-24">
       <h1 className="text-2xl font-bold tracking-tight">Planstudio</h1>
-      <p className="mt-1 text-sm text-zinc-600">Du har blivit inbjuden att använda planritningsverktyget.</p>
+      <p className="mt-1 text-sm text-zinc-600">{info?.forUser ? `Ny nyckel till ${info.forUser}.` : 'Du har blivit inbjuden att använda planritningsverktyget.'}</p>
       {info ? (
-        <InviteForm token={token} label={info.label} expiresAt={info.expiresAt} />
+        <InviteForm token={token} label={info.label} expiresAt={info.expiresAt} forUser={info.forUser} />
       ) : (
         <p className="mt-6 text-sm text-red-700" data-testid="invite-invalid">
           Inbjudan finns inte längre, har redan använts eller har gått ut. Be om en ny länk.

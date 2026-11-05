@@ -158,6 +158,44 @@ test('removing a person ends their access; people in PLAN_USERS are not removed 
   expect((await redeem(tokenOf(await invite('Igen')), 'cecilia')).status).toBe(201)
 })
 
+test('a person who lost their key gets a new one from the admin: the old key dies, the plans stay', async () => {
+  const first = await (await redeem(tokenOf(await invite()), 'cecilia')).json()
+  const mine = await runAs({ id: 'cecilia' }, () => createPlan({ name: 'Ceciliaplan', template: 'empty', author: 'user' }))
+  expect('errors' in mine).toBe(false)
+
+  // Only an administrator makes the link, only for a person who joined by invitation.
+  const bad = (who: string, key = 'ka') => peoplePOST(as(key, { method: 'POST', body: JSON.stringify({ resetFor: who }) }))
+  expect((await bad('cecilia', 'kb')).status).toBe(403)
+  expect((await bad('bo')).status).toBe(400)
+  expect((await bad('finnsinte')).status).toBe(404)
+  const res = await bad('cecilia')
+  expect(res.status).toBe(201)
+  const link = (await res.json()).link as string
+  expect(await inviteInfo(tokenOf(link))).toMatchObject({ forUser: 'cecilia' })
+  expect((await (await peopleGET(as('ka'))).json()).invites.map((i: { label: string }) => i.label)).toEqual(['Ny nyckel till cecilia'])
+
+  // The old key still works until the link is used; then it does not, and the new one does.
+  expect((await resolveKey(first.key))?.id).toBe('cecilia')
+  const again = await redeem(tokenOf(link), 'ignoreras')
+  expect(again.status).toBe(201)
+  const body = await again.json()
+  expect(body.id).toBe('cecilia')
+  expect(body.key).toMatch(/^pk_/)
+  expect(body.key).not.toBe(first.key)
+  expect(await resolveKey(first.key)).toBeNull()
+  expect((await resolveKey(body.key))?.id).toBe('cecilia')
+  const cookie = /plan_access=([^;]+)/.exec(again.headers.get('set-cookie') ?? '')![1]
+  expect((await resolveRequest(new Request('http://x/api/plans', { headers: { cookie: `plan_access=${cookie}` } })))?.id).toBe('cecilia')
+  // Her plans are still hers, she is still one person in the list, and the link is spent.
+  expect((await runAs({ id: 'cecilia' }, () => listPlans())).map((p) => p.name)).toEqual(['Ceciliaplan'])
+  expect((await (await peopleGET(as('ka'))).json()).people.map((p: { id: string }) => p.id)).toEqual(['cecilia'])
+  expect((await redeem(tokenOf(link), 'x1')).status).toBe(400)
+  // A removed person cannot be given a key from an old link.
+  const stale = (await (await bad('cecilia')).json()).link as string
+  await peopleDELETE(as('ka', { method: 'DELETE' }, 'http://x/api/plans/people?user=cecilia'))
+  expect((await (await redeem(tokenOf(stale), 'x1')).json()).errors[0]).toContain('finns inte')
+})
+
 test('too many bad invitations from one address lock it out for a while', async () => {
   for (let i = 0; i < 5; i++) expect((await redeem('inv_fel-fel-fel-fel-fel-fel', 'x1')).status).toBe(400)
   expect((await redeem('inv_fel-fel-fel-fel-fel-fel', 'x1')).status).toBe(429)
@@ -192,16 +230,34 @@ test.describe('pages', () => {
     await fp.getByTestId('invite-submit').click()
     await expect(fp.getByTestId('invite-key')).toHaveValue(/^pk_/)
     await expect(fp.getByTestId('invite-connector')).toHaveValue(/\/api\/mcp$/)
+    // The key can be copied, and the way on is locked until the person says it is saved.
+    await expect(fp.getByTestId('invite-key-copy')).toBeVisible()
+    await expect(fp.getByTestId('invite-continue-locked')).toBeVisible()
+    await expect(fp.getByTestId('invite-continue')).toHaveCount(0)
+    await fp.getByTestId('invite-saved').check()
+    await expect(fp.getByTestId('invite-continue')).toBeVisible()
 
     // The link is spent.
     await fp.goto(link)
     await expect(fp.getByTestId('invite-invalid')).toBeVisible()
     await friend.close()
 
-    // The admin sees the person and removes them.
+    // The admin sees the person; a new-key link for them opens as a form without a name field.
     await page.goto('/plans/people')
     const row = page.getByTestId('person-row').filter({ hasText: name })
     await expect(row).toBeVisible()
+    page.once('dialog', (d) => d.accept())
+    await row.getByTestId('person-rekey').click()
+    const rekeyLink = await page.getByTestId('invite-link').inputValue()
+    const again = await browser.newContext()
+    const ap = await again.newPage()
+    await ap.goto(rekeyLink)
+    await expect(ap.getByText(`Ny nyckel till ${name}`)).toBeVisible()
+    await expect(ap.getByTestId('invite-id')).toHaveCount(0)
+    await ap.getByTestId('invite-submit').click()
+    await expect(ap.getByTestId('invite-key')).toHaveValue(/^pk_/)
+    await again.close()
+    // The admin removes them.
     page.once('dialog', (d) => d.accept())
     await row.getByTestId('person-remove').click()
     await expect(page.getByTestId('person-row').filter({ hasText: name })).toHaveCount(0)

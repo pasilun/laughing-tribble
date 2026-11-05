@@ -7,14 +7,15 @@ import { USER_ID } from './user'
 //
 //   system/keys/<hash of the key>.json      → { id }          looked up on every sign-in
 //   system/users/<id>.json                  → { id, keyHash, createdAt, label }
-//   system/invites/<hash of the token>.json → { label, createdBy, createdAt, expiresAt }
+//   system/invites/<hash of the token>.json → { label, createdBy, createdAt, expiresAt, forUser? }
+//                                              (forUser: a link that gives that person a new key, for someone who lost theirs)
 //   system/claims/<hash of the token>.json  → the first person to redeem an invitation
 //
 // Only hashes of keys and tokens are stored. Each fact is its own file, so two
 // people joining at once never overwrite each other.
 
 export type Person = { id: string; keyHash: string; createdAt: string; label?: string }
-export type Invite = { id: string; label: string; createdBy: string; createdAt: string; expiresAt: string }
+export type Invite = { id: string; label: string; createdBy: string; createdAt: string; expiresAt: string; forUser?: string }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex')
 export const keyHashOf = (key: string) => createHash('sha256').update(`plan-key:${key}`).digest('hex')
@@ -87,7 +88,7 @@ export async function removePerson(id: string): Promise<boolean> {
 
 // ── invitations ────────────────────────────────────────────────────────────
 
-export async function createInvite(label: string, createdBy: string, days = 7): Promise<{ token: string; invite: Invite }> {
+export async function createInvite(label: string, createdBy: string, days = 7, forUser?: string): Promise<{ token: string; invite: Invite }> {
   const token = `inv_${randomBytes(32).toString('base64url')}`
   const d = Math.min(MAX_DAYS, Math.max(1, Math.round(days) || 7))
   const now = new Date()
@@ -97,6 +98,7 @@ export async function createInvite(label: string, createdBy: string, days = 7): 
     createdBy,
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + d * 86_400_000).toISOString(),
+    ...(forUser ? { forUser } : {}),
   }
   const { id, ...body } = invite
   await writeJson(kInvite(id), body)
@@ -111,9 +113,9 @@ async function liveInvite(token: string): Promise<Invite | null> {
   return { id, ...body }
 }
 
-export async function inviteInfo(token: string): Promise<{ label: string; expiresAt: string } | null> {
+export async function inviteInfo(token: string): Promise<{ label: string; expiresAt: string; forUser?: string } | null> {
   const i = await liveInvite(token)
-  return i ? { label: i.label, expiresAt: i.expiresAt } : null
+  return i ? { label: i.label, expiresAt: i.expiresAt, ...(i.forUser ? { forUser: i.forUser } : {}) } : null
 }
 
 export async function listInvites(): Promise<Invite[]> {
@@ -140,6 +142,8 @@ export type Redeemed = { ok: true; person: Person; key: string } | { ok: false; 
 // Turns an invitation into a person with a new key. The key is returned once
 // and never stored. An invitation works once: the first to claim it wins.
 export async function redeemInvite(token: string, wanted: string, takenByEnv: (id: string) => boolean): Promise<Redeemed> {
+  const link = await liveInvite(token)
+  if (link?.forUser) return rekey(link, link.forUser)
   const id = wanted.trim().toLowerCase()
   if (!USER_ID.test(id)) return { ok: false, error: 'Välj ett användarnamn med små bokstäver, siffror och bindestreck (högst 30 tecken).' }
   if (RESERVED.has(id) || takenByEnv(id)) return { ok: false, error: 'Det namnet är upptaget – välj ett annat.' }
@@ -158,6 +162,22 @@ export async function redeemInvite(token: string, wanted: string, takenByEnv: (i
   }
   await writeJson(kKey(person.keyHash), { id })
   await store().remove([kInvite(invite.id)])
+  forgetPeople()
+  return { ok: true, person, key }
+}
+
+// A new key for a person who lost theirs: the link was made by an admin for that person. The old
+// key stops working at once (up to the 30 s sign-in memory), the plans stay with the person.
+async function rekey(invite: Invite, id: string): Promise<Redeemed> {
+  const old = await readJson<Person>(kUser(id))
+  if (!old) return { ok: false, error: 'Personen finns inte längre. Be om en ny inbjudan.' }
+  const claimed = await writeJson(kClaim(invite.id), { at: new Date().toISOString() }, true)
+  if (!claimed) return { ok: false, error: 'Inbjudan är redan använd.' }
+  const key = `pk_${randomBytes(32).toString('base64url')}`
+  const person: Person = { ...old, keyHash: keyHashOf(key) }
+  await writeJson(kKey(person.keyHash), { id })
+  await writeJson(kUser(id), person)
+  await store().remove([kKey(old.keyHash), kInvite(invite.id)])
   forgetPeople()
   return { ok: true, person, key }
 }

@@ -40,6 +40,18 @@ export function PeoplePanel() {
     load()
   }
 
+  // A link that gives a person who lost their key a new one (the old key stops working when it is used).
+  const rekey = async (id: string) => {
+    if (!window.confirm(`Skapa en länk som ger ${id} en ny nyckel? Den gamla nyckeln slutar fungera när länken används. Planerna blir kvar.`)) return
+    setError('')
+    setCopied(false)
+    const r = await fetch('/api/plans/people', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ resetFor: id, days: 7 }) })
+    const b = await r.json().catch(() => ({}))
+    if (!r.ok) return setError(b.errors?.[0] ?? 'Kunde inte skapa länken.')
+    setLink(b.link)
+    load()
+  }
+
   const remove = async (query: string, what: string) => {
     if (!window.confirm(what)) return
     const r = await fetch(`/api/plans/people?${query}`, { method: 'DELETE' })
@@ -120,9 +132,14 @@ export function PeoplePanel() {
                 <span className="min-w-0 truncate">
                   <strong>{p.id}</strong> <span className="text-xs text-zinc-600">· {p.label} · sedan {new Date(p.createdAt).toLocaleDateString('sv-SE')}</span>
                 </span>
-                <button type="button" data-testid="person-remove" className="shrink-0 rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50" onClick={() => remove(`user=${p.id}`, `Ta bort ${p.id}? Personen loggas ut inom en halv minut. Planerna blir kvar i lagringen.`)}>
+                <span className="flex shrink-0 gap-2">
+                <button type="button" data-testid="person-rekey" className="rounded border px-2 py-1 text-xs hover:bg-zinc-50" onClick={() => rekey(p.id)}>
+                  Ny nyckel
+                </button>
+                <button type="button" data-testid="person-remove" className="rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50" onClick={() => remove(`user=${p.id}`, `Ta bort ${p.id}? Personen loggas ut inom en halv minut. Planerna blir kvar i lagringen.`)}>
                   Ta bort
                 </button>
+                </span>
               </li>
             ))}
           </ul>
