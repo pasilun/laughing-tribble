@@ -535,6 +535,14 @@ function Checks({ findings, onPick }: { findings: Finding[]; onPick: (ref?: stri
 
 function Revisions({ id, current, onRestore }: { id: string; current: number; onRestore: (p: Plan, n: number) => void }) {
   const [revs, setRevs] = useState<Revision[] | null>(null)
+  const [me, setMe] = useState('')
+  useEffect(() => {
+    // Who is signed in, to tell their own versions from the other person's on a shared plan.
+    fetch(`/api/plans/${id}/share`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setMe(b?.me ?? ''))
+      .catch(() => undefined)
+  }, [id])
   useEffect(() => {
     fetch(`/api/plans/${id}/revisions`)
       .then((r) => r.json())
@@ -557,7 +565,10 @@ function Revisions({ id, current, onRestore }: { id: string; current: number; on
               {r.issued && <span className="ml-1 rounded bg-green-100 px-1 text-xs text-green-800">rev {r.issued}</span>}
               {r.n === current && <span className="ml-1 text-xs text-zinc-500">(aktuell)</span>}
             </span>
-            <span className="text-xs text-zinc-500">{r.author === 'claude' ? 'Claude' : 'Du'}</span>
+            <span className="text-xs text-zinc-500" data-testid="rev-by">
+              {r.author === 'claude' ? 'Claude' : r.by && r.by !== me ? r.by : 'Du'}
+              {r.author === 'claude' && r.by && r.by !== me ? ` (${r.by})` : ''}
+            </span>
           </div>
           <div className="text-zinc-700">{r.message}</div>
           <div className="flex items-center justify-between text-xs text-zinc-500">

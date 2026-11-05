@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AppNav } from '@/components/AppNav'
 import { useRouter } from 'next/navigation'
 
-type Item = { id: string; name: string; revision: number; updatedAt: string; issued: string[]; tags?: string[] }
+type Item = { id: string; name: string; revision: number; updatedAt: string; issued: string[]; tags?: string[]; owner?: string; sharedWith?: string[] }
 
 const PAGE_SIZE = 10
 
@@ -50,6 +50,9 @@ export function PlanList() {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [loadError, setLoadError] = useState('')
+  const [sharing, setSharing] = useState<string | null>(null)
+  const [shareWith, setShareWith] = useState('')
+  const [shareMsg, setShareMsg] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
 
   // A failed read is shown as a failure with a retry, never as "no plans yet".
@@ -86,6 +89,17 @@ export function PlanList() {
     }
     setPlans((cur) => cur?.filter((p) => p.id !== id) ?? cur)
     setConfirming(null)
+  }
+
+  const share = async (id: string) => {
+    setShareMsg('')
+    const r = await fetch(`/api/plans/${id}/share`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user: shareWith }) })
+    const b = await r.json().catch(() => ({}))
+    if (!r.ok) return setShareMsg(b.errors?.[0] ?? 'kunde inte dela planen')
+    const people: string[] = b.members ?? []
+    setPlans((cur) => cur?.map((p) => (p.id === id ? { ...p, ...(p.owner ? {} : { sharedWith: people }) } : p)) ?? cur)
+    setShareMsg(`Delad med ${shareWith.trim().toLowerCase()}.`)
+    setShareWith('')
   }
 
   const saveTags = async (id: string) => {
@@ -258,6 +272,16 @@ export function PlanList() {
                 <p className="mt-0.5 text-xs text-zinc-600">
                   Rev {p.revision} · ändrad {day(p.updatedAt)}
                   {p.issued.length > 0 && <span className="ml-1.5 rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-800">utfärdad {p.issued[p.issued.length - 1]}</span>}
+                  {p.owner && (
+                    <span data-testid="shared-by" className="ml-1.5 rounded bg-violet-50 px-1.5 py-0.5 text-violet-800">
+                      delad av {p.owner}
+                    </span>
+                  )}
+                  {!p.owner && p.sharedWith && p.sharedWith.length > 0 && (
+                    <span data-testid="shared-with" className="ml-1.5 rounded bg-violet-50 px-1.5 py-0.5 text-violet-800">
+                      delad med {p.sharedWith.join(', ')}
+                    </span>
+                  )}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                   {editing === p.id ? (
@@ -313,13 +337,59 @@ export function PlanList() {
                       </button>
                     </>
                   )}
+                  <button
+                    type="button"
+                    data-testid="share-plan"
+                    aria-expanded={sharing === p.id}
+                    className="text-zinc-600 underline decoration-zinc-300 underline-offset-2 hover:text-blue-700"
+                    onClick={() => {
+                      setSharing(sharing === p.id ? null : p.id)
+                      setShareMsg('')
+                      setShareWith('')
+                    }}
+                  >
+                    Dela
+                  </button>
                 </div>
+                {sharing === p.id && (
+                  <form
+                    className="mt-2 space-y-1 text-xs"
+                    data-testid="share-form"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      void share(p.id)
+                    }}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        data-testid="share-user"
+                        autoFocus
+                        autoCapitalize="none"
+                        autoComplete="off"
+                        aria-label="Användarnamn att dela med"
+                        placeholder="Användarnamn, t.ex. emil"
+                        className="min-w-0 flex-1 rounded border bg-white px-2 py-1"
+                        value={shareWith}
+                        onChange={(e) => setShareWith(e.target.value)}
+                      />
+                      <button data-testid="share-save" className="rounded bg-blue-600 px-2.5 py-1 text-white">
+                        Dela
+                      </button>
+                    </div>
+                    <p className="text-zinc-600">Ni kan båda göra nya versioner av planen. Raderar någon den försvinner den bara för den personen.</p>
+                    {shareMsg && (
+                      <p data-testid="share-msg" role="status" className="text-zinc-800">
+                        {shareMsg}
+                      </p>
+                    )}
+                  </form>
+                )}
               </div>
               <div className="shrink-0 self-start text-xs">
                 {confirming === p.id ? (
                   <span className="flex flex-col items-end gap-1 sm:flex-row sm:items-center" data-testid="confirm-delete">
                     <button type="button" data-testid="delete-yes" className="rounded bg-red-700 px-2 py-1 text-white hover:bg-red-800" onClick={() => remove(p.id)}>
-                      Radera för alltid
+                      {p.owner || p.sharedWith?.length ? 'Ta bort för mig' : 'Radera för alltid'}
                     </button>
                     <button type="button" className="rounded border px-2 py-1" onClick={() => setConfirming(null)}>
                       Avbryt

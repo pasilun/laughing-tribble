@@ -54,6 +54,23 @@ links only), next to the plans. `PLAN_USERS` people still work as before and are
 not shown on the page; they are removed in Vercel. Their ids cannot be reused.
 The page only exists while `PLAN_USERS` is set.
 
+## Sharing a plan
+
+A plan can be shared with another person (any account: `PLAN_USERS` or joined by invitation).
+On the plan list press *Dela* on the plan and write their user name; Claude can do the same with
+`plan_share`. Both then make new revisions of the same plan (the revision check stops one from
+overwriting the other; the version list shows who saved what). Anyone who has the plan may share it
+on; the owner may take a person out (`DELETE /api/plans/:id/share?user=…`), anyone may leave.
+
+- **Delete only removes it for the one who deletes.** A member who deletes leaves the plan; an owner
+  who deletes hides it from themselves while the others keep it. The data is removed when the last
+  person has deleted it. If someone shares it back with the owner, the owner has it again.
+- **Storage:** the data stays under the owner (`u/<owner>/plans/<id>/`), together with
+  `shares.json` (`{ members, ownerRemoved? }`). A member has a pointer `u/<member>/shared/<id>.json`.
+  All reads and writes of `plans/<id>/…` go to the owner's folder for a member (lib/plan/store.ts).
+  The access is remembered for 10 s per server instance.
+- Not shared: tomter (site plans). Sharing needs personal keys (`PLAN_USERS`), not the single-password mode.
+
 ## Connecting Claude with sign-in (OAuth)
 
 The connector no longer needs a key in the URL. Add the plain address

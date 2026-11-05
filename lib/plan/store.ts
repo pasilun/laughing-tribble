@@ -3,7 +3,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { accessMode } from './access'
 import type { Plan, Revision } from './types'
-import { currentUser, scopeOf } from './user'
+import { currentUser, scopeOf, type User } from './user'
 
 // Append-only revision history per plan. Every save — from the editor or
 // from Claude — writes a new immutable revision; nothing is overwritten
@@ -194,9 +194,117 @@ class Scoped implements Backend {
   }
 }
 
+// ── Sharing ────────────────────────────────────────────────────────────────
+// A plan's data stays where it was made: u/<owner>/plans/<id>/…. Sharing it with
+// another person adds two small files:
+//   u/<owner>/plans/<id>/shares.json  → { members: [ids], ownerRemoved? }
+//   u/<member>/shared/<id>.json       → { owner, addedAt, addedBy }  (the member's pointer)
+// Every read and write of plans/<id>/… is routed to the owner's folder for a member,
+// so both work on the same revisions (and the same conflict check). "Delete" only
+// removes the plan for the person who deletes: a member leaves, the owner is marked
+// as removed; the data goes when the last person is gone.
+
+export type Shares = { members: string[]; ownerRemoved?: boolean }
+export type SharePointer = { owner: string; addedAt: string; addedBy: string }
+export type Access = { scope: string; owner: string; role: 'owner' | 'member' | 'none' }
+
+const NONE: Access = { scope: '', owner: '', role: 'none' }
+const ACCESS_TTL_MS = 10_000
+const accessCache = new Map<string, { v: Access; until: number }>()
+
+// Sharing changes bite at once in this instance and within the TTL in others.
+export function forgetAccess() {
+  accessCache.clear()
+}
+
+export function scopedBackend(scope: string): Backend {
+  return new Scoped(systemBackend(), scope)
+}
+
+async function readJsonFrom<T>(b: Backend, key: string): Promise<T | null> {
+  const buf = await b.read(key)
+  if (!buf) return null
+  try {
+    return JSON.parse(buf.toString('utf8')) as T
+  } catch {
+    return null
+  }
+}
+
+export const sharesKey = (id: string) => `plans/${id}/shares.json`
+export const pointerKey = (id: string) => `shared/${id}.json`
+
+export async function readShares(ownerScope: string, id: string): Promise<Shares | null> {
+  return readJsonFrom<Shares>(scopedBackend(ownerScope), sharesKey(id))
+}
+
+// Which folder holds this plan for this person, and in what role.
+export async function accessFor(user: User, id: string): Promise<Access> {
+  // The single-password and local layouts have one shared folder and no sharing.
+  if (user.legacy) return { scope: '', owner: user.id, role: 'owner' }
+  const ck = `${user.id}:${id}`
+  const hit = accessCache.get(ck)
+  if (hit && hit.until > Date.now()) return hit.v
+  const own = scopeOf(user)
+  const mine = scopedBackend(own)
+  let v: Access
+  const ptr = await readJsonFrom<SharePointer>(mine, pointerKey(id))
+  if (ptr) {
+    const ownerScope = `u/${ptr.owner}/`
+    const sh = await readShares(ownerScope, id)
+    v = sh?.members.includes(user.id) ? { scope: ownerScope, owner: ptr.owner, role: 'member' } : NONE
+  } else {
+    const sh = await readShares(own, id)
+    v = sh?.ownerRemoved ? NONE : { scope: own, owner: user.id, role: 'owner' }
+  }
+  if (accessCache.size > 500) accessCache.clear()
+  accessCache.set(ck, { v, until: Date.now() + ACCESS_TTL_MS })
+  return v
+}
+
+const PLAN_KEY = /^plans\/([^/]+)(?:\/|$)/
+
+// The person's own storage, except that plans shared with them are read and written where they live.
+class Routed implements Backend {
+  constructor(private user: User | undefined) {}
+  private async where(key: string): Promise<string | null> {
+    const own = this.user ? scopeOf(this.user) : ''
+    const m = PLAN_KEY.exec(key)
+    if (!m || !this.user) return own
+    const a = await accessFor(this.user, m[1])
+    return a.role === 'none' ? null : a.scope
+  }
+  async read(key: string) {
+    const scope = await this.where(key)
+    return scope === null ? null : new Scoped(systemBackend(), scope).read(key)
+  }
+  async write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }) {
+    const scope = await this.where(key)
+    if (scope === null) throw new Error('planen finns inte')
+    return new Scoped(systemBackend(), scope).write(key, data, contentType, opts)
+  }
+  async remove(keys: string[]) {
+    for (const k of keys) {
+      const scope = await this.where(k)
+      if (scope !== null) await new Scoped(systemBackend(), scope).remove([k])
+    }
+  }
+  async keys(prefix: string) {
+    const scope = await this.where(prefix)
+    return scope === null ? [] : new Scoped(systemBackend(), scope).keys(prefix)
+  }
+}
+
 // The storage of the person making the current request. With sign-in
 // configured a request without a person is a bug, never "everyone's data".
 function backend(): Backend {
+  const user = currentUser()
+  if (!user && accessMode() !== 'open') throw new Error('ingen användare för anropet – lagring nekas')
+  return new Routed(user)
+}
+
+// The person's own folder only (no routing): the plan list and the sharing bookkeeping.
+function ownBackend(): Backend {
   const user = currentUser()
   if (!user && accessMode() !== 'open') throw new Error('ingen användare för anropet – lagring nekas')
   return new Scoped(systemBackend(), user ? scopeOf(user) : '')
@@ -258,16 +366,44 @@ export async function listRevisions(id: string): Promise<Revision[]> {
   return revs.filter((r): r is StoredRevision => !!r).map((r) => r.meta)
 }
 
-export async function listPlans(): Promise<Array<{ id: string } & Head>> {
-  const b = backend()
-  const heads = (await b.keys('plans')).filter((k) => k.endsWith('/head.json'))
-  const out = await Promise.all(
+export type PlanListing = { id: string } & Head & { owner?: string; sharedWith?: string[] }
+
+// The person's own plans (not those they have deleted while others keep them) and the plans
+// shared with them. `owner` is set on the latter, `sharedWith` on plans the person owns and shares.
+export async function listPlans(): Promise<PlanListing[]> {
+  const b = ownBackend()
+  const user = currentUser()
+  const keys = await b.keys('plans')
+  const heads = keys.filter((k) => k.endsWith('/head.json'))
+  const shareFiles = new Set(keys.filter((k) => k.endsWith('/shares.json')))
+  const out: PlanListing[] = []
+  await Promise.all(
     heads.map(async (k) => {
+      const id = k.split('/')[1]
       const h = await readJson<Head>(b, k)
-      return h ? { id: k.split('/')[1], ...h } : null
+      if (!h) return
+      const sk = sharesKey(id)
+      const sh = shareFiles.has(sk) ? await readJson<Shares>(b, sk) : null
+      if (sh?.ownerRemoved) return
+      out.push({ id, ...h, ...(sh?.members.length ? { sharedWith: sh.members } : {}) })
     }),
   )
-  return out.filter((x): x is { id: string } & Head => !!x).sort((p, q) => q.updatedAt.localeCompare(p.updatedAt))
+  if (user && !user.legacy) {
+    const pointers = (await b.keys('shared')).filter((k) => k.endsWith('.json'))
+    await Promise.all(
+      pointers.map(async (k) => {
+        const ptr = await readJson<SharePointer>(b, k)
+        const id = k.split('/').pop()!.replace(/\.json$/, '')
+        if (!ptr || !ID.test(id)) return
+        const ownerScope = `u/${ptr.owner}/`
+        const sh = await readShares(ownerScope, id)
+        if (!sh?.members.includes(user.id)) return
+        const h = await readJsonFrom<Head>(scopedBackend(ownerScope), headKey(id))
+        if (h) out.push({ id, ...h, owner: ptr.owner })
+      }),
+    )
+  }
+  return out.sort((p, q) => q.updatedAt.localeCompare(p.updatedAt))
 }
 
 // Saves a new revision. baseRevision guards against overwriting a change
@@ -282,7 +418,9 @@ export async function saveRevision(
   const head = await readJson<Head>(b, headKey(plan.id))
   const current = head?.revision ?? 0
   if (baseRevision !== null && baseRevision !== current) throw new ConflictError(current)
+  const who = currentUser()
   const rev: Revision = { n: current + 1, author: meta.author, message: meta.message, createdAt: new Date().toISOString() }
+  if (who && !who.legacy) rev.by = who.id
   if (meta.issued) rev.issued = meta.issued
   // Two saves can read the same head: only one may create the next revision.
   const created = await b.write(revKey(plan.id, rev.n), JSON.stringify({ plan, meta: rev }), 'application/json', { createOnly: true })
@@ -312,10 +450,37 @@ export async function setTags(id: string, tags: unknown): Promise<string[] | nul
   return clean
 }
 
-// Deletes a plan with all its revisions and assets. Returns false if it doesn't exist.
+// Deletes a plan for the person who asks. Alone with it: everything goes (no undo). Shared: a
+// member leaves it, and an owner hides it from themselves; the others keep working on it, and
+// the data is removed when the last person has deleted it. False if the person has no such plan.
 export async function deletePlan(id: string): Promise<boolean> {
   assertId(id)
-  const b = backend()
+  const user = currentUser()
+  if (!user) return deleteAll(scopedBackend(''), id)
+  const a = await accessFor(user, id)
+  if (a.role === 'none') return false
+  const holder = scopedBackend(a.scope)
+  const sh = await readShares(a.scope, id)
+  try {
+    if (a.role === 'member') {
+      await scopedBackend(scopeOf(user)).remove([pointerKey(id)])
+      const members = (sh?.members ?? []).filter((m) => m !== user.id)
+      if (sh?.ownerRemoved && !members.length) return await deleteAll(holder, id)
+      if (sh) await holder.write(sharesKey(id), JSON.stringify({ ...sh, members }), 'application/json')
+      return true
+    }
+    if (sh?.members.length) {
+      if (!(await holder.keys(`plans/${id}`)).length) return false
+      await holder.write(sharesKey(id), JSON.stringify({ ...sh, ownerRemoved: true }), 'application/json')
+      return true
+    }
+    return await deleteAll(holder, id)
+  } finally {
+    forgetAccess()
+  }
+}
+
+async function deleteAll(b: Backend, id: string): Promise<boolean> {
   const keys = await b.keys(`plans/${id}`)
   if (!keys.length) return false
   await b.remove(keys)

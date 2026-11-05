@@ -195,4 +195,5 @@ export type Revision = {
   message: string
   createdAt: string
   issued?: string            // revision letter when issued
+  by?: string                // who saved it (the signed-in person; Claude's changes carry the person Claude acted for)
 }

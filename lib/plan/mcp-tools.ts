@@ -15,6 +15,8 @@ import { handleScanTool, SCAN_TOOLS } from './scan/tools'
 import { resolveSource } from './scan/raster'
 import { scanView } from './scan/view'
 import { createPlan, editPlan, loadPlan } from './service'
+import { addShare, participants, removeShare } from './shares'
+import { currentUser } from './user'
 import { getAsset, listPlans, listRevisions, putAsset, setTags } from './store'
 import { hasChanges } from './sheet'
 import type { Plan, Pt, View } from './types'
@@ -150,8 +152,13 @@ const BASE_TOOLS = [
   },
   {
     name: 'plan_list',
-    description: 'Lists saved floor plans (planritningar) with their latest revision and tags.',
+    description: 'Lists saved floor plans (planritningar) with their latest revision and tags. Plans shared with the user are marked with who owns them; plans the user shares say with whom.',
     inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'plan_share',
+    description: 'Shares a plan with another person (by user name) so that both can make new revisions of it, or shows who has it (no with/remove). remove: takes a person out (the owner anyone, others only themselves). Deleting a shared plan only removes it for the one who deletes. The person must already have an account.',
+    inputSchema: { type: 'object', properties: { plan_id: { type: 'string' }, with: { type: 'string', description: 'user name to share with' }, remove: { type: 'string', description: 'user name to take out' } }, required: ['plan_id'] },
   },
   {
     name: 'plan_tags',
@@ -508,7 +515,25 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
 
   if (name === 'plan_list') {
     const plans = await listPlans()
-    return { content: [text(plans.length ? plans.map((p) => `${p.id}: ${p.name} (rev ${p.revision}${p.issued.length ? `, utfärdad ${p.issued.at(-1)}` : ''})${p.tags?.length ? ` [${p.tags.join(', ')}]` : ''}`).join('\n') : 'Inga planer.')] }
+    const line = (p: (typeof plans)[number]) =>
+      `${p.id}: ${p.name} (rev ${p.revision}${p.issued.length ? `, utfärdad ${p.issued.at(-1)}` : ''})${p.tags?.length ? ` [${p.tags.join(', ')}]` : ''}${p.owner ? ` – delad av ${p.owner}` : ''}${p.sharedWith?.length ? ` – delad med ${p.sharedWith.join(', ')}` : ''}`
+    return { content: [text(plans.length ? plans.map(line).join('\n') : 'Inga planer.')] }
+  }
+
+  if (name === 'plan_share') {
+    try {
+      const who = typeof args.with === 'string' ? args.with : ''
+      const out = typeof args.remove === 'string' ? args.remove : ''
+      const err = who ? await addShare(planId, who) : out ? await removeShare(planId, out) : null
+      if (err) return { content: [text(err)], isError: true }
+      if (out && out === currentUser()?.id) return { content: [text(`Du har tagit bort planen ${planId} för dig. De andra har kvar den.`)] }
+      const p = await participants(planId)
+      if (!p) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
+      const people = [p.ownerRemoved ? `${p.owner} (har tagit bort den för sig)` : `${p.owner} (ägare)`, ...p.members]
+      return { content: [text(`Planen delas av: ${people.join(', ')}. Du är ${p.me}.`)] }
+    } catch (e) {
+      return { content: [text((e as Error).message)], isError: true }
+    }
   }
 
   if (name === 'plan_tags') {
