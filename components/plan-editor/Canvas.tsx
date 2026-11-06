@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { add, along, bounds, dist, leftNormal, pointSegmentDistance, scale, wallDir, wallLength, wallQuad } from '@/lib/plan/domain/geometry'
+import { add, along, bounds, dist, leafOffset, leftNormal, pointSegmentDistance, scale, wallDir, wallLength, wallQuad } from '@/lib/plan/domain/geometry'
 import { applyOps, newId, type Op } from '@/lib/plan/domain/ops'
 import { fireRatingIn, wallPieces } from '@/lib/plan/domain/sheet'
 import type { Fixture, FixtureKind, Opening, OpeningKind, Phase, Plan, Pt, View, Wall } from '@/lib/plan/domain/types'
@@ -542,9 +542,10 @@ export function Canvas(props: Props) {
           const n = leftNormal(wallDir(w))
           const hingeAtA = (o.hinge ?? 'a') === 'a'
           const side = (o.swing ?? 'left') === 'left' ? 1 : -1
-          const hinge = add(hingeAtA ? part.a : part.b, scale(n, (side * w.thickness) / 2))
+          const lean = leafOffset(w, o)
+          const hinge = add(hingeAtA ? part.a : part.b, scale(n, side * lean))
           const leaf = add(hinge, scale(n, side * o.width))
-          const closed = add(hingeAtA ? part.b : part.a, scale(n, (side * w.thickness) / 2))
+          const closed = add(hingeAtA ? part.b : part.a, scale(n, side * lean))
           const cross = (leaf.x - hinge.x) * (closed.y - hinge.y) - (leaf.y - hinge.y) * (closed.x - hinge.x)
           const struck = view === 'efter' && o.phase === 'demolish'
           return (

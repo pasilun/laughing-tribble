@@ -2,7 +2,7 @@ import { Resvg } from '@resvg/resvg-js'
 import PDFDocument from 'pdfkit'
 import SVGtoPDF from 'svg-to-pdfkit'
 import path from 'path'
-import { add, along, leftNormal, scale, wallDir } from './domain/geometry'
+import { add, along, leftNormal, leafOffset, scale, wallDir } from './domain/geometry'
 import { roomShownIn } from './domain/rooms'
 import { dimensionsIn, fireRatingIn, hasChanges, layoutSheet, massPieces, renderSheet, viewTitle, visibleIn, wallPieces } from './domain/sheet'
 import type { Plan, Pt, View } from './domain/types'
@@ -124,10 +124,11 @@ export function planDxf(plan: Plan, view: View): Buffer {
     if (o.kind === 'door') {
       const side = (o.swing ?? 'left') === 'left' ? 1 : -1
       const hingeAtA = (o.hinge ?? 'a') === 'a'
-      const hinge = add(hingeAtA ? s : e, scale(n, side * half))
+      const lean = leafOffset(w, o)
+      const hinge = add(hingeAtA ? s : e, scale(n, side * lean))
       const leafEnd = add(hinge, scale(n, side * o.width))
       lineE('A-OPPNING', hinge, leafEnd)
-      const free = add(hingeAtA ? e : s, scale(n, side * half))
+      const free = add(hingeAtA ? e : s, scale(n, side * lean))
       const h = P(hinge)
       const a1 = (Math.atan2(P(leafEnd).y - h.y, P(leafEnd).x - h.x) * 180) / Math.PI
       const a2 = (Math.atan2(P(free).y - h.y, P(free).x - h.x) * 180) / Math.PI

@@ -1,5 +1,12 @@
 import type { Opening, Plan, Pt, Wall } from './types'
 
+// Where a door leaf hangs, as a distance from the wall's centre line toward the side it swings to: the face of the wall,
+// less the door's inset (a frame set into a thick wall).
+export function leafOffset(w: Wall, o: Opening): number {
+  const inset = Math.min(Math.max(o.inset ?? 0, 0), w.thickness)
+  return w.thickness / 2 - inset
+}
+
 export function dist(a: Pt, b: Pt): number {
   return Math.hypot(b.x - a.x, b.y - a.y)
 }

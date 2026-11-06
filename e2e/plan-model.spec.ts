@@ -61,6 +61,28 @@ test.describe('plan ops', () => {
 })
 
 test.describe('sheet renderer', () => {
+  // A door frame set into a thick wall: the leaf hangs `inset` mm in from the face it swings to, so it reaches
+  // that much less far into the room. The leaf is always as long as the door is wide.
+  test('a door with an inset hangs further into the wall and reaches less far into the room', () => {
+    const plan = demoPlan()
+    const door = plan.openings.find((o) => o.id === 'd-a-hall')!
+    const leaf = (p: Plan) => {
+      const g = renderSheet(p, 'efter').split(`data-opening="${door.id}"`)[1].split('</g>')[0]
+      const m = /<line x1="([\d.-]+)" y1="([\d.-]+)" x2="([\d.-]+)" y2="([\d.-]+)"/.exec(g)!
+      const [x1, y1, x2, y2] = m.slice(1).map(Number)
+      return { hinge: { x: x1, y: y1 }, len: Math.hypot(x2 - x1, y2 - y1) }
+    }
+    const k = layoutSheet(plan).toPaper({ x: 1000, y: 0 }).x - layoutSheet(plan).toPaper({ x: 0, y: 0 }).x // paper mm per plan mm × 1000
+    const at = (inset?: number) => leaf({ ...plan, openings: plan.openings.map((o) => (o.id === door.id ? { ...o, inset } : o)) })
+    const flush = at(undefined)
+    const set = at(30)
+    const wall = plan.walls.find((w) => w.id === door.wallId)!
+    expect(wall.thickness).toBeGreaterThan(30)
+    expect(set.len).toBeCloseTo(flush.len, 3)
+    expect(flush.len).toBeCloseTo((door.width * k) / 1000, 2)
+    expect(Math.hypot(set.hinge.x - flush.hinge.x, set.hinge.y - flush.hinge.y)).toBeCloseTo((30 * k) / 1000, 2)
+  })
+
   test('A3 sheet is in paper millimetres at true scale', () => {
     const plan = demoPlan()
     const svg = renderSheet(plan, 'efter')

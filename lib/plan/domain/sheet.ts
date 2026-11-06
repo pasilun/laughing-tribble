@@ -1,4 +1,4 @@
-import { add, along, bounds, dist, leftNormal, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
+import { add, along, bounds, dist, leftNormal, leafOffset, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
 import { roomShownIn, roomSpaces } from './rooms'
 import type { Fixture, Mass, Opening, Phase, Plan, Pt, SheetScale, View, Wall, Zone } from './types'
 
@@ -319,8 +319,9 @@ function renderOpening(plan: Plan, o: Opening, view: View, L: SheetLayout): stri
   } else if (o.kind === 'door') {
     const hingeAtA = (o.hinge ?? 'a') === 'a'
     const side = (o.swing ?? 'left') === 'left' ? 1 : -1
-    const hinge = add(hingeAtA ? s : e, scale(n, side * half))
-    const free = add(hingeAtA ? e : s, scale(n, side * half))
+    const lean = leafOffset(w, o)
+    const hinge = add(hingeAtA ? s : e, scale(n, side * lean))
+    const free = add(hingeAtA ? e : s, scale(n, side * lean))
     const leafEnd = add(hinge, scale(n, side * o.width))
     out.push(line(P(hinge), P(leafEnd), lw))
     const r = o.width * L.k
