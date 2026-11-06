@@ -1,4 +1,4 @@
-import { accessMode } from '@/lib/plan/access'
+import { accessMode, isAdmin } from '@/lib/plan/access'
 import { activeAccount, otherAccounts, sessionCookies } from '@/lib/plan/accounts'
 import { readJson } from '../http'
 
@@ -7,10 +7,11 @@ export const runtime = 'nodejs'
 // The people signed in on this browser. Public like the login page: it only reports what the
 // browser's own cookies prove. { me, others: [id] }; me is null when nobody is signed in.
 export async function GET(req: Request) {
-  if (accessMode() !== 'users') return Response.json({ me: null, others: [], signIn: false })
+  // admin: whether the menu shows Personer, answered here from the settings (a list of people would cost storage operations).
+  if (accessMode() !== 'users') return Response.json({ me: null, others: [], signIn: false, admin: accessMode() === 'open' })
   const active = await activeAccount(req)
   const others = await otherAccounts(req)
-  return Response.json({ me: active?.id ?? null, others: others.map((o) => o.id), signIn: true }, { headers: { 'cache-control': 'no-store' } })
+  return Response.json({ me: active?.id ?? null, others: others.map((o) => o.id), signIn: true, admin: !!active && isAdmin({ id: active.id }) }, { headers: { 'cache-control': 'no-store' } })
 }
 
 const reply = (req: Request, body: unknown, active: string | null, others: Array<{ cookie: string }>, status = 200) => {

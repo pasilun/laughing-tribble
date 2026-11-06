@@ -87,6 +87,16 @@ the menu at the top right of the list pages (*patrik ▾*) shows who is in use, 
 cookies in `plan_access` (in use) and `plan_accounts` (the others, up to four, httpOnly); a dead one is
 dropped when read. Claude's connector is approved as the person in use when *Godkänn* is pressed, so switch first.
 
+## Storage operations (Vercel Blob limits)
+
+On the Hobby plan Blob allows 2 000 *advanced* operations and 10 000 *simple* ones a month. Advanced is
+every write (`put`: each saved revision costs two, the revision and the head) and every folder listing;
+simple is a read. The hot paths are kept cheap: the plan list and the trash come from one listing of the
+person's plans (`GET /api/plans` returns `{ plans, trash }`); the plans shared with a person are found through
+an index (`u/<person>/shared.json`, rebuilt from the pointers when missing or a day old); the admin check
+(`Personer` in the menu) is answered from `GET /api/plans/accounts` without listing people. Watch
+*Usage* in the Vercel dashboard; a store that hits a limit stops working until the next period.
+
 ## Trash and backup
 
 - **Trash.** Deleting a plan moves it to the trash: hidden for the owner, kept 30 days, restorable from

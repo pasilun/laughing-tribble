@@ -78,7 +78,7 @@ class Browser {
 
 test('signing in as someone else keeps the first; the menu switches between them', async () => {
   const b = new Browser()
-  expect(await b.who()).toEqual({ me: null, others: [], signIn: true })
+  expect(await b.who()).toMatchObject({ me: null, others: [], signIn: true, admin: false })
   await b.login('ka')
   expect(await b.who()).toMatchObject({ me: 'anna', others: [] })
   // anna tries an invitation login: bo becomes the one in use, anna stays

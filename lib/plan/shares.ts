@@ -1,6 +1,6 @@
 import { takenByEnv } from './access'
 import { personById } from './people'
-import { accessFor, forgetAccess, isTrashed, type Access, pointerKey, readShares, scopedBackend, sharesKey, type Shares } from './store'
+import { accessFor, forgetAccess, isTrashed, noteShared, type Access, pointerKey, readShares, scopedBackend, sharesKey, type Shares } from './store'
 import { currentUser, scopeOf, USER_ID } from './user'
 
 // Sharing a plan with another person. Both then make new revisions of the same plan
@@ -58,6 +58,7 @@ export async function addShare(id: string, wanted: string): Promise<string | nul
   if ((await theirs.keys(`plans/${id}`)).length || (await theirs.read(pointerKey(id)))) return `${target} har redan en plan med samma id.`
   // The pointer first: a member listed without a pointer is invisible and harmless, the other way round is not.
   await theirs.write(pointerKey(id), JSON.stringify({ owner: a.owner, addedAt: new Date().toISOString(), addedBy: me.id }), 'application/json')
+  await noteShared(scopeOf({ id: target }), id, true)
   await holder.write(sharesKey(id), JSON.stringify({ ...sh, members: [...sh.members, target] }), 'application/json')
   forgetAccess()
   return null
@@ -72,6 +73,7 @@ export async function removeShare(id: string, who: string): Promise<string | nul
   const sh = await readShares(a.scope, id)
   if (!sh?.members.includes(who)) return 'Personen har inte planen delad med sig.'
   await scopedBackend(scopeOf({ id: who })).remove([pointerKey(id)])
+  await noteShared(scopeOf({ id: who }), id, false)
   const members = sh.members.filter((m) => m !== who)
   const holder = scopedBackend(a.scope)
   await holder.write(sharesKey(id), JSON.stringify({ ...sh, members }), 'application/json')

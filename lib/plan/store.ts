@@ -374,15 +374,46 @@ export async function listRevisions(id: string): Promise<Revision[]> {
 
 export type PlanListing = { id: string } & Head & { owner?: string; sharedWith?: string[] }
 
-// The person's own plans (not those they have deleted while others keep them) and the plans
-// shared with them. `owner` is set on the latter, `sharedWith` on plans the person owns and shares.
-export async function listPlans(): Promise<PlanListing[]> {
+// Pointers to the plans shared with a person are kept as shared/<id>.json, and an index of their ids as
+// shared.json, so the plan list does not have to list the folder (a list is a billed "advanced operation"
+// on Vercel Blob, 2 000 a month on Hobby). The index is rebuilt from the pointers when it is missing or a
+// day old, and kept up to date when a plan is shared or left.
+type SharedIndex = { ids: string[]; checkedAt: string }
+const SHARED_INDEX = 'shared.json'
+
+async function sharedIds(b: Backend): Promise<string[]> {
+  const idx = await readJson<SharedIndex>(b, SHARED_INDEX)
+  if (idx && Date.now() - new Date(idx.checkedAt).getTime() < DAY_MS) return idx.ids
+  const ids = (await b.keys('shared'))
+    .filter((k) => k.endsWith('.json'))
+    .map((k) => k.split('/').pop()!.replace(/\.json$/, ''))
+    .filter((id) => ID.test(id))
+  await b.write(SHARED_INDEX, JSON.stringify({ ids, checkedAt: new Date().toISOString() } satisfies SharedIndex), 'application/json')
+  return ids
+}
+
+// Keeps the index in step with a pointer that was written or removed (a missing index is built by the next list).
+export async function noteShared(scope: string, id: string, on: boolean): Promise<void> {
+  const b = scopedBackend(scope)
+  const idx = await readJson<SharedIndex>(b, SHARED_INDEX)
+  if (!idx) return
+  const ids = new Set(idx.ids)
+  if (on) ids.add(id)
+  else ids.delete(id)
+  await b.write(SHARED_INDEX, JSON.stringify({ ...idx, ids: [...ids] } satisfies SharedIndex), 'application/json')
+}
+
+// The person's own plans (not those they have deleted while others keep them), the plans shared with them
+// and their trash, from one folder listing. `owner` is set on shared-in plans, `sharedWith` on plans the
+// person owns and shares.
+export async function listPlansAndTrash(opts: { shared?: boolean } = {}): Promise<{ plans: PlanListing[]; trash: TrashedPlan[] }> {
   const b = ownBackend()
   const user = currentUser()
   const keys = await b.keys('plans')
   const heads = keys.filter((k) => k.endsWith('/head.json'))
   const shareFiles = new Set(keys.filter((k) => k.endsWith('/shares.json')))
-  const out: PlanListing[] = []
+  const plans: PlanListing[] = []
+  const trash: TrashedPlan[] = []
   await Promise.all(
     heads.map(async (k) => {
       const id = k.split('/')[1]
@@ -390,29 +421,39 @@ export async function listPlans(): Promise<PlanListing[]> {
       if (!h) return
       const sk = sharesKey(id)
       const sh = shareFiles.has(sk) ? await readJson<Shares>(b, sk) : null
-      if (isTrashed(sh)) {
-        if (sh && expired(sh)) await deleteAll(b, id)
+      if (sh && isTrashed(sh)) {
+        if (expired(sh)) return void (await deleteAll(b, id))
+        const at = trashedAtMs(sh)
+        trash.push({
+          id,
+          name: h.name,
+          deletedAt: at ? new Date(at).toISOString() : h.updatedAt,
+          daysLeft: Math.max(0, Math.ceil((at + TRASH_DAYS * DAY_MS - Date.now()) / DAY_MS)),
+          ...(sh.members.length ? { sharedWith: sh.members } : {}),
+        })
         return
       }
-      out.push({ id, ...h, ...(sh?.members.length ? { sharedWith: sh.members } : {}) })
+      plans.push({ id, ...h, ...(sh?.members.length ? { sharedWith: sh.members } : {}) })
     }),
   )
-  if (user && !user.legacy) {
-    const pointers = (await b.keys('shared')).filter((k) => k.endsWith('.json'))
+  if (opts.shared !== false && user && !user.legacy) {
     await Promise.all(
-      pointers.map(async (k) => {
-        const ptr = await readJson<SharePointer>(b, k)
-        const id = k.split('/').pop()!.replace(/\.json$/, '')
-        if (!ptr || !ID.test(id)) return
+      (await sharedIds(b)).map(async (id) => {
+        const ptr = await readJson<SharePointer>(b, pointerKey(id))
+        if (!ptr) return
         const ownerScope = `u/${ptr.owner}/`
         const sh = await readShares(ownerScope, id)
         if (!sh?.members.includes(user.id)) return
         const h = await readJsonFrom<Head>(scopedBackend(ownerScope), headKey(id))
-        if (h) out.push({ id, ...h, owner: ptr.owner })
+        if (h) plans.push({ id, ...h, owner: ptr.owner })
       }),
     )
   }
-  return out.sort((p, q) => q.updatedAt.localeCompare(p.updatedAt))
+  return { plans: plans.sort((p, q) => q.updatedAt.localeCompare(p.updatedAt)), trash: trash.sort((p, q) => q.deletedAt.localeCompare(p.deletedAt)) }
+}
+
+export async function listPlans(): Promise<PlanListing[]> {
+  return (await listPlansAndTrash()).plans
 }
 
 // Saves a new revision. baseRevision guards against overwriting a change
@@ -472,6 +513,7 @@ export async function deletePlan(id: string): Promise<'trashed' | 'left' | false
   try {
     if (a.role === 'member' && user) {
       await scopedBackend(scopeOf(user)).remove([pointerKey(id)])
+      await noteShared(scopeOf(user), id, false)
       if (sh) await holder.write(sharesKey(id), JSON.stringify({ ...sh, members: sh.members.filter((m) => m !== user.id) }), 'application/json')
       return 'left'
     }
@@ -487,28 +529,7 @@ export type TrashedPlan = { id: string; name: string; deletedAt: string; daysLef
 
 // The person's trash. Plans past their time are removed here (and in the plan list) when seen.
 export async function listTrash(): Promise<TrashedPlan[]> {
-  const b = ownBackend()
-  const files = (await b.keys('plans')).filter((k) => k.endsWith('/shares.json'))
-  const out: TrashedPlan[] = []
-  await Promise.all(
-    files.map(async (k) => {
-      const id = k.split('/')[1]
-      const sh = await readJson<Shares>(b, k)
-      if (!sh || !isTrashed(sh)) return
-      if (expired(sh)) return void (await deleteAll(b, id))
-      const head = await readJson<Head>(b, headKey(id))
-      if (!head) return
-      const at = trashedAtMs(sh)
-      out.push({
-        id,
-        name: head.name,
-        deletedAt: at ? new Date(at).toISOString() : head.updatedAt,
-        daysLeft: Math.max(0, Math.ceil((at + TRASH_DAYS * DAY_MS - Date.now()) / DAY_MS)),
-        ...(sh.members.length ? { sharedWith: sh.members } : {}),
-      })
-    }),
-  )
-  return out.sort((p, q) => q.deletedAt.localeCompare(p.deletedAt))
+  return (await listPlansAndTrash({ shared: false })).trash
 }
 
 // Takes a plan out of the trash. False when it is not there.

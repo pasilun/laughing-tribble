@@ -11,8 +11,9 @@ export function AppNav({ current }: { current: Section }) {
   const [admin, setAdmin] = useState(current === 'personer')
 
   useEffect(() => {
-    fetch('/api/plans/people')
-      .then((r) => setAdmin(r.ok))
+    fetch('/api/plans/accounts')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setAdmin(!!b?.admin))
       .catch(() => setAdmin(false))
   }, [])
 

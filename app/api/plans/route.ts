@@ -1,6 +1,6 @@
 import { secured } from '@/lib/plan/access'
 import { createPlan } from '@/lib/plan/service'
-import { listPlans } from '@/lib/plan/store'
+import { listPlansAndTrash } from '@/lib/plan/store'
 import type { Plan } from '@/lib/plan/types'
 import { author, fail, readJson } from './http'
 
@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 
 export const GET = secured(async (): Promise<Response> => {
   try {
-    return Response.json({ plans: await listPlans() })
+    return Response.json(await listPlansAndTrash())
   } catch (e) {
     return fail(e)
   }

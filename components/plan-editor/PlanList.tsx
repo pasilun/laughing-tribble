@@ -66,18 +66,12 @@ export function PlanList() {
         if (!r.ok || !Array.isArray(b.plans)) throw new Error(b.errors?.[0] ?? `Fel ${r.status}`)
         setLoadError('')
         setPlans(b.plans)
+        setTrash(Array.isArray(b.trash) ? b.trash : [])
       })
       .catch((e: Error) => setLoadError(e.message || 'Kunde inte läsa planerna'))
 
-  const loadTrash = () =>
-    fetch('/api/plans/trash')
-      .then((r) => (r.ok ? r.json() : { plans: [] }))
-      .then((b) => setTrash(b.plans ?? []))
-      .catch(() => undefined)
-
   useEffect(() => {
     load()
-    loadTrash()
   }, [])
 
   const create = async (e: React.FormEvent) => {
@@ -102,7 +96,7 @@ export function PlanList() {
     setPlans((cur) => cur?.filter((p) => p.id !== id) ?? cur)
     setConfirming(null)
     setNotice(b.how === 'trashed' ? `”${gone?.name ?? 'Planen'}” ligger nu i papperskorgen och kan återställas i 30 dagar.` : `Du har tagit bort ”${gone?.name ?? 'planen'}” för dig. De andra har kvar den.`)
-    void loadTrash()
+    void load()
   }
 
   const restore = async (id: string) => {
@@ -111,7 +105,6 @@ export function PlanList() {
     if (!r.ok) return setError((await r.json().catch(() => ({}))).errors?.[0] ?? 'kunde inte återställa planen')
     setNotice('Planen är tillbaka i listan.')
     void load()
-    void loadTrash()
   }
 
   const purge = async (id: string, name: string) => {
@@ -120,7 +113,7 @@ export function PlanList() {
     const r = await fetch(`/api/plans/${id}?permanent=1`, { method: 'DELETE' })
     if (!r.ok) return setError((await r.json().catch(() => ({}))).errors?.[0] ?? 'kunde inte radera planen')
     setNotice('')
-    void loadTrash()
+    void load()
   }
 
   const share = async (id: string) => {
