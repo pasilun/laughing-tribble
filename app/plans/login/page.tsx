@@ -9,7 +9,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <h1 className="text-2xl font-bold tracking-tight">Planstudio</h1>
       <p className="mt-1 text-sm text-zinc-600">Logga in för att se dina planritningar.</p>
       <InviteLookup />
-      <details className="mt-4 rounded-lg border bg-white p-4 shadow-sm">
+      {/* Open after a wrong key, or the error below would be hidden and nothing would seem to have happened. */}
+      <details open={!!fel} className="mt-4 rounded-lg border bg-white p-4 shadow-sm">
         <summary className="cursor-pointer text-sm font-medium">Har du en nyckel?</summary>
         <form method="post" action="/api/plans/login" className="mt-3 space-y-3 text-sm">
           <input type="hidden" name="next" value={next} />

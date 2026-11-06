@@ -19,15 +19,20 @@ export function SiteList() {
   const [trash, setTrash] = useState<TrashedDoc[]>([])
   const [confirming, setConfirming] = useState<string | null>(null)
 
+  const [loadError, setLoadError] = useState('')
+
+  // A failed read is shown as a failure with a retry, never as "no sites yet".
   const load = () =>
     fetch('/api/sites')
-      .then((r) => r.json())
-      .then((b) => {
-        setSites(b.sites ?? [])
+      .then(async (r) => {
+        const b = await r.json().catch(() => ({}))
+        if (!r.ok || !Array.isArray(b.sites)) throw new Error(b.errors?.[0] ?? `Fel ${r.status}`)
+        setLoadError('')
+        setSites(b.sites)
         setTrash(Array.isArray(b.trash) ? b.trash : [])
         setSuggestions(b.suggestions ?? [])
       })
-      .catch(() => setSites([]))
+      .catch((e: Error) => setLoadError(e.message || 'Kunde inte läsa tomterna'))
 
   useEffect(() => {
     void load()
@@ -92,7 +97,15 @@ export function SiteList() {
         </p>
       )}
       <ul className="mt-6 divide-y rounded border bg-white" data-testid="site-list">
-        {sites === null && <li className="p-4 text-sm text-zinc-500">Läser in…</li>}
+        {sites === null && !loadError && <li className="p-4 text-sm text-zinc-500">Läser in…</li>}
+        {loadError && (
+          <li className="p-4 text-sm text-red-800" role="alert" data-testid="load-error">
+            Kunde inte läsa tomterna ({loadError}).{' '}
+            <button type="button" className="underline" onClick={() => void load()}>
+              Försök igen
+            </button>
+          </li>
+        )}
         {sites?.length === 0 && <li className="p-4 text-sm text-zinc-500">Inga tomter ännu.</li>}
         {sites?.map((s) => (
           <li key={s.slug} data-testid="site-row">

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { checkPlan, type Finding } from '@/lib/plan/domain/checks'
+import { refPoint } from '@/lib/plan/domain/names'
 import { dist } from '@/lib/plan/domain/geometry'
 import { applyOps, type Op } from '@/lib/plan/domain/ops'
 import { hasChanges, renderSheet } from '@/lib/plan/domain/sheet'
@@ -176,6 +177,8 @@ export function Editor({ id }: { id: string }) {
 
   // ── underlay ─────────────────────────────────────────────────────────────
   const fileRef = useRef<HTMLInputElement>(null)
+  const [renaming, setRenaming] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
   const [scanScale, setScanScale] = useState(100)
   const uploadUnderlay = async (file: File) => {
     if (!plan) return
@@ -215,7 +218,12 @@ export function Editor({ id }: { id: string }) {
     setFitSignal((s) => s + 1)
   }
 
-  const findings = useMemo<Finding[]>(() => (plan ? checkPlan(plan) : []), [plan])
+  const findings = useMemo<Finding[]>(() => (plan ? checkPlan(plan, { plain: true }) : []), [plan])
+  // Numbers on the drawing, the same as in the list, while the checks are open.
+  const markers = useMemo(
+    () => (plan ? findings.flatMap((f, i) => { const at = f.ref ? refPoint(plan, f.ref) : null; return at ? [{ n: i + 1, at, level: f.level }] : [] }) : []),
+    [plan, findings],
+  )
   const sheetSvg = useMemo(() => (plan && mode === 'sheet' ? renderSheet(plan, view) : ''), [plan, mode, view])
 
   if (error) return <div className="p-8 text-red-700">{error}</div>
@@ -255,9 +263,45 @@ export function Editor({ id }: { id: string }) {
         <Link href="/plans" className="text-sm text-zinc-500 hover:text-zinc-900">
           ← Planer
         </Link>
-        <h1 className="truncate font-semibold" data-testid="plan-name">
-          {plan.name}
-        </h1>
+        {renaming ? (
+          <form
+            className="flex items-center gap-1"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (nameDraft.trim() && nameDraft.trim() !== plan.name) applyAndCommit([{ op: 'setName', name: nameDraft }], 'name', 'Bytte namn')
+              setRenaming(false)
+            }}
+          >
+            <input
+              data-testid="plan-name-input"
+              autoFocus
+              aria-label="Planens namn"
+              maxLength={120}
+              className="w-64 rounded border px-2 py-0.5 text-sm font-semibold"
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
+              onBlur={() => setRenaming(false)}
+            />
+          </form>
+        ) : (
+          <>
+            <h1 className="truncate font-semibold" data-testid="plan-name">
+              {plan.name}
+            </h1>
+            <button
+              type="button"
+              data-testid="rename-plan"
+              className="shrink-0 text-xs text-zinc-500 underline decoration-zinc-300 underline-offset-2 hover:text-blue-700"
+              onClick={() => {
+                setNameDraft(plan.name)
+                setRenaming(true)
+              }}
+            >
+              Byt namn
+            </button>
+          </>
+        )}
         <span className="text-xs text-zinc-500" data-testid="save-state">
           rev {base.n}
           {dirty ? ' · osparade ändringar' : ' · sparad'}
@@ -391,6 +435,7 @@ export function Editor({ id }: { id: string }) {
               tool={tool}
               options={options}
               selection={selection}
+              markers={tab === 'checks' ? markers : undefined}
               fitSignal={fitSignal}
               onSelect={(s) => {
                 setSelection(s)
@@ -524,8 +569,11 @@ function Checks({ findings, onPick }: { findings: Finding[]; onPick: (ref?: stri
   return (
     <ul className="space-y-2" data-testid="findings">
       {findings.map((f, i) => (
-        <li key={i} className={`cursor-pointer rounded border px-2 py-1.5 text-sm ${color[f.level]}`} data-level={f.level} onClick={() => onPick(f.ref)}>
-          {f.message}
+        <li key={i} className={`flex cursor-pointer gap-2 rounded border px-2 py-1.5 text-sm ${color[f.level]}`} data-level={f.level} onClick={() => onPick(f.ref)}>
+          <span className="shrink-0 font-semibold" aria-label={`Anmärkning ${i + 1}`}>
+            {i + 1}.
+          </span>
+          <span>{f.message}</span>
         </li>
       ))}
       <li className="text-xs text-zinc-500">Kontrollen pekar ut vad ritningen behöver visa. Den gör ingen juridisk bedömning.</li>

@@ -32,6 +32,8 @@ type Props = {
   onCalibrate: (a: Pt, b: Pt) => void
   onStatus: (s: string) => void
   fitSignal: number
+  // Numbered markers for the checks (shown while the Kontroll tab is open): where each finding points.
+  markers?: Array<{ n: number; at: Pt; level: 'error' | 'warning' | 'info' }>
 }
 
 const PHASE_FILL: Record<Phase, string> = { existing: '#9ca3af', new: '#111827', demolish: 'none' }
@@ -647,6 +649,14 @@ export function Canvas(props: Props) {
         {cursor && (tool === 'wall' || tool === 'dimension' || dragging === 'vertex') && (
           <circle cx={cursor.pt.x} cy={cursor.pt.y} r={px(5)} fill="none" stroke={SNAP_COLOR[cursor.kind]} strokeWidth={px(2)} pointerEvents="none" />
         )}
+        {props.markers?.map((m) => (
+          <g key={m.n} data-testid={`marker-${m.n}`} pointerEvents="none">
+            <circle cx={m.at.x} cy={m.at.y} r={px(11)} fill={m.level === 'error' ? '#dc2626' : m.level === 'warning' ? '#d97706' : '#6b7280'} stroke="#fff" strokeWidth={px(1.5)} />
+            <text x={m.at.x} y={m.at.y + px(4)} fontSize={px(12)} fontWeight="bold" textAnchor="middle" fill="#fff">
+              {m.n}
+            </text>
+          </g>
+        ))}
       </g>
       <text x={10} y={size.h - 10} fontSize={11} fill="#6b7280">
         {cursor ? `${SNAP_LABEL[cursor.kind]} · x ${Math.round(cursor.pt.x)} y ${Math.round(cursor.pt.y)}` : ''}

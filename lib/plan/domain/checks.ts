@@ -1,5 +1,6 @@
 import { clashes } from '../assist/clear'
 import { validatePlan } from './ops'
+import { cap, describeMass, describeOpening, describeRef, describeWall } from './names'
 import { fittingScale, layoutSheet } from './sheet'
 import type { Plan } from './types'
 
@@ -23,7 +24,10 @@ const TITLE_FIELDS: Array<[keyof Plan['sheet']['titleBlock'], string]> = [
   ['author', 'ritad av'],
 ]
 
-export function checkPlan(plan: Plan): Finding[] {
+// `plain`: items are named in words ("väggen mellan Hall och Kök (2,4 m)"), for a person reading the checks in the editor.
+// Without it they are named by id, which is what Claude needs to act on them.
+export function checkPlan(plan: Plan, opts: { plain?: boolean } = {}): Finding[] {
+  const plain = !!opts.plain
   const out: Finding[] = []
   for (const e of validatePlan(plan)) out.push({ level: 'error', code: 'invalid', message: e })
 
@@ -52,30 +56,32 @@ export function checkPlan(plan: Plan): Finding[] {
     const w = walls.get(o.wallId)
     if (!w) continue
     const hit = clashes(plan, w, o.offset, o.width, o.phase)
-    if (hit.length)
-      out.push({ level: 'error', code: 'opening-in-wall', ref: o.id, message: `${KIND[o.kind]} ${o.id} går in i ${hit.join(', ')} – flytta eller beskär öppningen` })
+    if (hit.length) {
+      const names = plain ? hit.map((id) => describeRef(plan, id)).join(' och ') : hit.join(', ')
+      out.push({ level: 'error', code: 'opening-in-wall', ref: o.id, message: `${plain ? cap(describeOpening(plan, o)) : `${KIND[o.kind]} ${o.id}`} går in i ${names} – flytta eller beskär öppningen` })
+    }
   }
   for (const w of plan.walls) {
     if (w.phase === 'demolish' && w.loadBearing)
-      out.push({ level: 'warning', code: 'load-bearing', ref: w.id, message: `Bärande vägg ${w.id} rivs – kräver konstruktionshandling och beräkning` })
+      out.push({ level: 'warning', code: 'load-bearing', ref: w.id, message: `${plain ? `${cap(describeWall(plan, w))} är bärande och rivs` : `Bärande vägg ${w.id} rivs`} – kräver konstruktionshandling och beräkning` })
     if (w.phase === 'demolish' && (w.fireRating || w.apartmentBoundary))
-      out.push({ level: 'warning', code: 'fire', ref: w.id, message: `Vägg ${w.id} är brandcellsgräns och rivs – brandskyddsbeskrivning krävs` })
+      out.push({ level: 'warning', code: 'fire', ref: w.id, message: `${plain ? cap(describeWall(plan, w)) : `Vägg ${w.id}`} är brandcellsgräns och rivs – brandskyddsbeskrivning krävs` })
   }
   for (const m of plan.masses ?? []) {
     if (m.phase === 'demolish' && m.loadBearing)
-      out.push({ level: 'warning', code: 'load-bearing', ref: m.id, message: `Bärande murmassa ${m.id} rivs – kräver konstruktionshandling och beräkning` })
+      out.push({ level: 'warning', code: 'load-bearing', ref: m.id, message: `${plain ? `${cap(describeMass(plan, m))} är bärande och rivs` : `Bärande murmassa ${m.id} rivs`} – kräver konstruktionshandling och beräkning` })
   }
   for (const o of plan.openings) {
     const w = walls.get(o.wallId)
     if (!w || o.phase !== 'new') continue
     if (w.loadBearing)
-      out.push({ level: 'warning', code: 'load-bearing', ref: o.id, message: `Ny öppning ${o.id} i bärande vägg – kräver konstruktörsutlåtande, ev. avväxling` })
+      out.push({ level: 'warning', code: 'load-bearing', ref: o.id, message: `${plain ? `${cap(describeOpening(plan, o))} är ny och ligger i en bärande vägg` : `Ny öppning ${o.id} i bärande vägg`} – kräver konstruktörsutlåtande, ev. avväxling` })
     if (w.fireRating || w.apartmentBoundary) {
-      out.push({ level: 'warning', code: 'fire', ref: o.id, message: `Ny öppning ${o.id} i lägenhetsskiljande vägg/brandcellsgräns – brandskyddsbeskrivning krävs` })
+      out.push({ level: 'warning', code: 'fire', ref: o.id, message: `${plain ? `${cap(describeOpening(plan, o))} är ny och ligger i en lägenhetsskiljande vägg/brandcellsgräns` : `Ny öppning ${o.id} i lägenhetsskiljande vägg/brandcellsgräns`} – brandskyddsbeskrivning krävs` })
       if (w.fireRatingAfter === undefined && w.fireRating)
-        out.push({ level: 'warning', code: 'fire-after', ref: w.id, message: `Vägg ${w.id} har en ny öppning men är fortfarande ritad som brandcellsgräns (${w.fireRating}) i efter-planen – ange brandcellsgränsen efter ändringen` })
+        out.push({ level: 'warning', code: 'fire-after', ref: w.id, message: `${plain ? cap(describeWall(plan, w)) : `Vägg ${w.id}`} har en ny öppning men är fortfarande ritad som brandcellsgräns (${w.fireRating}) i efter-planen – ange brandcellsgränsen efter ändringen` })
     }
-    if (!o.height) out.push({ level: 'info', code: 'opening-height', ref: o.id, message: `Ny öppning ${o.id} saknar höjd – ange den om konstruktören behöver den` })
+    if (!o.height) out.push({ level: 'info', code: 'opening-height', ref: o.id, message: `${plain ? `${cap(describeOpening(plan, o))} är ny och` : `Ny öppning ${o.id}`} saknar höjd – ange den om konstruktören behöver den` })
   }
   const removedKitchen = plan.fixtures.some((f) => (f.kind === 'kitchen' || f.kind === 'sink' || f.kind === 'stove') && f.phase === 'demolish')
   if (removedKitchen && !plan.fixtures.some((f) => f.kind === 'plug' && f.phase === 'new'))

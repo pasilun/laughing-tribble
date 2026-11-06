@@ -15,6 +15,7 @@ export const OPS_DOC = `Operations (all lengths in whole millimetres; x to the r
 - {"op":"moveWall","id":"v1","dx":100,"dy":0}  (walls joined at its ends stretch)
 - {"op":"setWallLength","id":"v1","length":3500,"fixed":"a"|"b"}
 - {"op":"scale","origin":{"x":..,"y":..},"fx":1.01,"fy":1.006,"sources"?:1.008}  (scales the whole drawing about a point, separately along x and y; wall thicknesses and fixture sizes stay, openings keep their size. plan_finish with fit_outer does this to match the printed outside size)
+- {"op":"setName","name":"Källare Lundagatan"}  (renames the plan: what the plan list shows; the title block's project text is setTitleBlock)
 - {"op":"setSheet","patch":{"paper":"A3"|"A4","orientation":"landscape"|"portrait","scale":50|100|150|200,"northAngle":0,"doorSwings":false}}  (doorSwings false = doors without swing arcs, for overview sheets)
 - {"op":"setTitleBlock","patch":{"project","property","address","apartments","floor","drawingNumber","author","date"}}
 Phases matter only when the user asks for changes: a plan of what exists has only "existing" (and one sheet, "befintlig"). Otherwise "existing" = stays, "demolish" = exists today and is removed, "new" = added; före shows today, efter marks rivs/ny.

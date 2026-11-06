@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 function gate(): Response | null {
   const me = currentUser()
   if (me && isAdmin(me)) return null
-  return Response.json({ errors: [`Bara administratörer får bjuda in. Lägg till ditt användarnamn (${me?.id ?? '?'}) i PLAN_ADMINS i Vercel och deploya om.`], me: me?.id }, { status: 403 })
+  return Response.json({ errors: ['Bara administratörer får bjuda in nya personer. Be den som driver tjänsten om en inbjudan till den du vill ha med.'], me: me?.id }, { status: 403 })
 }
 
 export const GET = secured(async (): Promise<Response> => {

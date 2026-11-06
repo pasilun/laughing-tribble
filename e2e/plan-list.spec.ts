@@ -81,3 +81,39 @@ test('plan list: tags are set per plan, shown as filters, searchable and kept wh
     await request.delete(`/api/plans/${id}?permanent=1`)
   }
 })
+
+test('a plan can be renamed: from the list, from the editor, and through the API (a revision each time)', { tag: '@browser' }, async ({ page, request }) => {
+  const stamp = Date.now()
+  const created = await (await request.post('/api/plans', { data: { name: `Gammalt namn ${stamp}` } })).json()
+  const id = created.plan.id as string
+
+  // The API: a new name is a new revision; an empty name is refused.
+  const bad = await request.patch(`/api/plans/${id}`, { data: { name: '   ' } })
+  expect(bad.status()).toBe(422)
+  const ok = await request.patch(`/api/plans/${id}`, { data: { name: `Nytt  namn ${stamp}` } })
+  expect(ok.status()).toBe(200)
+  expect((await ok.json()).name).toBe(`Nytt namn ${stamp}`)
+  expect((await (await request.get(`/api/plans/${id}`)).json()).revision.n).toBe(2)
+
+  // The list.
+  await page.goto('/plans')
+  await page.getByTestId('plan-filter').fill(`${stamp}`)
+  const row = page.getByTestId('plan-row').first()
+  await row.getByTestId('rename-plan').click()
+  await row.getByTestId('rename-input').fill(`Från listan ${stamp}`)
+  await row.getByTestId('rename-save').click()
+  await expect(row.getByTestId('plan-name')).toHaveText(`Från listan ${stamp}`)
+
+  // The editor (desktop layout), saved as the editor saves.
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto(`/plans/${id}`)
+  await expect(page.getByTestId('plan-name')).toContainText(`Från listan ${stamp}`)
+  await page.getByTestId('rename-plan').click()
+  await page.getByTestId('plan-name-input').fill(`Från redigeraren ${stamp}`)
+  await page.getByTestId('plan-name-input').press('Enter')
+  await expect(page.getByTestId('plan-name')).toContainText(`Från redigeraren ${stamp}`)
+  await page.getByTestId('save').click()
+  await expect(page.getByTestId('save-state')).not.toContainText('osparade')
+  expect((await (await request.get(`/api/plans/${id}`)).json()).plan.name).toBe(`Från redigeraren ${stamp}`)
+  await request.delete(`/api/plans/${id}`)
+})

@@ -50,6 +50,8 @@ export function PlanList() {
   const [confirming, setConfirming] = useState<string | null>(null)
   const [tag, setTag] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [nameDraft, setNameDraft] = useState('')
   const [draft, setDraft] = useState('')
   const [loadError, setLoadError] = useState('')
   const [trash, setTrash] = useState<TrashedDoc[]>([])
@@ -95,6 +97,15 @@ export function PlanList() {
     setConfirming(null)
     setNotice(b.how === 'trashed' ? `”${gone?.name ?? 'Planen'}” ligger nu i papperskorgen och kan återställas i 30 dagar.` : `Du har tagit bort ”${gone?.name ?? 'planen'}” för dig. De andra har kvar den.`)
     void load()
+  }
+
+  const rename = async (id: string) => {
+    setError('')
+    const r = await fetch(`/api/plans/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: nameDraft }) })
+    const b = await r.json().catch(() => ({}))
+    if (!r.ok) return setError(b.errors?.[0] ?? 'kunde inte byta namn')
+    setPlans((cur) => cur?.map((p) => (p.id === id ? { ...p, name: b.name } : p)) ?? cur)
+    setRenaming(null)
   }
 
   const saveTags = async (id: string) => {
@@ -207,7 +218,7 @@ export function PlanList() {
 
       {plans && (
         <p className="mt-4 text-xs text-zinc-600" data-testid="plan-count" aria-live="polite">
-          {filtered ? `${shown.length} av ${plans.length}` : plans.length} planer
+          {filtered ? `${shown.length} av ${plans.length}` : plans.length} {plans.length === 1 ? 'plan' : 'planer'}
           {filtered && (
             <>
               {' · '}
@@ -266,9 +277,27 @@ export function PlanList() {
                 <Thumb p={p} />
               </a>
               <div className="min-w-0 flex-1">
-                <a href={`/plans/${p.id}`} data-testid="plan-name" className="block break-words font-medium leading-snug text-zinc-900 hover:underline">
-                  {p.name}
-                </a>
+                {renaming === p.id ? (
+                  <form
+                    className="flex items-center gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      void rename(p.id)
+                    }}
+                  >
+                    <input data-testid="rename-input" autoFocus aria-label="Planens namn" maxLength={120} className="min-w-0 flex-1 rounded border bg-white px-2 py-1 text-sm" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
+                    <button data-testid="rename-save" className="rounded bg-blue-600 px-2.5 py-1 text-xs text-white">
+                      Spara
+                    </button>
+                    <button type="button" className="rounded border px-2.5 py-1 text-xs" onClick={() => setRenaming(null)}>
+                      Avbryt
+                    </button>
+                  </form>
+                ) : (
+                  <a href={`/plans/${p.id}`} data-testid="plan-name" className="block break-words font-medium leading-snug text-zinc-900 hover:underline">
+                    {p.name}
+                  </a>
+                )}
                 <p className="mt-0.5 text-xs text-zinc-600">
                   Rev {p.revision} · ändrad {day(p.updatedAt)}
                   {p.issued.length > 0 && <span className="ml-1.5 rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-800">utfärdad {p.issued[p.issued.length - 1]}</span>}
@@ -337,6 +366,17 @@ export function PlanList() {
                       </button>
                     </>
                   )}
+                  <button
+                    type="button"
+                    data-testid="rename-plan"
+                    className="text-zinc-600 underline decoration-zinc-300 underline-offset-2 hover:text-blue-700"
+                    onClick={() => {
+                      setRenaming(p.id)
+                      setNameDraft(p.name)
+                    }}
+                  >
+                    Byt namn
+                  </button>
                   <DocShare
                     api="/api/plans"
                     id={p.id}

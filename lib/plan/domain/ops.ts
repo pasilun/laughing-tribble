@@ -47,6 +47,8 @@ export type Op =
   // stay. For a traced plan whose overall size is a little off the printed one. `sources` also
   // rescales the source drawings by that (equal on both axes) factor, so the underlay still fits.
   | { op: 'scale'; origin: Pt; fx: number; fy: number; sources?: number }
+  // The plan's name (what the list shows); not the title block's project text.
+  | { op: 'setName'; name: string }
   | { op: 'setSheet'; patch: Partial<Omit<Sheet, 'titleBlock'>> }
   | { op: 'setTitleBlock'; patch: Partial<TitleBlock> }
   | { op: 'setUnderlay'; underlay: Underlay | null }
@@ -226,6 +228,11 @@ function applyOne(plan: Plan, op: Op): Plan {
         notes: plan.notes.map((n) => ({ ...n, at: mv(n.at) })),
         ...(k && plan.sources ? { sources: plan.sources.map((s) => ({ ...s, ...mv({ x: s.x, y: s.y }), mmPerPx: s.mmPerPx * k })) } : {}),
       }
+    }
+    case 'setName': {
+      const name = String(op.name ?? '').trim().replace(/\s+/g, ' ')
+      if (!name || name.length > 120) throw new Error('namnet ska vara 1–120 tecken')
+      return { ...plan, name }
     }
     case 'setSheet':
       return { ...plan, sheet: { ...plan.sheet, ...op.patch, titleBlock: plan.sheet.titleBlock } }

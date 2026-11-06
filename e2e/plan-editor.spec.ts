@@ -138,3 +138,24 @@ test('trace a room along its inner faces: corners close at the centre lines', { 
   expect(walls[1].b).toEqual({ x: 1550, y: 1050 })
   expect(walls[3].b).toEqual({ x: -50, y: -50 })
 })
+
+test('the checks name what they point at in words and number it on the drawing', { tag: '@browser' }, async ({ page, request }) => {
+  const created = await (await request.post('/api/plans', { data: { name: 'Kontrolltext', template: 'demo' } })).json()
+  const id = created.plan.id as string
+  await page.goto(`/plans/${id}`)
+  await expect(page.getByTestId('plan-name')).toContainText('Kontrolltext')
+  // No markers until the checks are open.
+  await expect(page.getByTestId('marker-1')).toHaveCount(0)
+  await page.getByTestId('tab-checks').click()
+  const items = page.getByTestId('findings').locator('li[data-level]')
+  await expect(items.first()).toContainText('1.')
+  const texts = await items.allTextContents()
+  // The demo's wall ids are never shown to the person.
+  for (const t of texts) expect(t).not.toMatch(/\b(lgh-grans|ny-oppning|yt-[nsov]|a-kok|b-kok)\b/)
+  expect(texts.some((t) => /väggen (mellan|mot)|yttervägg|dörren|öppningen|fönstret/.test(t))).toBe(true)
+  // The same number is on the drawing, and clicking the finding selects what it points at.
+  await expect(page.getByTestId('marker-1')).toBeVisible()
+  await page.getByTestId('tab-props').click()
+  await expect(page.getByTestId('marker-1')).toHaveCount(0)
+  await request.delete(`/api/plans/${id}`)
+})

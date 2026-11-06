@@ -51,7 +51,7 @@ async function invite(label = 'Cecilia', days = 7) {
 
 test('only administrators see people and make invitations', async () => {
   expect((await peopleGET(as('kb'))).status).toBe(403)
-  expect((await (await peopleGET(as('kb'))).json()).errors[0]).toContain('PLAN_ADMINS')
+  expect((await (await peopleGET(as('kb'))).json()).errors[0]).toContain('Bara administratörer')
   expect((await peoplePOST(as('kb', { method: 'POST', body: '{}' }))).status).toBe(403)
   expect((await peopleGET(new Request('http://x/api/plans/people'))).status).toBe(401)
   expect((await peopleGET(as('ka'))).status).toBe(200)

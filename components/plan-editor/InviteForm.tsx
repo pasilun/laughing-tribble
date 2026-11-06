@@ -123,7 +123,7 @@ export function InviteForm({ token, label, expiresAt, forUser }: { token: string
               className="mt-1 w-full rounded border px-2 py-1.5"
               value={id}
               onChange={(e) => setId(e.target.value.toLowerCase())}
-              placeholder="t.ex. anna"
+              placeholder="t.ex. maria"
             />
             <span className="mt-1 block text-xs text-zinc-600">Små bokstäver, siffror och bindestreck. Dina planer sparas under det namnet.</span>
           </label>

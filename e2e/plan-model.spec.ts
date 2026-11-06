@@ -3,6 +3,7 @@ import { applyOps } from '@/lib/plan/domain/ops'
 import { demoPlan } from '@/lib/plan/domain/demo'
 import { renderSheet, layoutSheet, wallPieces } from '@/lib/plan/domain/sheet'
 import { checkPlan } from '@/lib/plan/domain/checks'
+import { describeWall, refPoint } from '@/lib/plan/domain/names'
 import type { Opening, Plan, Wall } from '@/lib/plan/domain/types'
 import { clashes, clipToFree, shiftToFree } from '@/lib/plan/assist/clear'
 
@@ -378,4 +379,36 @@ test('a sheet can leave out door swings: the door stays a door, drawn closed', (
   const closed = group(renderSheet({ ...plan, sheet: { ...plan.sheet, doorSwings: false } }, 'fore'))
   expect(closed).not.toContain('<path')
   expect(closed).toContain('<line')
+})
+
+test.describe('the checks in words', () => {
+  // The editor names walls and openings by what they are and where, never by id; Claude still gets the ids.
+  test('a finding says what it points at without ids, and the same finding names the id for Claude', () => {
+    const plan = demoPlan()
+    const ids = plan.walls.map((w) => w.id).concat(plan.openings.map((o) => o.id))
+    const plain = checkPlan(plan, { plain: true })
+    const coded = checkPlan(plan)
+    expect(plain.length).toBe(coded.length)
+    const pointing = plain.filter((f) => f.ref)
+    expect(pointing.length).toBeGreaterThan(0)
+    for (const f of pointing) for (const id of ids) expect(f.message, `${f.code}: ${f.message}`).not.toContain(id)
+    // Where it is: a room it separates or a side of the building, and a length.
+    expect(pointing.some((f) => /väggen (mellan|mot) .+ \(\d+,\d m\)|yttervägg mot \w+ \(\d+,\d m\)/.test(f.message))).toBe(true)
+    // Claude's text still carries the ids.
+    expect(coded.filter((f) => f.ref).some((f) => ids.some((id) => f.message.includes(id)))).toBe(true)
+  })
+
+  test('walls are named by room and by compass, with the north arrow turned or not', () => {
+    const plan = demoPlan()
+    const north = plan.walls.find((w) => w.id === 'yt-n')!
+    expect(describeWall(plan, north)).toMatch(/^yttervägg mot norr \(\d+,\d m\)$/)
+    const turned = { ...plan, sheet: { ...plan.sheet, northAngle: 90 } }
+    expect(describeWall(turned, north)).toMatch(/^yttervägg mot väster /)
+    const inner = plan.walls.filter((w) => !/^yt-/.test(w.id))
+    expect(inner.some((w) => /^väggen (mellan|mot) /.test(describeWall(plan, w)))).toBe(true)
+    // A marker has a place on the drawing.
+    expect(refPoint(plan, north.id)).not.toBeNull()
+    expect(refPoint(plan, plan.openings[0].id)).not.toBeNull()
+    expect(refPoint(plan, 'finns-inte')).toBeNull()
+  })
 })

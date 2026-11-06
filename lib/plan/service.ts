@@ -113,3 +113,10 @@ export async function importPlan(input: Partial<Plan> | undefined, name: string,
   const ed = await editPlan(res.plan.id, ops, res.revision.n, 'claude', `Källritningar kopierade från ${copySourcesFrom}`)
   return ed.status === 200 ? { plan: ed.plan, revision: ed.revision, copied: copied.length } : { plan: res.plan, revision: res.revision, copied: null }
 }
+
+// Renames a plan: a new revision, so the name in the list and the history agree. Null when the plan does not exist.
+export async function renamePlan(id: string, name: unknown) {
+  const cur = await getRevision(id)
+  if (!cur) return null
+  return editPlan(id, [{ op: 'setName', name: String(name ?? '') }], cur.meta.n, 'user', 'Bytte namn')
+}
