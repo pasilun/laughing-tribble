@@ -1,4 +1,4 @@
-import type { Plan } from '@/lib/plan/types'
+import type { Plan } from '@/lib/plan/domain/types'
 
 // Undo/redo for the editor. Consecutive edits with the same key (e.g. typing
 // in one numeric field) collapse into one undo step.

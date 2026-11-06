@@ -2,10 +2,10 @@ import { Resvg } from '@resvg/resvg-js'
 import PDFDocument from 'pdfkit'
 import SVGtoPDF from 'svg-to-pdfkit'
 import path from 'path'
-import { add, along, leftNormal, scale, wallDir } from './geometry'
-import { roomShownIn } from './rooms'
-import { dimensionsIn, fireRatingIn, hasChanges, layoutSheet, massPieces, renderSheet, viewTitle, visibleIn, wallPieces } from './sheet'
-import type { Plan, Pt, View } from './types'
+import { add, along, leftNormal, scale, wallDir } from './domain/geometry'
+import { roomShownIn } from './domain/rooms'
+import { dimensionsIn, fireRatingIn, hasChanges, layoutSheet, massPieces, renderSheet, viewTitle, visibleIn, wallPieces } from './domain/sheet'
+import type { Plan, Pt, View } from './domain/types'
 
 const FONT_DIR = path.join(process.cwd(), 'lib/plan/fonts')
 const PT_PER_MM = 72 / 25.4

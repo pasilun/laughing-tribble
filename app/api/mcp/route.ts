@@ -1,7 +1,7 @@
-import { PLAN_TOOLS, handlePlanTool, instructionsFor, toolsFor } from '@/lib/plan/mcp-tools'
-import { presentedCredential, resolveRequest } from '@/lib/plan/access'
-import { runAs } from '@/lib/plan/user'
-import { PublicError } from '@/lib/plan/storage'
+import { PLAN_TOOLS, handlePlanTool, instructionsFor, toolsFor } from '@/lib/plan/mcp/mcp-tools'
+import { presentedCredential, resolveRequest } from '@/lib/plan/auth/access'
+import { runAs } from '@/lib/plan/auth/user'
+import { PublicError } from '@/lib/plan/storage/storage'
 
 export const runtime = 'nodejs'
 // Scans and renders can take a while.

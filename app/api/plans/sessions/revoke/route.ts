@@ -1,12 +1,12 @@
-import { ACCESS_COOKIE, secured, takenByEnv } from '@/lib/plan/access'
-import { bumpSessionVersion } from '@/lib/plan/people'
-import { currentUser } from '@/lib/plan/user'
+import { ACCESS_COOKIE, secured, takenByEnv } from '@/lib/plan/auth/access'
+import { bumpSessionVersion } from '@/lib/plan/auth/people'
+import { currentUser } from '@/lib/plan/auth/user'
 
 export const runtime = 'nodejs'
 
 // POST /api/plans/sessions/revoke – "Logga ut alla enheter". Ends every signed-in
 // browser session for the caller by bumping their session version (the cookie holds
-// it; see lib/plan/access.ts cookieValue). The key keeps working, and so do Claude
+// it; see lib/plan/auth/access.ts cookieValue). The key keeps working, and so do Claude
 // connectors: OAuth tokens are checked against the person, not the cookie. The
 // calling device is signed out too, so the answer clears the cookie.
 //

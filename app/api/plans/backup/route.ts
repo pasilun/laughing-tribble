@@ -1,6 +1,6 @@
-import { isAdmin, secured } from '@/lib/plan/access'
-import { backupStream } from '@/lib/plan/backup'
-import { currentUser } from '@/lib/plan/user'
+import { isAdmin, secured } from '@/lib/plan/auth/access'
+import { backupStream } from '@/lib/plan/storage/backup'
+import { currentUser } from '@/lib/plan/auth/user'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60

@@ -1,11 +1,11 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
-import { checkPlan } from '@/lib/plan/checks'
+import { checkPlan } from '@/lib/plan/domain/checks'
 import { sheetPdf } from '@/lib/plan/export'
-import { finishPlan } from '@/lib/plan/finish'
-import { applyOps } from '@/lib/plan/ops'
-import { fittingScale, hasChanges, renderSheet } from '@/lib/plan/sheet'
-import type { Plan, Wall } from '@/lib/plan/types'
-import { demoPlan } from '@/lib/plan/demo'
+import { finishPlan } from '@/lib/plan/assist/finish'
+import { applyOps } from '@/lib/plan/domain/ops'
+import { fittingScale, hasChanges, renderSheet } from '@/lib/plan/domain/sheet'
+import type { Plan, Wall } from '@/lib/plan/domain/types'
+import { demoPlan } from '@/lib/plan/domain/demo'
 
 // A plan of what exists is one sheet; plan_finish does the mechanical last steps.
 

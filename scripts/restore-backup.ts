@@ -5,8 +5,8 @@
 // and the PDFs are not put back; a backup of everyone ("alla/…") is put back as it was.
 import { readFileSync } from 'node:fs'
 import { unzipSync } from 'fflate'
-import { systemBackend } from '../lib/plan/storage'
-import { USER_ID } from '../lib/plan/user'
+import { systemBackend } from '../lib/plan/storage/storage'
+import { USER_ID } from '../lib/plan/auth/user'
 
 const type = (k: string) => (k.endsWith('.json') ? 'application/json' : k.endsWith('.png') ? 'image/png' : /\.jpe?g$/.test(k) ? 'image/jpeg' : 'application/octet-stream')
 

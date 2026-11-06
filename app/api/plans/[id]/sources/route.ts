@@ -1,6 +1,6 @@
-import { secured } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/auth/access'
 import { addSource } from '@/lib/plan/scan/add-source'
-import { deleteAsset, getAsset } from '@/lib/plan/store'
+import { deleteAsset, getAsset } from '@/lib/plan/storage/store'
 import { fail, type Ctx } from '../../http'
 import { PARTS_MAX, UPLOAD_ID, partName } from '../../upload'
 

@@ -1,5 +1,5 @@
-import { leftNormal, wallDir, wallLength, wallQuad } from './geometry'
-import type { Phase, Plan, Wall } from './types'
+import { leftNormal, wallDir, wallLength, wallQuad } from '../domain/geometry'
+import type { Phase, Plan, Wall } from '../domain/types'
 
 // An opening stays clear of the walls it meets: a window must not run into a
 // corner wall, and a door must not sit against a stair wall. Positions are

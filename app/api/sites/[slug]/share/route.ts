@@ -1,4 +1,4 @@
-import { SITES } from '@/lib/plan/docs'
+import { SITES } from '@/lib/plan/storage/docs'
 import { shareRoutes } from '../../../plans/doc-routes'
 
 export const runtime = 'nodejs'

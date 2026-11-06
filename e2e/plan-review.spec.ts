@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
-import { demoPlan } from '@/lib/plan/demo'
-import { reviewPlan, roomKind } from '@/lib/plan/review'
-import type { Opening, Plan, Room, Wall } from '@/lib/plan/types'
+import { demoPlan } from '@/lib/plan/domain/demo'
+import { reviewPlan, roomKind } from '@/lib/plan/assist/review'
+import type { Opening, Plan, Room, Wall } from '@/lib/plan/domain/types'
 
 // Pure model tests — no browser needed.
 

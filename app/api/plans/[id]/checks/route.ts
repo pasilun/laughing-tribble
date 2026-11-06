@@ -1,5 +1,5 @@
-import { secured } from '@/lib/plan/access'
-import { checkPlan } from '@/lib/plan/checks'
+import { secured } from '@/lib/plan/auth/access'
+import { checkPlan } from '@/lib/plan/domain/checks'
 import { loadPlan } from '@/lib/plan/service'
 import { fail, revParam, type Ctx } from '../../http'
 

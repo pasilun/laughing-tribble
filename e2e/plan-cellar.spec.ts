@@ -3,7 +3,7 @@ import { readFileSync } from 'fs'
 import { findDimensionEnds } from '@/lib/plan/scan/dimension'
 import { findWindowBands } from '@/lib/plan/scan/openings'
 import type { Gray, Raster } from '@/lib/plan/scan/raster'
-import type { Plan, Wall } from '@/lib/plan/types'
+import type { Plan, Wall } from '@/lib/plan/domain/types'
 import sharp from 'sharp'
 
 // The cellar drawing (a 1936-style 1:100 sheet, hand drawn, stretched ~1.3 % more along one

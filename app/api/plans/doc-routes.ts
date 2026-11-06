@@ -1,6 +1,6 @@
-import { secured } from '@/lib/plan/access'
-import { deleteDoc, purgeDoc, restoreDoc, type DocKind } from '@/lib/plan/docs'
-import { addShare, participants, removeShare } from '@/lib/plan/shares'
+import { secured } from '@/lib/plan/auth/access'
+import { deleteDoc, purgeDoc, restoreDoc, type DocKind } from '@/lib/plan/storage/docs'
+import { addShare, participants, removeShare } from '@/lib/plan/storage/shares'
 import { fail, readJson } from './http'
 
 // The routes every kind of document has the same: sharing, delete (to the trash, or for good from it) and restore.

@@ -2,12 +2,12 @@ import { test, expect } from '@playwright/test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { hashKey, resolveCookie, resolveKey, resolveRequest } from '@/lib/plan/access'
+import { hashKey, resolveCookie, resolveKey, resolveRequest } from '@/lib/plan/auth/access'
 import { createPlan } from '@/lib/plan/service'
-import { listPlans } from '@/lib/plan/store'
-import { createInvite, forgetPeople, inviteInfo, redeemInvite } from '@/lib/plan/people'
-import { runAs } from '@/lib/plan/user'
-import { takenByEnv } from '@/lib/plan/access'
+import { listPlans } from '@/lib/plan/storage/store'
+import { createInvite, forgetPeople, inviteInfo, redeemInvite } from '@/lib/plan/auth/people'
+import { runAs } from '@/lib/plan/auth/user'
+import { takenByEnv } from '@/lib/plan/auth/access'
 import { DELETE as peopleDELETE, GET as peopleGET, POST as peoplePOST } from '../app/api/plans/people/route'
 import { GET as inviteGET, POST as invitePOST } from '../app/api/plans/invite/route'
 import { resetLimits } from '../app/api/plans/login/limit'
@@ -124,7 +124,7 @@ test('expired, withdrawn and made-up invitations are refused', async () => {
   const { token: old } = await createInvite('Gammal', 'anna', 1)
   expect(await inviteInfo(old)).not.toBeNull()
   // Expiry: rewrite the file with a date in the past.
-  const { systemBackend } = await import('@/lib/plan/storage')
+  const { systemBackend } = await import('@/lib/plan/storage/storage')
   const { createHash } = await import('node:crypto')
   const h = createHash('sha256').update(`plan-invite:${old}`).digest('hex')
   const b = systemBackend()

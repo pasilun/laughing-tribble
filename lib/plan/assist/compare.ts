@@ -1,5 +1,5 @@
-import { wallDir, wallLength } from './geometry'
-import type { Opening, Plan, Pt, Wall } from './types'
+import { wallDir, wallLength } from '../domain/geometry'
+import type { Opening, Plan, Pt, Wall } from '../domain/types'
 
 // Compares a plan with a reference plan of the same floor (e.g. one built
 // from archive drawings against one from a survey). Walls are paired by

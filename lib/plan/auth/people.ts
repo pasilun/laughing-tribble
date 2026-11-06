@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto'
-import { systemBackend } from './storage'
+import { systemBackend } from '../storage/storage'
 import { USER_ID } from './user'
 
 // People who joined through an invitation link. They live in the store, not in
@@ -169,7 +169,7 @@ export async function redeemInvite(token: string, wanted: string, takenByEnv: (i
 // A new key for a person who lost theirs: the link was made by an admin for that person. The old
 // key stops working at once (up to the 30 s sign-in memory), the plans stay with the person.
 // Every signed-in session ends too: the cookie is derived from the session version, which the
-// bump changes (lib/plan/access.ts cookieValue).
+// bump changes (lib/plan/auth/access.ts cookieValue).
 async function rekey(invite: Invite, id: string): Promise<Redeemed> {
   const old = await readJson<Person>(kUser(id))
   if (!old) return { ok: false, error: 'Personen finns inte längre. Be om en ny inbjudan.' }

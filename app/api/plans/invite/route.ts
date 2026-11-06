@@ -1,6 +1,6 @@
-import { cookieForAny, reservedByEnv } from '@/lib/plan/access'
-import { cookiesForNewLogin } from '@/lib/plan/accounts'
-import { inviteInfo, redeemInvite } from '@/lib/plan/people'
+import { cookieForAny, reservedByEnv } from '@/lib/plan/auth/access'
+import { cookiesForNewLogin } from '@/lib/plan/auth/accounts'
+import { inviteInfo, redeemInvite } from '@/lib/plan/auth/people'
 import { allowed, fail, ok } from '../login/limit'
 import { readJson } from '../http'
 

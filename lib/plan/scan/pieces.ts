@@ -1,4 +1,4 @@
-import type { Pt } from '../types'
+import type { Pt } from '../domain/types'
 
 // Detected walls come in pieces where a door or window breaks them.
 export type Piece = { a: Pt; b: Pt; thickness: number }

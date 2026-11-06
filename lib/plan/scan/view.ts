@@ -1,8 +1,8 @@
 import { Resvg } from '@resvg/resvg-js'
 import path from 'path'
 import sharp from 'sharp'
-import { wallQuad } from '../geometry'
-import type { Plan, Pt } from '../types'
+import { wallQuad } from '../domain/geometry'
+import type { Plan, Pt } from '../domain/types'
 import { loadPng, toPx, type Raster } from './raster'
 
 // A crop of a source drawing in plan millimetres, with a labelled mm grid

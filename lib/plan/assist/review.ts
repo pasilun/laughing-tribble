@@ -1,8 +1,8 @@
-import { add, along, leftNormal, scale, wallDir } from './geometry'
-import type { Finding } from './checks'
-import { spaceGrid, type Space } from './rooms'
-import { structureFindings } from './structure'
-import type { Opening, Plan, Room, View, Wall } from './types'
+import { add, along, leftNormal, scale, wallDir } from '../domain/geometry'
+import type { Finding } from '../domain/checks'
+import { spaceGrid, type Space } from '../domain/rooms'
+import { structureFindings } from '../domain/structure'
+import type { Opening, Plan, Room, View, Wall } from '../domain/types'
 
 // Reads a plan the way an architect walks it: who enters where, which room
 // each door joins, whether every room can be reached and makes sense for its

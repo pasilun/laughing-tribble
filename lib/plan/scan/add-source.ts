@@ -1,6 +1,6 @@
 import { editPlan, loadPlan } from '../service'
-import { putAsset } from '../store'
-import type { Plan, Source } from '../types'
+import { putAsset } from '../storage/store'
+import type { Plan, Source } from '../domain/types'
 import { convertToPng, mmPerPxFor } from './raster'
 
 // A drawing (TIF, PDF, PNG, JPG) becomes a source of the plan: converted to PNG,

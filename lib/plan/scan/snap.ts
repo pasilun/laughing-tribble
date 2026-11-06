@@ -1,6 +1,6 @@
-import { dist, leftNormal, wallDir, wallLength } from '../geometry'
-import type { Op } from '../ops'
-import type { Plan, Pt, Wall } from '../types'
+import { dist, leftNormal, wallDir, wallLength } from '../domain/geometry'
+import type { Op } from '../domain/ops'
+import type { Plan, Pt, Wall } from '../domain/types'
 import { profile, type Run } from './profile'
 import type { Gray, Raster } from './raster'
 

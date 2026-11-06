@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { Keep } from './clipboard'
-import { looksLikeInAppBrowser } from '@/lib/plan/browser'
+import { looksLikeInAppBrowser } from '@/lib/plan/auth/browser'
 
 type Done = { id: string; key: string; connector: string }
 

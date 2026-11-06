@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { ACCESS_COOKIE, accessMode, resolveCookie } from '@/lib/plan/access'
-import type { User } from '@/lib/plan/user'
+import { ACCESS_COOKIE, accessMode, resolveCookie } from '@/lib/plan/auth/access'
+import type { User } from '@/lib/plan/auth/user'
 
 // The signed-in person, or a redirect to the login page.
 export async function requireAccess(next: string): Promise<User | null> {

@@ -1,4 +1,4 @@
-import { inviteInfo } from '@/lib/plan/people'
+import { inviteInfo } from '@/lib/plan/auth/people'
 import { InviteForm } from '@/components/plan-editor/InviteForm'
 
 export const metadata = { title: 'Inbjudan' }

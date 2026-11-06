@@ -1,9 +1,9 @@
-import { checkPlan, type Finding } from './checks'
-import { bounds, wallQuad } from './geometry'
-import { applyOps, type Op } from './ops'
+import { checkPlan, type Finding } from '../domain/checks'
+import { bounds, wallQuad } from '../domain/geometry'
+import { applyOps, type Op } from '../domain/ops'
 import { reviewPlan } from './review'
-import { fittingScale, SCALES } from './sheet'
-import type { Plan, Sheet, TitleBlock } from './types'
+import { fittingScale, SCALES } from '../domain/sheet'
+import type { Plan, Sheet, TitleBlock } from '../domain/types'
 
 // The mechanical last steps of a plan, so they happen every time and not only when
 // whoever draws it remembers them: the sheet scale and orientation that fill the

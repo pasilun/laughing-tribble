@@ -4,10 +4,10 @@
 // (dry run, nothing saved), and, with --reference, the wall and opening match against
 // another plan of the same floor (e2e/golden.ts judge).
 import { judge } from '../e2e/golden'
-import { finishPlan } from '../lib/plan/finish'
-import { wallQuad } from '../lib/plan/geometry'
-import { roomAreas } from '../lib/plan/rooms'
-import type { Plan } from '../lib/plan/types'
+import { finishPlan } from '../lib/plan/assist/finish'
+import { wallQuad } from '../lib/plan/domain/geometry'
+import { roomAreas } from '../lib/plan/domain/rooms'
+import type { Plan } from '../lib/plan/domain/types'
 
 const [host, key, id, ...rest] = process.argv.slice(2)
 if (!host || !key || !id) {

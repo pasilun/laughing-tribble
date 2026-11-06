@@ -2,8 +2,8 @@
 // not stored anywhere) and the line to add to PLAN_USERS in Vercel.
 //   npx tsx scripts/user-add.ts <id> [https://din-adress.vercel.app]
 import { randomBytes } from 'crypto'
-import { hashKey } from '../lib/plan/access'
-import { USER_ID } from '../lib/plan/user'
+import { hashKey } from '../lib/plan/auth/access'
+import { USER_ID } from '../lib/plan/auth/user'
 
 const [id, host = 'https://<adress>'] = process.argv.slice(2)
 if (!id || !USER_ID.test(id)) {

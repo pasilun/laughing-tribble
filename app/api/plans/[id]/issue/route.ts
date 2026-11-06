@@ -1,4 +1,4 @@
-import { secured } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/auth/access'
 import { issuePlan } from '@/lib/plan/service'
 import { author, fail, readJson, type Ctx } from '../../http'
 

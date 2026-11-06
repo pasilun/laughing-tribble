@@ -1,5 +1,5 @@
-import { secured } from '@/lib/plan/access'
-import { putAsset } from '@/lib/plan/store'
+import { secured } from '@/lib/plan/auth/access'
+import { putAsset } from '@/lib/plan/storage/store'
 import { fail, type Ctx } from '../../http'
 
 export const runtime = 'nodejs'

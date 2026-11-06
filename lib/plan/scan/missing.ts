@@ -1,5 +1,5 @@
-import { pointSegmentDistance } from '../geometry'
-import type { Plan, Pt } from '../types'
+import { pointSegmentDistance } from '../domain/geometry'
+import type { Plan, Pt } from '../domain/types'
 import type { Proposal } from './detect'
 
 // Walls the drawings show and the plan lacks. Each drawing's wall proposals

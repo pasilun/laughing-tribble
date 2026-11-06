@@ -22,7 +22,7 @@ async function main() {
   const file = flag('--file')
   const [tool, raw = '{}'] = argv
   if (!tool) {
-    const { PLAN_TOOLS } = await import('../lib/plan/mcp-tools')
+    const { PLAN_TOOLS } = await import('../lib/plan/mcp/mcp-tools')
     console.log(PLAN_TOOLS.map((t) => `${t.name}: ${t.description.split('\n')[0]}`).join('\n'))
     return
   }
@@ -31,7 +31,7 @@ async function main() {
     args.data_base64 = readFileSync(file).toString('base64')
     args.filename ??= path.basename(file)
   }
-  const { handlePlanTool } = await import('../lib/plan/mcp-tools')
+  const { handlePlanTool } = await import('../lib/plan/mcp/mcp-tools')
   const res = await handlePlanTool(tool, args)
   if (!res) throw new Error(`okänt verktyg ${tool}`)
   mkdirSync(out, { recursive: true })

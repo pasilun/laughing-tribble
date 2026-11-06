@@ -1,8 +1,8 @@
-import { takenByEnv } from './access'
-import { personById } from './people'
+import { takenByEnv } from '../auth/access'
+import { personById } from '../auth/people'
 import { accessFor, forgetAccess, headKey, isTrashed, noteShared, pointerKey, readShares, scopedBackend, sharesKey, type Access, type DocKind, type Shares } from './docs'
 import { PublicError } from './storage'
-import { currentUser, scopeOf, USER_ID } from './user'
+import { currentUser, scopeOf, USER_ID } from '../auth/user'
 
 // Sharing a document (a plan, a site plan) with another person. Both then make new revisions of the same
 // document (the revision check stops one from overwriting the other). Anyone in it may add a person;

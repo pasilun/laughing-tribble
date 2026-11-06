@@ -3,14 +3,14 @@ import { promises as fsp } from 'node:fs'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { forgetPeople } from '@/lib/plan/people'
-import { hashKey } from '@/lib/plan/access'
+import { forgetPeople } from '@/lib/plan/auth/people'
+import { hashKey } from '@/lib/plan/auth/access'
 import { createPlan } from '@/lib/plan/service'
-import { listPlansAndTrash } from '@/lib/plan/store'
-import { forgetAccess } from '@/lib/plan/docs'
-import { PLANS } from '@/lib/plan/docs'
-import { addShare, removeShare } from '@/lib/plan/shares'
-import { runAs } from '@/lib/plan/user'
+import { listPlansAndTrash } from '@/lib/plan/storage/store'
+import { forgetAccess } from '@/lib/plan/storage/docs'
+import { PLANS } from '@/lib/plan/storage/docs'
+import { addShare, removeShare } from '@/lib/plan/storage/shares'
+import { runAs } from '@/lib/plan/auth/user'
 import { GET as accountsGET } from '../app/api/plans/accounts/route'
 
 // Listing a folder is a billed "advanced operation" on Vercel Blob (2 000 a month on Hobby, as are all
@@ -99,7 +99,7 @@ test('an index that is missing or a day old is rebuilt from the pointers', async
 
 test('the admin check costs no listing: the accounts answer carries it', async () => {
   const req = (key: string) => new Request('http://x/api/plans/accounts', { headers: { cookie: `plan_access=${cookieOf(key)}` } })
-  const { cookieFor, userFromKey } = await import('@/lib/plan/access')
+  const { cookieFor, userFromKey } = await import('@/lib/plan/auth/access')
   const cookieOf = (key: string) => cookieFor(userFromKey(key)!)
   let res: Response | undefined
   const n = await count(async () => {

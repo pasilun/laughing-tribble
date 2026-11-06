@@ -1,4 +1,4 @@
-import { SITES } from '@/lib/plan/docs'
+import { SITES } from '@/lib/plan/storage/docs'
 import { restoreRoute } from '../../../plans/doc-routes'
 
 export const runtime = 'nodejs'

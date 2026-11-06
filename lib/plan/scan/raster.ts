@@ -1,7 +1,7 @@
 import path from 'path'
 import sharp from 'sharp'
-import { getAsset } from '../store'
-import type { Plan, Pt, Source, Underlay } from '../types'
+import { getAsset } from '../storage/store'
+import type { Plan, Pt, Source, Underlay } from '../domain/types'
 
 // Server-side handling of source drawings: conversion to PNG and pixel
 // access for the scan tools. Coordinates: plan mm ↔ image px through the

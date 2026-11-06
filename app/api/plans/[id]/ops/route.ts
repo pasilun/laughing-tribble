@@ -1,5 +1,5 @@
-import { secured } from '@/lib/plan/access'
-import type { Op } from '@/lib/plan/ops'
+import { secured } from '@/lib/plan/auth/access'
+import type { Op } from '@/lib/plan/domain/ops'
 import { editPlan } from '@/lib/plan/service'
 import { author, fail, readJson, type Ctx } from '../../http'
 

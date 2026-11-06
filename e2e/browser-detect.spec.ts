@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { looksLikeInAppBrowser } from '@/lib/plan/browser'
+import { looksLikeInAppBrowser } from '@/lib/plan/auth/browser'
 
 // The strip above the invite form shows only in a webview: cookies set there are
 // not shared with the browser the OAuth handshake opens.

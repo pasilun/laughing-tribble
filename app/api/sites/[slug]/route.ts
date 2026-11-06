@@ -1,7 +1,7 @@
-import { secured } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/auth/access'
 import { editItems } from '@/lib/site/service'
 import { getSite } from '@/lib/site/store'
-import { SITES } from '@/lib/plan/docs'
+import { SITES } from '@/lib/plan/storage/docs'
 import { deleteRoute } from '../../plans/doc-routes'
 import { author, fail, readJson, revParam } from '../../plans/http'
 

@@ -1,8 +1,8 @@
-import { secured } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/auth/access'
 import { planDxf, sheetPdf, sheetPng, sheetSvg } from '@/lib/plan/export'
-import { hasChanges } from '@/lib/plan/sheet'
+import { hasChanges } from '@/lib/plan/domain/sheet'
 import { loadPlan } from '@/lib/plan/service'
-import type { View } from '@/lib/plan/types'
+import type { View } from '@/lib/plan/domain/types'
 import { fail, revParam, type Ctx } from '../../http'
 
 export const runtime = 'nodejs'

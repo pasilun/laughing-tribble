@@ -1,9 +1,9 @@
-import { assertDocId, deleteDoc, headKey as docHeadKey, listDocs, purgeDoc, restoreDoc, SITES, userBackend, type Listed, type Trashed } from '../plan/docs'
-import { ConflictError } from '../plan/storage'
+import { assertDocId, deleteDoc, headKey as docHeadKey, listDocs, purgeDoc, restoreDoc, SITES, userBackend, type Listed, type Trashed } from '../plan/storage/docs'
+import { ConflictError } from '../plan/storage/storage'
 import type { SiteDoc, SiteRevision } from './doc'
 
 // Site documents beside the plans, in the same private per-person storage and with the same sharing and trash
-// (lib/plan/docs.ts): every save is an immutable revision (sites/<slug>/rev-0001.json …) and a small head
+// (lib/plan/storage/docs.ts): every save is an immutable revision (sites/<slug>/rev-0001.json …) and a small head
 // pointer; a save against an old revision is refused.
 
 type Head = { revision: number; designation: string; updatedAt: string }

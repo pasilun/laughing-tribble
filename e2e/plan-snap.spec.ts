@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { centerCorner, faceToCenter, snapPoint } from '@/components/plan-editor/snap'
-import { demoPlan } from '@/lib/plan/demo'
+import { demoPlan } from '@/lib/plan/domain/demo'
 
 test('face-traced wall becomes a centre line on the chosen side', () => {
   // Along +x in y-down coordinates, "left" is up (negative y).

@@ -5,7 +5,7 @@
 //   npx tsx scripts/eval-openings.ts <plan> <reference> <source> <method,...> [--rescan]
 // --rescan first drops the openings that source alone gave, to score them anew.
 process.env.PLAN_STORE ??= 'fs'
-import { comparePlans } from '../lib/plan/compare'
+import { comparePlans } from '../lib/plan/assist/compare'
 import { loadPlan } from '../lib/plan/service'
 import { newOpenings } from '../lib/plan/scan/openings'
 import { loadGray, resolveSource } from '../lib/plan/scan/raster'

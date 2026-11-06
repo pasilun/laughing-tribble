@@ -1,6 +1,6 @@
-import { isAdmin, secured, takenByEnv } from '@/lib/plan/access'
-import { createInvite, listInvites, listPeople, personById, removePerson, revokeInvite } from '@/lib/plan/people'
-import { currentUser } from '@/lib/plan/user'
+import { isAdmin, secured, takenByEnv } from '@/lib/plan/auth/access'
+import { createInvite, listInvites, listPeople, personById, removePerson, revokeInvite } from '@/lib/plan/auth/people'
+import { currentUser } from '@/lib/plan/auth/user'
 import { readJson } from '../http'
 
 export const runtime = 'nodejs'

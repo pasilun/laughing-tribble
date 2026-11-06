@@ -1,4 +1,4 @@
-import { exchangeCode, refreshTokens, type TokenResult } from '@/lib/plan/oauth'
+import { exchangeCode, refreshTokens, type TokenResult } from '@/lib/plan/auth/oauth'
 
 export const runtime = 'nodejs'
 

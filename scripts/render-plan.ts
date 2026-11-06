@@ -2,9 +2,9 @@
 //   npx tsx scripts/render-plan.ts [plan.json|demo] <outDir>
 import { Resvg } from '@resvg/resvg-js'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { demoPlan } from '../lib/plan/demo'
-import { renderSheet } from '../lib/plan/sheet'
-import type { Plan } from '../lib/plan/types'
+import { demoPlan } from '../lib/plan/domain/demo'
+import { renderSheet } from '../lib/plan/domain/sheet'
+import type { Plan } from '../lib/plan/domain/types'
 
 const [src = 'demo', out = '.visual/plan'] = process.argv.slice(2)
 const plan: Plan = src === 'demo' ? demoPlan() : JSON.parse(readFileSync(src, 'utf8'))

@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { add, along, bounds, dist, leftNormal, pointSegmentDistance, scale, wallDir, wallLength, wallQuad } from '@/lib/plan/geometry'
-import { applyOps, newId, type Op } from '@/lib/plan/ops'
-import { fireRatingIn, wallPieces } from '@/lib/plan/sheet'
-import type { Fixture, FixtureKind, Opening, OpeningKind, Phase, Plan, Pt, View, Wall } from '@/lib/plan/types'
+import { add, along, bounds, dist, leftNormal, pointSegmentDistance, scale, wallDir, wallLength, wallQuad } from '@/lib/plan/domain/geometry'
+import { applyOps, newId, type Op } from '@/lib/plan/domain/ops'
+import { fireRatingIn, wallPieces } from '@/lib/plan/domain/sheet'
+import type { Fixture, FixtureKind, Opening, OpeningKind, Phase, Plan, Pt, View, Wall } from '@/lib/plan/domain/types'
 import { atLength, centerCorner, faceToCenter, snapPoint, type Justify, type Snap } from './snap'
 
 export type Tool = 'select' | 'wall' | 'opening' | 'fixture' | 'room' | 'note' | 'dimension' | 'calibrate' | 'underlay' | 'pan'

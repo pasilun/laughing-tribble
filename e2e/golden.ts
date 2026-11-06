@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { comparePlans } from '@/lib/plan/compare'
-import { pointSegmentDistance } from '@/lib/plan/geometry'
-import { roomAreas } from '@/lib/plan/rooms'
+import { comparePlans } from '@/lib/plan/assist/compare'
+import { pointSegmentDistance } from '@/lib/plan/domain/geometry'
+import { roomAreas } from '@/lib/plan/domain/rooms'
 import { joinPieces } from '@/lib/plan/scan/pieces'
-import type { Plan, Pt, Wall } from '@/lib/plan/types'
+import type { Plan, Pt, Wall } from '@/lib/plan/domain/types'
 
 // The golden case: build a plan from one known drawing with the scan tools,
 // the way Claude does (detect, snap, read the facade, find openings, read

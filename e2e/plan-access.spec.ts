@@ -3,9 +3,9 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { accessMode, cookieFor, cookieValue, denied, hashKey, isAdmin, reservedByEnv, resolveCookie, resolveKey, resolveRequest, userFromKey } from '@/lib/plan/access'
-import { bumpSessionVersion, createInvite, forgetPeople, redeemInvite } from '@/lib/plan/people'
-import { takenByEnv } from '@/lib/plan/access'
+import { accessMode, cookieFor, cookieValue, denied, hashKey, isAdmin, reservedByEnv, resolveCookie, resolveKey, resolveRequest, userFromKey } from '@/lib/plan/auth/access'
+import { bumpSessionVersion, createInvite, forgetPeople, redeemInvite } from '@/lib/plan/auth/people'
+import { takenByEnv } from '@/lib/plan/auth/access'
 import { allowed, fail, ok, resetLimits } from '../app/api/plans/login/limit'
 
 test.describe.configure({ mode: 'serial' })

@@ -1,4 +1,4 @@
-import type { Pt } from '../types'
+import type { Pt } from '../domain/types'
 import { toMm, toPx, type Gray, type Raster } from './raster'
 import type { Rect } from './view'
 

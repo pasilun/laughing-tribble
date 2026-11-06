@@ -1,7 +1,7 @@
-import { isAdmin, secured } from '@/lib/plan/access'
-import { copyPages } from '@/lib/plan/migrate-store'
-import { blobBackend, blobConfigured, storageKind, tursoBackend, tursoConfigured } from '@/lib/plan/storage'
-import { currentUser } from '@/lib/plan/user'
+import { isAdmin, secured } from '@/lib/plan/auth/access'
+import { copyPages } from '@/lib/plan/storage/migrate-store'
+import { blobBackend, blobConfigured, storageKind, tursoBackend, tursoConfigured } from '@/lib/plan/storage/storage'
+import { currentUser } from '@/lib/plan/auth/user'
 import { fail, readJson } from '../http'
 
 export const runtime = 'nodejs'

@@ -1,4 +1,4 @@
-import { registerClient } from '@/lib/plan/oauth'
+import { registerClient } from '@/lib/plan/auth/oauth'
 import { allowed, fail } from '../../api/plans/login/limit'
 
 export const runtime = 'nodejs'

@@ -1,11 +1,11 @@
 import { Zip, ZipDeflate, ZipPassThrough } from 'fflate'
-import { sheetPdf } from './export'
-import { loadPlan } from './service'
+import { sheetPdf } from '../export'
+import { loadPlan } from '../service'
 import { listPlans } from './store'
 import { systemBackend } from './storage'
 import { ownBackend, userBackend } from './docs'
-import { listSites } from '../site/store'
-import { runAs, type User } from './user'
+import { listSites } from '../../site/store'
+import { runAs, type User } from '../auth/user'
 
 // A backup of a person's plans as a zip, built while it is sent (no size limit from the buffered
 // response, and the download starts at once).

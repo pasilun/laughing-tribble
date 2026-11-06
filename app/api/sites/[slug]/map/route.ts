@@ -1,4 +1,4 @@
-import { secured } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/auth/access'
 import { underlayImage } from '@/lib/site/service'
 import { getSite } from '@/lib/site/store'
 import { fail } from '../../../plans/http'

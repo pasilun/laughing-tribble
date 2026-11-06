@@ -3,8 +3,8 @@
 // copies have been read back and compared. Run against the real store with its
 // blob token in the environment (BLOB_READ_WRITE_TOKEN), or against .data locally.
 //   npx tsx scripts/migrate-to-users.ts --to <id> [--delete-legacy] [--dry-run]
-import { systemBackend } from '../lib/plan/storage'
-import { USER_ID } from '../lib/plan/user'
+import { systemBackend } from '../lib/plan/storage/storage'
+import { USER_ID } from '../lib/plan/auth/user'
 
 async function main() {
   const args = process.argv.slice(2)

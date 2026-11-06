@@ -8,8 +8,8 @@
 // Run: npx tsx scripts/make-golden.ts
 import { writeFileSync } from 'node:fs'
 import sharp from 'sharp'
-import { leftNormal, wallDir, wallSegments } from '../lib/plan/geometry'
-import type { Plan, Pt, Wall } from '../lib/plan/types'
+import { leftNormal, wallDir, wallSegments } from '../lib/plan/domain/geometry'
+import type { Plan, Pt, Wall } from '../lib/plan/domain/types'
 
 const DIR = 'e2e/fixtures/golden'
 const MM_PER_PX = 8.467 // 1:100 at 300 dpi

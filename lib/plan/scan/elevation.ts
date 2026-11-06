@@ -1,5 +1,5 @@
-import { wallDir, wallLength } from '../geometry'
-import type { Pt, Wall } from '../types'
+import { wallDir, wallLength } from '../domain/geometry'
+import type { Pt, Wall } from '../domain/types'
 import { dark, toPx, type Gray, type Raster } from './raster'
 
 // Windows from a facade drawing. In an elevation the wall surface is blank

@@ -1,6 +1,6 @@
-import type { Op } from './ops'
-import { spaceGrid } from './rooms'
-import type { Plan, Pt } from './types'
+import type { Op } from '../domain/ops'
+import { spaceGrid } from '../domain/rooms'
+import type { Plan, Pt } from '../domain/types'
 
 // The simple surface for small models: plan_fix verbs instead of raw operations, and plan_next,
 // which says where a plan stands and what to do next, with the arguments filled in.

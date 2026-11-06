@@ -16,7 +16,7 @@ import { runAs, USER_ID, type User } from './user'
 //
 //   PLAN_ADMINS  "anna": who may invite people (the page /plans/people).
 //
-// People who joined by an invitation link are kept in the store (lib/plan/people.ts)
+// People who joined by an invitation link are kept in the store (lib/plan/auth/people.ts)
 // and checked after PLAN_USERS, so adding someone needs no redeploy.
 //
 // The key is accepted as a login cookie (browser) or a bearer token. (A key in the URL, ?key=, is not: it

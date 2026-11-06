@@ -1,5 +1,5 @@
-import { accessMode, isAdmin } from '@/lib/plan/access'
-import { activeAccount, otherAccounts, sessionCookies } from '@/lib/plan/accounts'
+import { accessMode, isAdmin } from '@/lib/plan/auth/access'
+import { activeAccount, otherAccounts, sessionCookies } from '@/lib/plan/auth/accounts'
 import { readJson } from '../http'
 
 export const runtime = 'nodejs'

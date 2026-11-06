@@ -27,7 +27,7 @@ plans are stored under their own prefix and are invisible to everyone else.
 Without any sign-in variable (local development) everything is open; on Vercel
 it is refused. Plan ids carry a 64-bit random suffix.
 
-## Model (`lib/plan/types.ts`)
+## Model (`lib/plan/domain/types.ts`)
 
 Integer millimetres, x right / y down. Walls are centre lines with a
 thickness and a phase (`existing | demolish | new`), optional load-bearing,
@@ -39,14 +39,14 @@ Openings sit on a wall at an offset from its `a` end. Före and efter are **one 
 shows today (new work hidden), efter marks demolition (dashed) and new
 work (black).
 
-## Editing (`lib/plan/ops.ts`)
+## Editing (`lib/plan/domain/ops.ts`)
 
 Every change — editor or Claude — is a list of small operations applied
 all-or-nothing (`add`, `update`, `delete`, `moveVertex`, `moveWall`,
 `setWallLength`, `setSheet`, `setTitleBlock`, `setUnderlay`). Moving a wall
 end drags walls joined at that point. Nothing is regenerated.
 
-## Versions (`lib/plan/store.ts`)
+## Versions (`lib/plan/storage/store.ts`)
 
 Append-only revisions (`plans/<id>/rev-NNNN.json` + `head.json`) in a
 private Vercel Blob store, or `.data/` locally. Saves carry the revision
@@ -54,7 +54,7 @@ they were based on; a stale base is rejected (409) so Claude and the editor
 never overwrite each other. *Utfärda* sets the next revision letter
 (A, B, …) in the title block.
 
-## Output (`lib/plan/sheet.ts`, `lib/plan/export.ts`)
+## Output (`lib/plan/domain/sheet.ts`, `lib/plan/export.ts`)
 
 A3/A4 at 1:50 or 1:100, drawn in paper millimetres so the PDF prints at
 true scale at 100 %: title block, legend, scale bar, north arrow, room
@@ -63,7 +63,7 @@ names/areas, fire-cell boundary, automatic dimensions for new openings
 Exports: vector PDF, SVG, PNG (embedded Liberation Sans), DXF R12 in mm
 with layers (`A-VAGG-BEF`, `A-VAGG-RIV`, `A-VAGG-NY`, …) for consultants.
 
-## Checks (`lib/plan/checks.ts`)
+## Checks (`lib/plan/domain/checks.ts`)
 
 Flags what the drawing should show — missing title-block fields, brf name
 used instead of fastighetsbeteckning, plan not fitting the sheet, demolished
@@ -142,7 +142,7 @@ handlers against the local store:
   test picks candidates and the leaf+arc test decides. This finds doors in
   walls that can't be located in the drawing (mostly door, or drawn more
   than 0.15 m off), and gives their width and swing.
-- Openings keep clear of the walls they meet (`lib/plan/clear.ts`). A window
+- Openings keep clear of the walls they meet (`lib/plan/assist/clear.ts`). A window
   that runs into a corner wall is cut back to the free part of the wall,
   100 mm clear of the other wall; a centre-marked opening, whose width is only
   a guess and whose centre is good to about ±0.2 m, moves along the wall (up

@@ -1,5 +1,5 @@
-import { ACCESS_COOKIE, accessMode, resolveCookie } from '@/lib/plan/access'
-import { checkAuthRequest, issueCode } from '@/lib/plan/oauth'
+import { ACCESS_COOKIE, accessMode, resolveCookie } from '@/lib/plan/auth/access'
+import { checkAuthRequest, issueCode } from '@/lib/plan/auth/oauth'
 
 export const runtime = 'nodejs'
 

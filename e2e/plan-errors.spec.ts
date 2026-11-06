@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ConflictError, PublicError } from '@/lib/plan/storage'
+import { ConflictError, PublicError } from '@/lib/plan/storage/storage'
 import { fail } from '../app/api/plans/http'
 
 // Errors meant for people are shown; every other error is logged and answered with a plain message,

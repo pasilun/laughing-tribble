@@ -1,4 +1,4 @@
-import { PLANS } from '@/lib/plan/docs'
+import { PLANS } from '@/lib/plan/storage/docs'
 import { shareRoutes } from '../../doc-routes'
 
 export const runtime = 'nodejs'

@@ -1,8 +1,8 @@
 import { randomBytes } from 'crypto'
-import { applyOps, validatePlan, type Op } from './ops'
-import { demoPlan } from './demo'
-import { getHead, getRevision, nextLetter, saveRevision, type StoredRevision } from './store'
-import type { Plan, Revision } from './types'
+import { applyOps, validatePlan, type Op } from './domain/ops'
+import { demoPlan } from './domain/demo'
+import { getHead, getRevision, nextLetter, saveRevision, type StoredRevision } from './storage/store'
+import type { Plan, Revision } from './domain/types'
 
 function emptyPlan(id: string, name: string): Plan {
   return {

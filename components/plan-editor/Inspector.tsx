@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { dist, polygonArea, wallLength } from '@/lib/plan/geometry'
-import type { Op } from '@/lib/plan/ops'
-import type { FixtureKind, Phase, Plan, SheetScale, TitleBlock } from '@/lib/plan/types'
+import { dist, polygonArea, wallLength } from '@/lib/plan/domain/geometry'
+import type { Op } from '@/lib/plan/domain/ops'
+import type { FixtureKind, Phase, Plan, SheetScale, TitleBlock } from '@/lib/plan/domain/types'
 import type { Selection } from './Canvas'
 
 type Props = {

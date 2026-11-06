@@ -1,4 +1,4 @@
-import { secured } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/auth/access'
 import type { SiteDoc } from '@/lib/site/doc'
 import { slugOf } from '@/lib/site/doc'
 import { createSite, importSite, knownDesignations } from '@/lib/site/service'

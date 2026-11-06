@@ -1,4 +1,4 @@
-import type { Pt } from '../types'
+import type { Pt } from '../domain/types'
 import { sample, toMm, toPx, type Gray, type Raster } from './raster'
 
 // A printed dimension line ends in strokes across it (extension lines, ticks).

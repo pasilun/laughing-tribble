@@ -1,6 +1,6 @@
-import { secured } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/auth/access'
 import { loadPlan } from '@/lib/plan/service'
-import { putAsset } from '@/lib/plan/store'
+import { putAsset } from '@/lib/plan/storage/store'
 import { fail, type Ctx } from '../../../http'
 import { PART_MAX, UPLOAD_ID, partName } from '../../../upload'
 

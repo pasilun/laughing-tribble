@@ -30,12 +30,12 @@ if (!dry && !apiKey) {
 
 process.env.PLAN_STORE = 'fs'
 process.env.PLAN_DATA_DIR = mkdtempSync(path.join(tmpdir(), 'plan-eval-'))
-const { runAs } = await import('../lib/plan/user')
+const { runAs } = await import('../lib/plan/auth/user')
 const { createPlan, loadPlan } = await import('../lib/plan/service')
 const { addSource } = await import('../lib/plan/scan/add-source')
-const { handlePlanTool, toolsFor, instructionsFor } = await import('../lib/plan/mcp-tools')
-const { finishPlan } = await import('../lib/plan/finish')
-const { auditPlan } = await import('../lib/plan/audit')
+const { handlePlanTool, toolsFor, instructionsFor } = await import('../lib/plan/mcp/mcp-tools')
+const { finishPlan } = await import('../lib/plan/assist/finish')
+const { auditPlan } = await import('../lib/plan/assist/audit')
 
 // The case: the cellar drawing of the repository, 1:100, printed outside size 6,08 × 10,50 m.
 const CASE = { file: 'e2e/fixtures/cellar/kallare.png', printed: { width: 6080, length: 10500 }, windows: 2 }

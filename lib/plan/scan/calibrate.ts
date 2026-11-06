@@ -1,5 +1,5 @@
-import { dist } from '../geometry'
-import type { Pt } from '../types'
+import { dist } from '../domain/geometry'
+import type { Pt } from '../domain/types'
 import type { Raster } from './raster'
 
 // Least-squares scale from several known distances read off the source.

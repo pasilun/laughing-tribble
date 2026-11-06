@@ -75,9 +75,9 @@ on; the owner may take a person out (`DELETE /api/plans/:id/share?user=…`), an
   it back with the owner, the owner has it again.
 - **Storage:** the data stays under the owner (`u/<owner>/plans/<id>/`), together with
   `shares.json` (`{ members, ownerRemoved? }`). A member has a pointer `u/<member>/shared/<id>.json`.
-  All reads and writes of `plans/<id>/…` go to the owner's folder for a member (lib/plan/docs.ts).
+  All reads and writes of `plans/<id>/…` go to the owner's folder for a member (lib/plan/storage/docs.ts).
   The access is remembered for 10 s per server instance.
-- Tomter (site plans) are shared, deleted (to the trash) and restored in the same way, through the same code (`lib/plan/docs.ts`); their pointers live in `u/<member>/shared-sites/<slug>.json`. Sharing needs personal keys (`PLAN_USERS`), and not local development without sign-in.
+- Tomter (site plans) are shared, deleted (to the trash) and restored in the same way, through the same code (`lib/plan/storage/docs.ts`); their pointers live in `u/<member>/shared-sites/<slug>.json`. Sharing needs personal keys (`PLAN_USERS`), and not local development without sign-in.
 
 ## Several people on one browser
 

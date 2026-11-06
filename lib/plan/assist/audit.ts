@@ -1,13 +1,13 @@
-import { checkPlan } from './checks'
+import { checkPlan } from '../domain/checks'
 import { finishPlan } from './finish'
-import { dist, wallLength } from './geometry'
-import type { Op } from './ops'
+import { dist, wallLength } from '../domain/geometry'
+import type { Op } from '../domain/ops'
 import { reviewPlan } from './review'
-import { readDoors } from './scan/doors'
-import { showsWall } from './scan/openings'
-import { loadGray, resolveSource } from './scan/raster'
-import { snapWalls } from './scan/snap'
-import type { Plan, Wall } from './types'
+import { readDoors } from '../scan/doors'
+import { showsWall } from '../scan/openings'
+import { loadGray, resolveSource } from '../scan/raster'
+import { snapWalls } from '../scan/snap'
+import type { Plan, Wall } from '../domain/types'
 
 // plan_audit: the plan checked against the drawing it was traced from, by the server, so that
 // whoever draws it (a small model, or a large one reviewing) reads a short list of numbered

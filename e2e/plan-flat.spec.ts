@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext, type TestInfo } from '@playwright/test'
 import { readFileSync } from 'fs'
-import type { Opening, Plan, Wall } from '@/lib/plan/types'
+import type { Opening, Plan, Wall } from '@/lib/plan/domain/types'
 
 // The golden case from a real flat: lgh 152–154 as the user's model has it (rev 40, traced from the
 // 1999 survey A00:24 and checked against the 1936 drawing and laser measurements), and the survey

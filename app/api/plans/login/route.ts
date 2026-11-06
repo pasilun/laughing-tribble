@@ -1,5 +1,5 @@
-import { accessMode, cookieForAny, resolveKey } from '@/lib/plan/access'
-import { cookiesForNewLogin } from '@/lib/plan/accounts'
+import { accessMode, cookieForAny, resolveKey } from '@/lib/plan/auth/access'
+import { cookiesForNewLogin } from '@/lib/plan/auth/accounts'
 import { allowed, fail, ok } from './limit'
 
 export const runtime = 'nodejs'

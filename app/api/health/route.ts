@@ -1,5 +1,5 @@
-import { accessMode, secured, userCount } from '@/lib/plan/access'
-import { storageProbe } from '@/lib/plan/storage'
+import { accessMode, secured, userCount } from '@/lib/plan/auth/access'
+import { storageProbe } from '@/lib/plan/storage/storage'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -37,7 +37,7 @@ export const GET = secured(async (): Promise<Response> => {
       return `${new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="4" height="4"/></svg>').render().asPng().length} byte`
     }),
     pdf: await check(async () => {
-      const { demoPlan } = await import('@/lib/plan/demo')
+      const { demoPlan } = await import('@/lib/plan/domain/demo')
       const { sheetPdf, sheetPng } = await import('@/lib/plan/export')
       const pdf = await sheetPdf(demoPlan(), ['fore', 'efter'])
       if (pdf.subarray(0, 4).toString() !== '%PDF') throw new Error('inte en PDF')

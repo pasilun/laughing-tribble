@@ -1,4 +1,4 @@
-import { clashes } from './clear'
+import { clashes } from '../assist/clear'
 import { validatePlan } from './ops'
 import { fittingScale, layoutSheet } from './sheet'
 import type { Plan } from './types'

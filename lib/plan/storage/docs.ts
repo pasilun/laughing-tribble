@@ -1,7 +1,7 @@
-import { accessMode } from './access'
-import { SLUG } from '../site/doc'
+import { accessMode } from '../auth/access'
+import { SLUG } from '../../site/doc'
 import { PublicError, Scoped, systemBackend, type Backend } from './storage'
-import { currentUser, scopeOf, type User } from './user'
+import { currentUser, scopeOf, type User } from '../auth/user'
 
 // Documents of any kind (plans, site plans) in a person's storage: who has access, sharing, the trash and the
 // list. Everything here is the same for every kind; a kind says only where its files live (DocKind). A new

@@ -1,7 +1,7 @@
-import { secured } from '@/lib/plan/access'
+import { secured } from '@/lib/plan/auth/access'
 import { createPlan } from '@/lib/plan/service'
-import { listPlansAndTrash } from '@/lib/plan/store'
-import type { Plan } from '@/lib/plan/types'
+import { listPlansAndTrash } from '@/lib/plan/storage/store'
+import type { Plan } from '@/lib/plan/domain/types'
 import { author, fail, readJson } from './http'
 
 export const runtime = 'nodejs'

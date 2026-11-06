@@ -1,6 +1,6 @@
-import { along, leftNormal, wallDir, wallLength } from '../geometry'
-import type { Op } from '../ops'
-import type { Opening, Plan, Pt, Wall } from '../types'
+import { along, leftNormal, wallDir, wallLength } from '../domain/geometry'
+import type { Op } from '../domain/ops'
+import type { Opening, Plan, Pt, Wall } from '../domain/types'
 import { dark, toPx, type Gray, type Raster } from './raster'
 
 // Reads door swings off a source drawing instead of guessing them: each of

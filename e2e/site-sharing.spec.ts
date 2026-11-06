@@ -3,19 +3,19 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { unzipSync } from 'fflate'
-import { hashKey } from '@/lib/plan/access'
-import { forgetAccess, SITES } from '@/lib/plan/docs'
-import { forgetPeople } from '@/lib/plan/people'
-import { addShare } from '@/lib/plan/shares'
+import { hashKey } from '@/lib/plan/auth/access'
+import { forgetAccess, SITES } from '@/lib/plan/storage/docs'
+import { forgetPeople } from '@/lib/plan/auth/people'
+import { addShare } from '@/lib/plan/storage/shares'
 import { importSite, editItems } from '@/lib/site/service'
 import { getSite, listSites, listSitesAndTrash, purgeSite, restoreSite, deleteSite } from '@/lib/site/store'
-import { runAs } from '@/lib/plan/user'
+import { runAs } from '@/lib/plan/auth/user'
 import { GET as backupGET } from '../app/api/plans/backup/route'
 import { POST as sharePOST } from '../app/api/sites/[slug]/share/route'
 import { DELETE as siteDELETE } from '../app/api/sites/[slug]/route'
 import { POST as restorePOST } from '../app/api/sites/[slug]/restore/route'
 
-// Site plans (tomter) share, trash and restore through the same code as plans (lib/plan/docs.ts). This checks
+// Site plans (tomter) share, trash and restore through the same code as plans (lib/plan/storage/docs.ts). This checks
 // the parts that are particular to sites: and that the backup carries them.
 
 test.describe.configure({ mode: 'serial' })

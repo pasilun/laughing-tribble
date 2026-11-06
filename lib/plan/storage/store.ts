@@ -1,7 +1,7 @@
-import { currentUser } from './user'
+import { currentUser } from '../auth/user'
 import { assertDocId, headKey as docHeadKey, listDocs, PLANS, userBackend, type Listed, type Trashed } from './docs'
 import { ConflictError, PublicError, type Backend } from './storage'
-import type { Plan, Revision } from './types'
+import type { Plan, Revision } from '../domain/types'
 
 // Append-only revision history per plan. Every save – from the editor or from Claude – writes a new immutable
 // revision; nothing is overwritten except the small head pointer. Where the files live is storage.ts, who may see

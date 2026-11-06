@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { ACCESS_COOKIE, accessMode, resolveCookie } from '@/lib/plan/access'
-import { checkAuthRequest } from '@/lib/plan/oauth'
+import { ACCESS_COOKIE, accessMode, resolveCookie } from '@/lib/plan/auth/access'
+import { checkAuthRequest } from '@/lib/plan/auth/oauth'
 
 export const metadata = { title: 'Godkänn anslutning' }
 export const dynamic = 'force-dynamic'

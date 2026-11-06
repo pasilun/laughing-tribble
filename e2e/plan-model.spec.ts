@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test'
-import { applyOps } from '@/lib/plan/ops'
-import { demoPlan } from '@/lib/plan/demo'
-import { renderSheet, layoutSheet, wallPieces } from '@/lib/plan/sheet'
-import { checkPlan } from '@/lib/plan/checks'
-import type { Opening, Plan, Wall } from '@/lib/plan/types'
-import { clashes, clipToFree, shiftToFree } from '@/lib/plan/clear'
+import { applyOps } from '@/lib/plan/domain/ops'
+import { demoPlan } from '@/lib/plan/domain/demo'
+import { renderSheet, layoutSheet, wallPieces } from '@/lib/plan/domain/sheet'
+import { checkPlan } from '@/lib/plan/domain/checks'
+import type { Opening, Plan, Wall } from '@/lib/plan/domain/types'
+import { clashes, clipToFree, shiftToFree } from '@/lib/plan/assist/clear'
 
 // Pure model tests — no browser needed.
 
@@ -220,7 +220,7 @@ test.describe('checks', () => {
 
 test.describe('room areas', () => {
   test('computed from walls per view; doors count as closed', async () => {
-    const { roomAreas } = await import('@/lib/plan/rooms')
+    const { roomAreas } = await import('@/lib/plan/domain/rooms')
     const plan = demoPlan()
     const fore = roomAreas(plan, 'fore')
     const efter = roomAreas(plan, 'efter')
@@ -233,7 +233,7 @@ test.describe('room areas', () => {
   })
 
   test('a passage with no wall in it joins the rooms either side; a doorway does not', async () => {
-    const { roomAreas } = await import('@/lib/plan/rooms')
+    const { roomAreas } = await import('@/lib/plan/domain/rooms')
     const wall = (id: string, ax: number, ay: number, bx: number, by: number): Wall => ({ id, a: { x: ax, y: ay }, b: { x: bx, y: by }, thickness: 100, phase: 'existing' })
     const walls = [wall('n', 0, 0, 4000, 0), wall('s', 0, 2000, 4000, 2000), wall('w', 0, 0, 0, 2000), wall('e', 4000, 0, 4000, 2000), wall('m', 2000, 0, 2000, 2000)]
     const rooms = [{ id: 'r1', name: 'Hall', at: { x: 1000, y: 1000 } }, { id: 'r2', name: 'Hall', at: { x: 3000, y: 1000 } }]
@@ -317,7 +317,7 @@ test('openings clear of the walls they meet: a window through a corner is cut ba
 })
 
 test('a mass is a convex solid: drawn hatched like a load-bearing wall, solid in room areas, in the way of openings', async () => {
-  const { roomAreas } = await import('@/lib/plan/rooms')
+  const { roomAreas } = await import('@/lib/plan/domain/rooms')
   const wall = (id: string, ax: number, ay: number, bx: number, by: number): Wall => ({ id, a: { x: ax, y: ay }, b: { x: bx, y: by }, thickness: 100, phase: 'existing' })
   const walls = [wall('n', 0, 0, 4000, 0), wall('s', 0, 2000, 4000, 2000), wall('w', 0, 0, 0, 2000), wall('e', 4000, 0, 4000, 2000)]
   const base: Plan = { ...demoPlan(), walls, openings: [], fixtures: [], rooms: [{ id: 'r', name: 'Rum', at: { x: 2000, y: 1000 } }] }

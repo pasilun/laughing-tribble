@@ -1,4 +1,4 @@
-import type { Pt } from '../types'
+import type { Pt } from '../domain/types'
 import { sample, toPx, type Gray, type Raster } from './raster'
 
 // Dark runs along a line through the source drawing, in mm from the line's
