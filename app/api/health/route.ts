@@ -1,5 +1,5 @@
 import { accessMode, secured, userCount } from '@/lib/plan/access'
-import { storageProbe } from '@/lib/plan/store'
+import { storageProbe } from '@/lib/plan/storage'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60

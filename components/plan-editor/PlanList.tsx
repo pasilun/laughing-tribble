@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AppNav } from '@/components/AppNav'
+import { DocShare } from '@/components/DocShare'
+import { DocTrash, type TrashedDoc } from '@/components/DocTrash'
 import { useRouter } from 'next/navigation'
 
-type Trashed = { id: string; name: string; deletedAt: string; daysLeft: number; sharedWith?: string[] }
 type Item = { id: string; name: string; revision: number; updatedAt: string; issued: string[]; tags?: string[]; owner?: string; sharedWith?: string[] }
 
 const PAGE_SIZE = 10
@@ -51,11 +52,8 @@ export function PlanList() {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [loadError, setLoadError] = useState('')
-  const [trash, setTrash] = useState<Trashed[]>([])
+  const [trash, setTrash] = useState<TrashedDoc[]>([])
   const [notice, setNotice] = useState('')
-  const [sharing, setSharing] = useState<string | null>(null)
-  const [shareWith, setShareWith] = useState('')
-  const [shareMsg, setShareMsg] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
 
   // A failed read is shown as a failure with a retry, never as "no plans yet".
@@ -97,34 +95,6 @@ export function PlanList() {
     setConfirming(null)
     setNotice(b.how === 'trashed' ? `”${gone?.name ?? 'Planen'}” ligger nu i papperskorgen och kan återställas i 30 dagar.` : `Du har tagit bort ”${gone?.name ?? 'planen'}” för dig. De andra har kvar den.`)
     void load()
-  }
-
-  const restore = async (id: string) => {
-    setError('')
-    const r = await fetch(`/api/plans/${id}/restore`, { method: 'POST' })
-    if (!r.ok) return setError((await r.json().catch(() => ({}))).errors?.[0] ?? 'kunde inte återställa planen')
-    setNotice('Planen är tillbaka i listan.')
-    void load()
-  }
-
-  const purge = async (id: string, name: string) => {
-    if (!window.confirm(`Radera ”${name}” för alltid? Det går inte att ångra.`)) return
-    setError('')
-    const r = await fetch(`/api/plans/${id}?permanent=1`, { method: 'DELETE' })
-    if (!r.ok) return setError((await r.json().catch(() => ({}))).errors?.[0] ?? 'kunde inte radera planen')
-    setNotice('')
-    void load()
-  }
-
-  const share = async (id: string) => {
-    setShareMsg('')
-    const r = await fetch(`/api/plans/${id}/share`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user: shareWith }) })
-    const b = await r.json().catch(() => ({}))
-    if (!r.ok) return setShareMsg(b.errors?.[0] ?? 'kunde inte dela planen')
-    const people: string[] = b.members ?? []
-    setPlans((cur) => cur?.map((p) => (p.id === id ? { ...p, ...(p.owner ? {} : { sharedWith: people }) } : p)) ?? cur)
-    setShareMsg(`Delad med ${shareWith.trim().toLowerCase()}.`)
-    setShareWith('')
   }
 
   const saveTags = async (id: string) => {
@@ -367,53 +337,13 @@ export function PlanList() {
                       </button>
                     </>
                   )}
-                  <button
-                    type="button"
-                    data-testid="share-plan"
-                    aria-expanded={sharing === p.id}
-                    className="text-zinc-600 underline decoration-zinc-300 underline-offset-2 hover:text-blue-700"
-                    onClick={() => {
-                      setSharing(sharing === p.id ? null : p.id)
-                      setShareMsg('')
-                      setShareWith('')
-                    }}
-                  >
-                    Dela
-                  </button>
+                  <DocShare
+                    api="/api/plans"
+                    id={p.id}
+                    noun="planen"
+                    onShared={(people) => setPlans((cur) => cur?.map((x) => (x.id === p.id ? { ...x, ...(x.owner ? {} : { sharedWith: people }) } : x)) ?? cur)}
+                  />
                 </div>
-                {sharing === p.id && (
-                  <form
-                    className="mt-2 space-y-1 text-xs"
-                    data-testid="share-form"
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      void share(p.id)
-                    }}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input
-                        data-testid="share-user"
-                        autoFocus
-                        autoCapitalize="none"
-                        autoComplete="off"
-                        aria-label="Användarnamn att dela med"
-                        placeholder="Användarnamn, t.ex. emil"
-                        className="min-w-0 flex-1 rounded border bg-white px-2 py-1"
-                        value={shareWith}
-                        onChange={(e) => setShareWith(e.target.value)}
-                      />
-                      <button data-testid="share-save" className="rounded bg-blue-600 px-2.5 py-1 text-white">
-                        Dela
-                      </button>
-                    </div>
-                    <p className="text-zinc-600">Ni kan båda göra nya versioner av planen. Raderar någon den försvinner den bara för den personen.</p>
-                    {shareMsg && (
-                      <p data-testid="share-msg" role="status" className="text-zinc-800">
-                        {shareMsg}
-                      </p>
-                    )}
-                  </form>
-                )}
               </div>
               <div className="shrink-0 self-start text-xs">
                 {confirming === p.id ? (
@@ -451,34 +381,7 @@ export function PlanList() {
         </nav>
       )}
 
-      {trash.length > 0 && (
-        <details className="mt-6 rounded-lg border bg-white p-3 text-sm" data-testid="trash">
-          <summary className="cursor-pointer font-medium">Papperskorgen ({trash.length})</summary>
-          <p className="mt-2 text-xs text-zinc-600">Raderade planer ligger här i 30 dagar och kan återställas.</p>
-          <ul className="mt-2 divide-y">
-            {trash.map((t) => (
-              <li key={t.id} data-testid="trash-row" className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <span className="min-w-0">
-                  <span className="break-words">{t.name}</span>
-                  <span className="ml-2 text-xs text-zinc-600">
-                    {t.daysLeft} dagar kvar{t.sharedWith?.length ? ` · delas med ${t.sharedWith.join(', ')}` : ''}
-                  </span>
-                </span>
-                <span className="flex shrink-0 gap-2 text-xs">
-                  <button type="button" data-testid="restore-plan" className="rounded border px-2 py-1 hover:bg-zinc-50" onClick={() => restore(t.id)}>
-                    Återställ
-                  </button>
-                  {!t.sharedWith?.length && (
-                    <button type="button" data-testid="purge-plan" className="rounded border border-red-300 px-2 py-1 text-red-700 hover:bg-red-50" onClick={() => purge(t.id, t.name)}>
-                      Radera för alltid
-                    </button>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+      <DocTrash api="/api/plans" items={trash} words={{ plural: 'planer', one: 'planen' }} onChanged={() => void load()} onError={setError} onNotice={setNotice} />
 
       <p className="mt-6 text-xs text-zinc-600">
         <a href="/api/plans/backup" download data-testid="backup-download" className="text-blue-700 underline">

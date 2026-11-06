@@ -1,7 +1,10 @@
 import { Zip, ZipDeflate, ZipPassThrough } from 'fflate'
 import { sheetPdf } from './export'
 import { loadPlan } from './service'
-import { listPlans, ownBackend, systemBackend, userBackend } from './store'
+import { listPlans } from './store'
+import { systemBackend } from './storage'
+import { ownBackend, userBackend } from './docs'
+import { listSites } from '../site/store'
 import { runAs, type User } from './user'
 
 // A backup of a person's plans as a zip, built while it is sent (no size limit from the buffered
@@ -42,6 +45,9 @@ async function ownItems(): Promise<{ items: Item[]; pdfs: Array<{ id: string; ow
   const plans = await listPlans()
   for (const p of plans.filter((x) => x.owner)) {
     for (const k of await mine.keys(`plans/${p.id}`)) items.push({ path: `delade-med-mig/${p.owner}/${k.slice('plans/'.length)}`, read: () => mine.read(k) })
+  }
+  for (const s of (await listSites()).filter((x) => x.owner)) {
+    for (const k of await mine.keys(`sites/${s.id}`)) items.push({ path: `delade-med-mig/${s.owner}/tomter/${k.slice('sites/'.length)}`, read: () => mine.read(k) })
   }
   return { items, pdfs: plans.map((p) => ({ id: p.id, owner: p.owner, name: p.name })) }
 }

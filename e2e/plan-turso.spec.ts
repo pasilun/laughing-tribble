@@ -8,7 +8,10 @@ import { forgetPeople } from '@/lib/plan/people'
 import { hashKey } from '@/lib/plan/access'
 import { copyPages, type Source } from '@/lib/plan/migrate-store'
 import { createPlan, editPlan } from '@/lib/plan/service'
-import { forgetAccess, getAsset, getRevision, listPlansAndTrash, putAsset, saveRevision, ConflictError, storageKind, storageProbe, systemBackend, useTursoForTests } from '@/lib/plan/store'
+import { getAsset, getRevision, listPlansAndTrash, putAsset, saveRevision } from '@/lib/plan/store'
+import { ConflictError, storageKind, storageProbe, systemBackend, useTursoForTests } from '@/lib/plan/storage'
+import { forgetAccess } from '@/lib/plan/docs'
+import { PLANS } from '@/lib/plan/docs'
 import { addShare } from '@/lib/plan/shares'
 import { TursoBackend } from '@/lib/plan/turso'
 import { runAs } from '@/lib/plan/user'
@@ -91,7 +94,7 @@ test('the whole app on Turso: plans, revisions, assets, sharing, trash, backup, 
   expect((await runAs(ANNA, () => getAsset(id, 'ritning.png')))!.equals(Buffer.from([1, 2, 3, 250]))).toBe(true)
 
   // sharing: bo sees it, makes a revision of it
-  expect(await runAs(ANNA, () => addShare(id, 'bo'))).toBeNull()
+  expect(await runAs(ANNA, () => addShare(PLANS, id, 'bo'))).toBeNull()
   expect((await runAs(BO, () => listPlansAndTrash())).plans.map((p) => p.id)).toEqual([id])
   expect((await runAs(BO, () => editPlan(id, [], 2, 'user', 'Bo')))!.status).toBe(200)
   expect((await runAs(ANNA, () => getRevision(id)))!.meta).toMatchObject({ n: 3, by: 'bo' })

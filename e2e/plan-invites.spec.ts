@@ -124,7 +124,7 @@ test('expired, withdrawn and made-up invitations are refused', async () => {
   const { token: old } = await createInvite('Gammal', 'anna', 1)
   expect(await inviteInfo(old)).not.toBeNull()
   // Expiry: rewrite the file with a date in the past.
-  const { systemBackend } = await import('@/lib/plan/store')
+  const { systemBackend } = await import('@/lib/plan/storage')
   const { createHash } = await import('node:crypto')
   const h = createHash('sha256').update(`plan-invite:${old}`).digest('hex')
   const b = systemBackend()

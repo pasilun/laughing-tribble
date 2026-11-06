@@ -15,6 +15,7 @@ import { handleScanTool, SCAN_TOOLS } from './scan/tools'
 import { resolveSource } from './scan/raster'
 import { scanView } from './scan/view'
 import { createPlan, editPlan, loadPlan } from './service'
+import { PLANS } from './docs'
 import { addShare, participants, removeShare } from './shares'
 import { currentUser } from './user'
 import { getAsset, listPlans, listRevisions, putAsset, setTags } from './store'
@@ -524,10 +525,10 @@ export async function handlePlanTool(name: string, args: Record<string, unknown>
     try {
       const who = typeof args.with === 'string' ? args.with : ''
       const out = typeof args.remove === 'string' ? args.remove : ''
-      const err = who ? await addShare(planId, who) : out ? await removeShare(planId, out) : null
+      const err = who ? await addShare(PLANS, planId, who) : out ? await removeShare(PLANS, planId, out) : null
       if (err) return { content: [text(err)], isError: true }
       if (out && out === currentUser()?.id) return { content: [text(`Du har tagit bort planen ${planId} för dig. De andra har kvar den.`)] }
-      const p = await participants(planId)
+      const p = await participants(PLANS, planId)
       if (!p) return { content: [text(`Planen ${planId} finns inte`)], isError: true }
       const people = [p.ownerRemoved ? `${p.owner} (har tagit bort den för sig)` : `${p.owner} (ägare)`, ...p.members]
       return { content: [text(`Planen delas av: ${people.join(', ')}. Du är ${p.me}.`)] }

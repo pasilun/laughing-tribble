@@ -1,6 +1,8 @@
 import { secured } from '@/lib/plan/access'
 import { editItems } from '@/lib/site/service'
-import { deleteSite, getSite } from '@/lib/site/store'
+import { getSite } from '@/lib/site/store'
+import { SITES } from '@/lib/plan/docs'
+import { deleteRoute } from '../../plans/doc-routes'
 import { author, fail, readJson, revParam } from '../../plans/http'
 
 export const runtime = 'nodejs'
@@ -32,12 +34,5 @@ export const PUT = secured(async (req: Request, { params }: Ctx): Promise<Respon
   }
 })
 
-export const DELETE = secured(async (_req: Request, { params }: Ctx): Promise<Response> => {
-  const { slug } = await params
-  try {
-    if (!(await deleteSite(slug))) return Response.json({ errors: ['tomten finns inte'] }, { status: 404 })
-    return Response.json({ deleted: slug })
-  } catch (e) {
-    return fail(e)
-  }
-})
+// To the trash for the owner (restorable), out of the list for a member; ?permanent=1 empties it from the trash.
+export const DELETE = deleteRoute(SITES)

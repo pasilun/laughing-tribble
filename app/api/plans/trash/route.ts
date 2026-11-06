@@ -1,5 +1,6 @@
 import { secured } from '@/lib/plan/access'
-import { listTrash, TRASH_DAYS } from '@/lib/plan/store'
+import { listTrash } from '@/lib/plan/store'
+import { TRASH_DAYS } from '@/lib/plan/docs'
 import { fail } from '../http'
 
 export const runtime = 'nodejs'

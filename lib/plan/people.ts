@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto'
-import { systemBackend } from './store'
+import { systemBackend } from './storage'
 import { USER_ID } from './user'
 
 // People who joined through an invitation link. They live in the store, not in

@@ -1,4 +1,4 @@
-import type { Backend } from './store'
+import type { Backend } from './storage'
 
 // Copies a store into another (Blob into Turso), a page at a time so a function that may run for a minute
 // can do it in several calls. Every key is read from the source and written to the target, overwriting

@@ -1,4 +1,4 @@
-import { ConflictError, PublicError } from '@/lib/plan/store'
+import { ConflictError, PublicError } from '@/lib/plan/storage'
 
 export type Ctx = { params: Promise<{ id: string }> }
 

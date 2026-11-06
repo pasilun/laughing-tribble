@@ -1,5 +1,5 @@
 import type { Client, InValue } from '@libsql/client'
-import type { Backend } from './store'
+import type { Backend } from './storage'
 
 // The store on Turso (libSQL, SQLite over HTTP): one table of keys and values, which is all the store
 // needs (read, write, write-only-if-new, remove, list a prefix). Unlike Blob it has no per-operation

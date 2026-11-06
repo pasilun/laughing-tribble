@@ -6,7 +6,9 @@ import path from 'node:path'
 import { forgetPeople } from '@/lib/plan/people'
 import { hashKey } from '@/lib/plan/access'
 import { createPlan } from '@/lib/plan/service'
-import { forgetAccess, listPlansAndTrash } from '@/lib/plan/store'
+import { listPlansAndTrash } from '@/lib/plan/store'
+import { forgetAccess } from '@/lib/plan/docs'
+import { PLANS } from '@/lib/plan/docs'
 import { addShare, removeShare } from '@/lib/plan/shares'
 import { runAs } from '@/lib/plan/user'
 import { GET as accountsGET } from '../app/api/plans/accounts/route'
@@ -74,20 +76,20 @@ test('the plan list and the trash come from one listing, and shared plans need n
 
   // sharing keeps the index right without another listing for the person who gets the plan
   await runAs(BO, () => listPlansAndTrash()) // builds bo's index (bo has nothing yet)
-  expect(await runAs(ANNA, () => addShare(id, 'bo'))).toBeNull()
+  expect(await runAs(ANNA, () => addShare(PLANS, id, 'bo'))).toBeNull()
   const m = await count(async () => {
     const l = await runAs(BO, () => listPlansAndTrash())
     expect(l.plans.map((p) => p.id)).toEqual([id])
   })
   expect(m).toBeLessThanOrEqual(1)
   // leaving is seen at once too
-  expect(await runAs(ANNA, () => removeShare(id, 'bo'))).toBeNull()
+  expect(await runAs(ANNA, () => removeShare(PLANS, id, 'bo'))).toBeNull()
   expect((await runAs(BO, () => listPlansAndTrash())).plans).toEqual([])
 })
 
 test('an index that is missing or a day old is rebuilt from the pointers', async () => {
   const id = await make(ANNA, 'Delad')
-  await runAs(ANNA, () => addShare(id, 'bo')) // bo has no index yet: nothing to update
+  await runAs(ANNA, () => addShare(PLANS, id, 'bo')) // bo has no index yet: nothing to update
   expect((await runAs(BO, () => listPlansAndTrash())).plans.map((p) => p.id)).toEqual([id])
   // make the index look old and stale (missing the plan): the next list finds the pointer again
   const idx = path.join(dir, 'u/bo/shared.json')

@@ -1,6 +1,6 @@
 import { isAdmin, secured } from '@/lib/plan/access'
 import { copyPages } from '@/lib/plan/migrate-store'
-import { blobBackend, blobConfigured, storageKind, tursoBackend, tursoConfigured } from '@/lib/plan/store'
+import { blobBackend, blobConfigured, storageKind, tursoBackend, tursoConfigured } from '@/lib/plan/storage'
 import { currentUser } from '@/lib/plan/user'
 import { fail, readJson } from '../http'
 
