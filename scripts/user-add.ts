@@ -17,7 +17,7 @@ Lägg till i PLAN_USERS (kommaseparerat, i Vercel → Settings → Environment V
   ${id}:${hashKey(key)}
 
 Personens inloggning:   ${host}/plans   (klistra in nyckeln)
-Claude-koppling (lägg till som anpassad connector):
-  ${host}/api/mcp?key=${key}
+Claude-koppling (lägg till som anpassad connector; Claude loggar in med OAuth, nyckeln skrivs aldrig i adressen):
+  ${host}/api/mcp
 
 Ändra PLAN_USERS och deploya om för att lägga till eller ta bort någon.`)

@@ -135,8 +135,8 @@ The connector no longer needs a key in the URL. Add the plain address
 `https://<host>/api/mcp` in Claude (Settings → Connectors → Add custom connector). Claude
 answers the 401 by registering itself and opening `/oauth/authorize` in the browser:
 the person signs in with their key (or is already signed in), presses *Godkänn*, and Claude
-gets a token that lasts an hour and renews itself (90 days, rotating). Connectors with
-`?key=` in the URL keep working.
+gets a token that lasts an hour and renews itself (90 days, rotating). A key in the address
+(`?key=`) is not accepted any more: it ends up in logs and history.
 
 - Endpoints: `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`,
   `/oauth/register` (Dynamic Client Registration), `/oauth/authorize`, `/oauth/token`.
@@ -154,7 +154,7 @@ gets a token that lasts an hour and renews itself (90 days, rotating). Connector
 
 - Add: `npm run user:add <id> https://<host>`, append the printed `id:hash` to
   `PLAN_USERS`, redeploy, give the person the key. They sign in at `/plans` with it,
-  or add the connector URL (`https://<host>/api/mcp?key=<key>`) in Claude under
+  or add the connector URL (`https://<host>/api/mcp`) in Claude under
   Settings → Connectors → Add custom connector.
 - Remove: delete their entry from `PLAN_USERS` and redeploy. Their sessions and
   connector stop working at once. Their files stay in the store under `u/<id>/`.

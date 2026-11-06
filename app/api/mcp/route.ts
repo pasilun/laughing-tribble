@@ -1,6 +1,7 @@
 import { PLAN_TOOLS, handlePlanTool, instructionsFor, toolsFor } from '@/lib/plan/mcp-tools'
 import { presentedCredential, resolveRequest } from '@/lib/plan/access'
 import { runAs } from '@/lib/plan/user'
+import { PublicError } from '@/lib/plan/store'
 
 export const runtime = 'nodejs'
 // Scans and renders can take a while.
@@ -76,13 +77,14 @@ export async function POST(request: Request) {
 
     if (name) {
       try {
-        // Plan tools need the plan password (connector URL ?key=… or bearer token).
+        // Plan tools run as the signed-in person (bearer token: an OAuth token or a personal key).
         if (PLAN_TOOLS.some((t) => t.name === name)) {
           const planResult = await runAs(person, () => handlePlanTool(name, args))
           if (planResult) return mcpResp({ jsonrpc: '2.0', id, result: planResult })
         }
       } catch (err) {
-        return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' } })
+        if (!(err instanceof PublicError)) console.error('[mcp]', name, err)
+        return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: err instanceof PublicError ? err.message : 'Internal error' } })
       }
     }
 

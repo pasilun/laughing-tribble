@@ -30,6 +30,17 @@ export function cleanTags(input: unknown): string[] {
   return out.slice(0, 10)
 }
 
+// A message meant for the person using the app, with the HTTP status it goes with. Any other error that reaches an
+// API route is logged on the server and answered with a plain "something went wrong" (see app/api/plans/http.ts).
+export class PublicError extends Error {
+  constructor(
+    message: string,
+    public status = 400,
+  ) {
+    super(message)
+  }
+}
+
 export class ConflictError extends Error {
   constructor(public head: number) {
     super(`Planen har ändrats (senaste revision ${head}) – läs in den igen innan du sparar`)
@@ -317,7 +328,7 @@ class Routed implements Backend {
   }
   async write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }) {
     const scope = await this.where(key)
-    if (scope === null) throw new Error('planen finns inte')
+    if (scope === null) throw new PublicError('planen finns inte', 404)
     return new Scoped(systemBackend(), scope).write(key, data, contentType, opts)
   }
   async remove(keys: string[]) {
@@ -371,7 +382,7 @@ export async function storageProbe(): Promise<{ kind: 'blob' | 'fs' | 'turso'; o
 const ID = /^[a-z0-9][a-z0-9-]{0,80}$/
 
 export function assertId(id: string) {
-  if (!ID.test(id)) throw new Error(`ogiltigt plan-id "${id}"`)
+  if (!ID.test(id)) throw new PublicError(`ogiltigt plan-id "${id}"`)
 }
 
 const revKey = (id: string, n: number) => `plans/${id}/rev-${String(n).padStart(4, '0')}.json`
@@ -600,7 +611,7 @@ async function deleteAll(b: Backend, id: string): Promise<boolean> {
 // each revision.
 export async function putAsset(id: string, name: string, data: Buffer, contentType: string): Promise<string> {
   assertId(id)
-  if (!/^[a-z0-9][a-z0-9._-]{0,80}$/i.test(name)) throw new Error('ogiltigt filnamn')
+  if (!/^[a-z0-9][a-z0-9._-]{0,80}$/i.test(name)) throw new PublicError('ogiltigt filnamn')
   await backend().write(`plans/${id}/assets/${name}`, data, contentType)
   return `/api/plans/${id}/assets/${encodeURIComponent(name)}`
 }

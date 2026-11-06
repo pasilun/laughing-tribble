@@ -96,14 +96,15 @@ test('discovery documents point at the sign-in endpoints', async () => {
   expect(as.token_endpoint_auth_methods_supported).toContain('none')
 })
 
-test('the connector answers 401 with a pointer to the sign-in; keys and tokens still get in', async () => {
+test('the connector answers 401 with a pointer to the sign-in; keys as bearer tokens and OAuth tokens get in, a key in the address does not', async () => {
   const none = await mcp()
   expect(none.status).toBe(401)
   expect(none.headers.get('www-authenticate')).toBe(`Bearer resource_metadata="${HOST}/.well-known/oauth-protected-resource"`)
   const wrong = await mcp({ authorization: 'Bearer at_inte-giltig-token-alls-nej' })
   expect(wrong.status).toBe(401)
   expect(wrong.headers.get('www-authenticate')).toContain('error="invalid_token"')
-  expect((await mcp({}, `${HOST}/api/mcp?key=ka`)).status).toBe(200)
+  expect((await mcp({}, `${HOST}/api/mcp?key=ka`)).status).toBe(401)
+  expect((await mcp({ authorization: 'Bearer ka' })).status).toBe(200)
   expect((await mcp({ authorization: 'Bearer kb' })).status).toBe(200)
   // initialize and tools/list need it too: that is what starts the sign-in.
   const init = await mcpPOST(new Request(`${HOST}/api/mcp`, { method: 'POST', body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' }) }))

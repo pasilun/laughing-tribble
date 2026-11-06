@@ -19,9 +19,9 @@ import { runAs, USER_ID, type User } from './user'
 // People who joined by an invitation link are kept in the store (lib/plan/people.ts)
 // and checked after PLAN_USERS, so adding someone needs no redeploy.
 //
-// The key is accepted as a login cookie (browser), a bearer token, or ?key=
-// (MCP connector URL). Without PLAN_USERS access is open locally and closed on
-// Vercel.
+// The key is accepted as a login cookie (browser) or a bearer token. (A key in the URL, ?key=, is not: it
+// ends up in logs and history; the Claude connector signs in with OAuth.) Without PLAN_USERS access is open
+// locally and closed on Vercel.
 
 export const ACCESS_COOKIE = 'plan_access'
 
@@ -96,32 +96,6 @@ export function userFromCookie(cookie: string | undefined): User | null {
   return e && same(cookie, cookieValue(e)) ? userOf(e) : null
 }
 
-export function authenticate(req: Request): User | null {
-  const mode = accessMode()
-  if (mode === 'open') return { id: 'local', legacy: true }
-  if (mode === 'locked') return null
-  const auth = req.headers.get('authorization') ?? ''
-  if (auth.startsWith('Bearer ')) {
-    const u = userFromKey(auth.slice(7))
-    if (u) return u
-  }
-  const key = new URL(req.url).searchParams.get('key')
-  if (key) {
-    const u = userFromKey(key)
-    if (u) return u
-  }
-  const cookie = (req.headers.get('cookie') ?? '')
-    .split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith(`${ACCESS_COOKIE}=`))
-    ?.slice(ACCESS_COOKIE.length + 1)
-  return userFromCookie(cookie)
-}
-
-export function hasAccess(req: Request): boolean {
-  return !!authenticate(req)
-}
-
 // ── PLAN_USERS first, then the people who joined by invitation ─────────────
 
 // The value of the access cookie on a request (undefined when there is none).
@@ -169,23 +143,25 @@ export async function resolveRequest(req: Request): Promise<User | null> {
     const u = t.startsWith('at_') ? await userFromAccessToken(t, takenByEnv) : await resolveKey(t)
     if (u) return u
   }
-  const key = new URL(req.url).searchParams.get('key')
-  if (key) {
-    const u = await resolveKey(key)
-    if (u) return u
-  }
   return resolveCookie(cookieOf(req))
 }
 
 // A request that carried a credential which did not work (for the WWW-Authenticate error).
 export function presentedCredential(req: Request): boolean {
-  return (req.headers.get('authorization') ?? '').startsWith('Bearer ') || !!new URL(req.url).searchParams.get('key')
+  return (req.headers.get('authorization') ?? '').startsWith('Bearer ')
 }
 
+const adminIds = () => (process.env.PLAN_ADMINS ?? '').split(/[\s,;]+/).filter(Boolean)
+
+// An administrator is named in PLAN_ADMINS and is a person in PLAN_USERS (kept in Vercel, not one who joined by an
+// invitation), so nobody can become one by choosing a name.
 export function isAdmin(user: User): boolean {
   if (accessMode() === 'open') return true
-  return (process.env.PLAN_ADMINS ?? '').split(/[\s,;]+/).includes(user.id)
+  return takenByEnv(user.id) && adminIds().includes(user.id)
 }
+
+// Names an invitation may not use: the people in PLAN_USERS and those named in PLAN_ADMINS.
+export const reservedByEnv = (id: string) => takenByEnv(id) || adminIds().includes(id)
 
 export function denied(): Response {
   const msg = accessMode() === 'locked' ? 'inloggning är inte konfigurerad (PLAN_USERS saknas)' : 'inloggning krävs'

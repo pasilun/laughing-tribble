@@ -1,6 +1,6 @@
 import { takenByEnv } from './access'
 import { personById } from './people'
-import { accessFor, forgetAccess, isTrashed, noteShared, type Access, pointerKey, readShares, scopedBackend, sharesKey, type Shares } from './store'
+import { accessFor, forgetAccess, isTrashed, noteShared, PublicError, type Access, pointerKey, readShares, scopedBackend, sharesKey, type Shares } from './store'
 import { currentUser, scopeOf, USER_ID } from './user'
 
 // Sharing a plan with another person. Both then make new revisions of the same plan
@@ -12,7 +12,7 @@ export type Participants = { id: string; me: string; owner: string; ownerRemoved
 
 const user = () => {
   const u = currentUser()
-  if (!u || u.legacy) throw new Error('delning kräver personliga nycklar (PLAN_USERS)')
+  if (!u || u.legacy) throw new PublicError('delning kräver personliga nycklar (PLAN_USERS)')
   return u
 }
 

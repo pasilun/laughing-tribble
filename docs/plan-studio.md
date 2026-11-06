@@ -22,7 +22,7 @@ block → check the *Kontroll* tab → *Spara* → *Exportera* PDF.
 
 Each person has a personal key (`PLAN_USERS`, see deploy.md). `/plans` asks for
 it once (httpOnly cookie), the API accepts `Authorization: Bearer <key>`, and
-Claude's MCP connector uses `/api/mcp?key=<key>` for the plan tools. A person's
+Claude's MCP connector uses `/api/mcp` for the plan tools. A person's
 plans are stored under their own prefix and are invisible to everyone else.
 Without any sign-in variable (local development) everything is open; on Vercel
 it is refused. Plan ids carry a 64-bit random suffix.

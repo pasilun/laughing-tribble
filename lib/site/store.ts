@@ -1,4 +1,4 @@
-import { ConflictError, userBackend } from '../plan/store'
+import { ConflictError, PublicError, userBackend } from '../plan/store'
 import { SLUG, type SiteDoc, type SiteRevision } from './doc'
 
 // Site documents beside the plans, in the same private per-person storage: every save is an immutable
@@ -11,7 +11,7 @@ const revKey = (slug: string, n: number) => `sites/${slug}/rev-${String(n).padSt
 const headKey = (slug: string) => `sites/${slug}/head.json`
 
 export function assertSlug(slug: string) {
-  if (!SLUG.test(slug)) throw new Error(`ogiltigt tomt-id "${slug}"`)
+  if (!SLUG.test(slug)) throw new PublicError(`ogiltigt tomt-id "${slug}"`)
 }
 
 async function readJson<T>(key: string): Promise<T | null> {

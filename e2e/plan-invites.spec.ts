@@ -72,9 +72,10 @@ test('an invitation link becomes a person with a key, a login cookie and their o
   expect(body.connector).toBe('http://x/api/mcp')  // no key in the address: Claude signs in with OAuth
   const cookie = /plan_access=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')![1]
 
-  // The key works as a key, a bearer token and in the connector URL; the cookie works too.
+  // The key works as a key and a bearer token (not in the address); the cookie works too.
   expect((await resolveKey(body.key))?.id).toBe('cecilia-1')
-  expect((await resolveRequest(new Request(`http://x/api/mcp?key=${body.key}`)))?.id).toBe('cecilia-1')
+  expect((await resolveRequest(new Request('http://x/api/mcp', { headers: { authorization: `Bearer ${body.key}` } })))?.id).toBe('cecilia-1')
+  expect(await resolveRequest(new Request(`http://x/api/mcp?key=${body.key}`))).toBeNull()
   expect((await resolveRequest(new Request('http://x/api/plans', { headers: { cookie: `plan_access=${cookie}` } })))?.id).toBe('cecilia-1')
   expect(await resolveKey('fel-nyckel')).toBeNull()
   expect(await resolveCookie('cecilia-1.0000')).toBeNull()
@@ -94,7 +95,9 @@ test('an invitation link becomes a person with a key, a login cookie and their o
 test('an invitation works once, and a taken name does not burn it', async () => {
   const token = tokenOf(await invite())
   // PLAN_USERS names and reserved names are taken; the invitation survives the attempt.
-  for (const id of ['anna', 'bo', 'legacy']) {
+  // (a name only in PLAN_ADMINS is kept out too)
+  process.env.PLAN_ADMINS = 'anna, ghost'
+  for (const id of ['anna', 'bo', 'legacy', 'ghost']) {
     const r = await redeem(token, id)
     expect(r.status).toBe(400)
     expect((await r.json()).errors[0]).toContain('upptaget')

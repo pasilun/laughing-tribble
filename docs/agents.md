@@ -7,7 +7,7 @@ images. Three things make it cheaper and easier.
 
 ## 1. A short connector: `?tools=basic`
 
-`https://<host>/api/mcp?key=<key>&tools=basic` lists 11 tools (about 2,500 tokens of
+`https://<host>/api/mcp?tools=basic` lists 11 tools (about 2,500 tokens of
 definitions; the full list is 31 tools, about 8,500) and sends shorter instructions.
 
 | Tool | What it does |

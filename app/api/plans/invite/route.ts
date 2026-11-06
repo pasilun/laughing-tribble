@@ -1,4 +1,4 @@
-import { cookieForAny, takenByEnv } from '@/lib/plan/access'
+import { cookieForAny, reservedByEnv } from '@/lib/plan/access'
 import { cookiesForNewLogin } from '@/lib/plan/accounts'
 import { inviteInfo, redeemInvite } from '@/lib/plan/people'
 import { allowed, fail, ok } from '../login/limit'
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   if (!allowed(ip)) return Response.json({ errors: ['För många försök – vänta tio minuter.'] }, { status: 429 })
   const body = await readJson(req)
   const token = String(body?.token ?? '')
-  const res = await redeemInvite(token, String(body?.id ?? ''), takenByEnv)
+  const res = await redeemInvite(token, String(body?.id ?? ''), reservedByEnv)
   if (!res.ok) {
     // A name that is taken is not a guessed token: only count the bad invitations.
     if (/Inbjudan/.test(res.error)) fail(ip)

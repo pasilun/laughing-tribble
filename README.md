@@ -74,7 +74,7 @@ The endpoint is `/api/mcp` (streamable HTTP). Add it as a connector in Claude
 with your personal key in the URL:
 
 ```
-https://<host>/api/mcp?key=<your key>
+https://<host>/api/mcp
 ```
 
 The key can also be sent as `Authorization: Bearer <key>`.
@@ -95,7 +95,7 @@ Plan tools:
   `plan_scan_diff`
 
 **Two sizes of connector.** The address above lists every tool (31). Add `&tools=basic`
-(`https://<host>/api/mcp?key=<key>&tools=basic`) for 11: `plan_next` says where the plan stands
+(`https://<host>/api/mcp?tools=basic`) for 11: `plan_next` says where the plan stands
 and what to call next, `plan_trace` makes a first draft from the uploaded drawing,
 `plan_audit` lists where the plan differs from the drawing (each finding with its fix),
 `plan_fix` applies findings by id or simple changes (move a wall, set a width, add a room),

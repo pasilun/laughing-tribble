@@ -55,7 +55,7 @@ for (const [name, q, magic] of [['PDF', 'format=pdf&view=both', '%PDF'], ['PNG',
     return `${b.length} byte`
   })
 await step('MCP-anslutningen svarar', async () => {
-  const r = await fetch(url(`api/mcp?key=${encodeURIComponent(key)}`), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'plan_get', arguments: { plan_id: id } } }) })
+  const r = await fetch(url('api/mcp'), { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'plan_get', arguments: { plan_id: id } } }) })
   const j = await r.json()
   expect(!j.result?.isError && JSON.stringify(j).includes(id), JSON.stringify(j).slice(0, 200))
 })
