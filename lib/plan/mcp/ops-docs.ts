@@ -1,0 +1,26 @@
+// The reference for plan_edit operations, in full (plan_guide ops) and short (in plan_edit's own description).
+
+export const OPS_DOC = `Operations (all lengths in whole millimetres; x to the right, y DOWN; ids are stable strings):
+- {"op":"add","kind":"wall","item":{"id":"v1","a":{"x":0,"y":0},"b":{"x":4000,"y":0},"thickness":100,"phase":"existing"|"demolish"|"new","loadBearing"?:true,"fireRating"?:"EI60","fireRatingAfter"?:""|"EI60","apartmentBoundary"?:true,"noAutoDim"?:true}}
+- {"op":"add","kind":"mass","item":{"id":"m1","points":[{"x":..,"y":..},…],"phase":"existing","loadBearing"?:true}}  (a solid with a sloping outline a straight wall can't draw, e.g. tapered masonry beside a stairwell: convex, corners in order; split other shapes into several. Drawn and counted like walls; walls running into it disappear under it)
+- {"op":"add","kind":"zone","item":{"id":"z1","points":[{"x":..,"y":..},…],"label"?:"Lgh 154 (slås samman med lgh 153)","views"?:["fore"|"efter"]}}  (a light-grey shaded area under the walls, e.g. the apartment that is merged into another; any outline, corners in order, run it along wall centre lines; "label" adds a row in the legend; "views" limits it to one sheet)
+- {"op":"add","kind":"opening","item":{"id":"o1","wallId":"v1","kind":"door"|"opening"|"window","offset":1200,"width":900,"height"?:2100,"phase":"new","hinge"?:"a"|"b","swing"?:"left"|"right"}}  (offset = distance from the wall's a-end to the opening's near edge). "beam":"INP 22 (K-ritning 1936)" records the documented beam over a wide opening in a load-bearing wall. "through":true marks an open passage with no wall, door or frame in the stretch between two walls: the rooms either side count as one space (one label, one area). hinge/swing: don't set them by eye — with a source drawing run plan_scan_doors; plan_get lists each door in words ("gångjärn vid västra karmen, öppnar mot norr") to check.
+- {"op":"add","kind":"fixture","item":{"id":"i1","kind":"kitchen"|"stove"|"sink"|"radiator"|"exhaust"|"shaft"|"wc"|"shower"|"bath"|"plug"|"box"|"balcony","x":..,"y":..,"w":..,"d":..,"rotation"?:0,"phase":"existing","label"?:"..."}}  (x,y = centre; a balcony: w along the facade, d out from its outer face)
+- {"op":"add","kind":"room","item":{"id":"r1","name":"Kök","renamed"?:"Rum","goneAfter"?:true,"newAfter"?:true,"at":{"x":..,"y":..},"polygon"?:[{x,y},...]}}
+- {"op":"add","kind":"dimension","item":{"id":"m1","a":{..},"b":{..},"offset":500,"views"?:["fore"|"efter"]}}  (offset: positive puts the line to the left of a→b, i.e. north of an eastward line; "views" limits it to one sheet, e.g. a measure of a demolished wall only on efter)
+- {"op":"add","kind":"note","item":{"id":"n1","at":{..},"text":"...","phase"?:"existing"|"demolish"|"new","badge"?:true}}  (badge: the text, e.g. "U1", in a circle centred on the point, for numbering walls)
+- {"op":"update","kind":"wall|mass|zone|opening|fixture|room|dimension|note","id":"…","patch":{…fields to change…}}
+- {"op":"delete","kind":"…","id":"…"}  (deleting a wall deletes its openings)
+- {"op":"moveVertex","from":{x,y},"to":{x,y}}  (moves every wall end at that point — joined walls follow)
+- {"op":"moveWall","id":"v1","dx":100,"dy":0}  (walls joined at its ends stretch)
+- {"op":"setWallLength","id":"v1","length":3500,"fixed":"a"|"b"}
+- {"op":"scale","origin":{"x":..,"y":..},"fx":1.01,"fy":1.006,"sources"?:1.008}  (scales the whole drawing about a point, separately along x and y; wall thicknesses and fixture sizes stay, openings keep their size. plan_finish with fit_outer does this to match the printed outside size)
+- {"op":"setSheet","patch":{"paper":"A3"|"A4","orientation":"landscape"|"portrait","scale":50|100|150|200,"northAngle":0,"doorSwings":false}}  (doorSwings false = doors without swing arcs, for overview sheets)
+- {"op":"setTitleBlock","patch":{"project","property","address","apartments","floor","drawingNumber","author","date"}}
+Phases matter only when the user asks for changes: a plan of what exists has only "existing" (and one sheet, "befintlig"). Otherwise "existing" = stays, "demolish" = exists today and is removed, "new" = added; före shows today, efter marks rivs/ny.
+All ops in one call succeed together or none are applied.`
+
+export const OPS_SHORT = `Operations (whole mm, x right, y DOWN, stable string ids). The full reference with every field: plan_guide {"topic":"ops"}. For simple changes plan_fix is easier.
+- {"op":"add","kind":"wall"|"opening"|"fixture"|"room"|"dimension"|"note"|"mass"|"zone","item":{…}} e.g. wall {"id":"v1","a":{"x":0,"y":0},"b":{"x":4000,"y":0},"thickness":100,"phase":"existing"}; opening {"id":"o1","wallId":"v1","kind":"door"|"opening"|"window","offset":1200,"width":900,"phase":"existing"}; room {"id":"r1","name":"Kök","at":{"x":..,"y":..}}
+- {"op":"update","kind":"…","id":"…","patch":{…}} · {"op":"delete","kind":"…","id":"…"} · {"op":"moveVertex","from":{x,y},"to":{x,y}} · {"op":"moveWall","id","dx","dy"} · {"op":"setWallLength","id","length","fixed":"a"|"b"} · {"op":"scale","origin","fx","fy"} · {"op":"setSheet","patch":{…}} · {"op":"setTitleBlock","patch":{…}}
+Phases only when the user asks for changes (a plan of what exists is all "existing"): "demolish" = removed, "new" = added. All ops in one call succeed together or none are applied.`

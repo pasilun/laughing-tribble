@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto'
 import { applyOps, validatePlan, type Op } from './domain/ops'
 import { demoPlan } from './domain/demo'
-import { getHead, getRevision, nextLetter, saveRevision, type StoredRevision } from './storage/store'
+import { getAsset, getHead, getRevision, nextLetter, putAsset, saveRevision, setTags, type StoredRevision } from './storage/store'
 import type { Plan, Revision } from './domain/types'
 
 function emptyPlan(id: string, name: string): Plan {
@@ -80,4 +80,36 @@ export async function issuePlan(id: string, author: Revision['author']) {
 
 export async function loadPlan(id: string, rev?: number): Promise<StoredRevision | null> {
   return getRevision(id, rev)
+}
+
+// Sets a plan's tags (replaces them). Not a revision of the drawing.
+export async function tagPlan(id: string, tags: unknown): Promise<{ status: 400 | 404; errors: string[] } | { status: 200; tags: string[] }> {
+  if (!Array.isArray(tags)) return { status: 400, errors: ['tags (lista) krävs'] }
+  const clean = await setTags(id, tags)
+  return clean ? { status: 200, tags: clean } : { status: 404, errors: ['planen finns inte'] }
+}
+
+// A new plan from a full plan (traced elsewhere, or read out with include_json). Sources and the underlay point at
+// another plan's files, so they do not come along; with copySourcesFrom the source drawings are copied from that plan.
+// `stage` says what refused it: the input itself, or the plan it makes.
+export async function importPlan(input: Partial<Plan> | undefined, name: string, copySourcesFrom?: string): Promise<{ errors: string[]; stage: 'input' | 'create' } | { plan: Plan; revision: Revision; copied: number | null }> {
+  if (!input || !Array.isArray(input.walls) || !input.sheet) return { errors: ['plan med walls och sheet krävs'], stage: 'input' }
+  const plan = { openings: [], fixtures: [], rooms: [], dimensions: [], notes: [], ...input } as Plan
+  delete plan.underlay
+  const wanted = copySourcesFrom ? (plan.sources ?? []) : []
+  delete plan.sources
+  const res = await createPlan({ name: name || input.name || 'Planritning', plan, author: 'claude' })
+  if ('errors' in res) return { errors: res.errors ?? [], stage: 'create' }
+  if (!wanted.length || !copySourcesFrom) return { plan: res.plan, revision: res.revision, copied: null }
+  // Copy each drawing's image into the new plan and point at it.
+  const copied = []
+  for (const src of wanted) {
+    const file = decodeURIComponent(src.src.split('/').pop() ?? '')
+    const data = await getAsset(copySourcesFrom, file)
+    if (!data) continue
+    copied.push({ ...src, src: await putAsset(res.plan.id, file, data, 'image/png') })
+  }
+  const ops: Op[] = copied.map((item) => ({ op: 'add', kind: 'source', item }))
+  const ed = await editPlan(res.plan.id, ops, res.revision.n, 'claude', `Källritningar kopierade från ${copySourcesFrom}`)
+  return ed.status === 200 ? { plan: ed.plan, revision: ed.revision, copied: copied.length } : { plan: res.plan, revision: res.revision, copied: null }
 }

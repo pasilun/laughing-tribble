@@ -114,3 +114,22 @@ test('the backup carries sites, shared ones too', async () => {
   const own = Object.keys(unzipSync(new Uint8Array(await mine.arrayBuffer())))
   expect(own.some((f) => f.includes(`tomter/${slug}/head.json`))).toBe(true)
 })
+
+test('Claude: site_share, site_list and doc_trash work for sites the same way as for plans', async () => {
+  const { handlePlanTool } = await import('@/lib/plan/mcp/mcp-tools')
+  const text = (r: Awaited<ReturnType<typeof handlePlanTool>>) => r!.content.filter((c) => c.type === 'text').map((c) => (c as { text: string }).text).join('\n')
+  const slug = await annaMakes()
+  expect(text(await runAs(ANNA, () => handlePlanTool('site_share', { slug, with: 'bo' })))).toContain('anna (ägare), bo')
+  expect(text(await runAs(ANNA, () => handlePlanTool('site_list', {})))).toContain('delad med bo')
+  expect(text(await runAs(BO, () => handlePlanTool('site_list', {})))).toContain('delad av anna')
+  expect((await runAs(ANNA, () => handlePlanTool('site_share', { slug, with: 'ingen' })))!.isError).toBe(true)
+  // the trash: bo leaves, anna trashes, both can list and restore
+  expect(text(await runAs(BO, () => handlePlanTool('doc_trash', { kind: 'site', action: 'delete', id: slug })))).toContain('Du har tagit bort tomten')
+  expect(text(await runAs(ANNA, () => handlePlanTool('doc_trash', { kind: 'site', action: 'delete', id: slug })))).toContain('papperskorgen')
+  expect(text(await runAs(ANNA, () => handlePlanTool('doc_trash', { kind: 'site', action: 'list' })))).toContain(slug)
+  expect(text(await runAs(ANNA, () => handlePlanTool('site_list', {})))).not.toContain(slug)
+  expect(text(await runAs(ANNA, () => handlePlanTool('doc_trash', { kind: 'site', action: 'restore', id: slug })))).toContain('tillbaka')
+  expect(text(await runAs(ANNA, () => handlePlanTool('site_list', {})))).toContain(slug)
+  expect((await runAs(ANNA, () => handlePlanTool('doc_trash', { kind: 'site', action: 'restore', id: slug })))!.isError).toBe(true)
+  expect((await runAs(ANNA, () => handlePlanTool('doc_trash', { kind: 'bil', action: 'list' })))!.isError).toBe(true)
+})

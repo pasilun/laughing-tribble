@@ -1,7 +1,6 @@
 import { secured } from '@/lib/plan/auth/access'
-import { loadPlan, replacePlan } from '@/lib/plan/service'
+import { loadPlan, replacePlan, tagPlan } from '@/lib/plan/service'
 import { PLANS } from '@/lib/plan/storage/docs'
-import { setTags } from '@/lib/plan/storage/store'
 import type { Plan } from '@/lib/plan/domain/types'
 import { deleteRoute } from '../doc-routes'
 import { author, fail, readJson, revParam, type Ctx } from '../http'
@@ -37,11 +36,9 @@ export const PUT = secured(async (req: Request, { params }: Ctx): Promise<Respon
 export const PATCH = secured(async (req: Request, { params }: Ctx): Promise<Response> => {
   const { id } = await params
   const body = await readJson(req)
-  if (!body || !Array.isArray(body.tags)) return Response.json({ errors: ['tags (lista) krävs'] }, { status: 400 })
   try {
-    const tags = await setTags(id, body.tags)
-    if (!tags) return Response.json({ errors: ['planen finns inte'] }, { status: 404 })
-    return Response.json({ tags })
+    const res = await tagPlan(id, body?.tags)
+    return 'errors' in res ? Response.json({ errors: res.errors }, { status: res.status }) : Response.json({ tags: res.tags })
   } catch (e) {
     return fail(e)
   }

@@ -19,7 +19,7 @@ const pt = (p: P) => `(${m(p.x)}, ${m(p.y)})`
 export const SITE_TOOLS = [
   {
     name: 'site_list',
-    description: 'Lists the sites (properties seen from above: boundary, buildings, what has been drawn on them) with their latest revision.',
+    description: 'Lists the sites (properties seen from above: boundary, buildings, what has been drawn on them) with their latest revision. Sites shared with the user are marked with who owns them; sites the user shares say with whom (site_share).',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -102,7 +102,7 @@ export async function handleSiteTool(name: string, args: Record<string, unknown>
   try {
     if (name === 'site_list') {
       const sites = await listSites()
-      return { content: [text(sites.length ? sites.map((s) => `${s.slug}: ${s.designation} (rev ${s.revision})`).join('\n') : 'Inga tomter ännu. site_create gör en från en fastighetsbeteckning.')] }
+      return { content: [text(sites.length ? sites.map((s) => `${s.slug}: ${s.designation} (rev ${s.revision})${s.owner ? ` – delad av ${s.owner}` : ''}${s.sharedWith?.length ? ` – delad med ${s.sharedWith.join(', ')}` : ''}`).join('\n') : 'Inga tomter ännu. site_create gör en från en fastighetsbeteckning.')] }
     }
     if (name === 'site_create') {
       const res = await createSite(String(args.designation ?? ''), 'claude')
