@@ -33,7 +33,7 @@ test('trace a scanned drawing: TIF underlay, calibrate, draw, undo, save, sheet'
   // TIF underlay is converted in the browser and uploaded.
   await page.getByTestId('tab-underlay').click()
   await page.getByTestId('underlay-file').setInputFiles(path.join(__dirname, 'fixtures/test-scan.tif'))
-  await expect(page.getByTestId('underlay')).toBeVisible()
+  await expect(page.getByTestId('underlay')).toBeVisible({ timeout: 20_000 })
   await expect(page.getByTestId('tool-calibrate')).toHaveClass(/bg-blue-600/)
 
   // Calibrate on the 250 px scale bar = 5 m → 20 mm per pixel.

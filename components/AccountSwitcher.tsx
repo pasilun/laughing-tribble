@@ -26,9 +26,12 @@ export function AccountSwitcher() {
     return r.ok
   }
   const switchTo = async (id: string) => {
+    // A full page load on purpose: everything the server rendered for the old account must go.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     if (await call('POST', '/api/plans/accounts', { switchTo: id })) window.location.assign('/plans')
   }
   const signOut = async () => {
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     if (await call('DELETE')) window.location.assign('/plans')
   }
   const forget = async (id: string) => {
