@@ -23,7 +23,7 @@ async function clickAt(page: Page, x: number, y: number) {
   await page.mouse.click(p.x, p.y)
 }
 
-test('trace a scanned drawing: TIF underlay, calibrate, draw, undo, save, sheet', async ({ page, request }) => {
+test('trace a scanned drawing: TIF underlay, calibrate, draw, undo, save, sheet', { tag: '@browser' }, async ({ page, request }) => {
   const created = await (await request.post('/api/plans', { data: { name: 'Editor-test' } })).json()
   const id = created.plan.id as string
   await page.goto(`/plans/${id}`)
@@ -86,7 +86,7 @@ test('trace a scanned drawing: TIF underlay, calibrate, draw, undo, save, sheet'
   await expect(page.getByTestId('sheet-preview')).toContainText('Stockholm Testet 1')
 })
 
-test('select a wall, change its length and phase', async ({ page, request }) => {
+test('select a wall, change its length and phase', { tag: '@browser' }, async ({ page, request }) => {
   const created = await (await request.post('/api/plans', { data: { name: 'Editor-demo', template: 'demo' } })).json()
   const id = created.plan.id as string
   await page.goto(`/plans/${id}`)
@@ -106,7 +106,7 @@ test('select a wall, change its length and phase', async ({ page, request }) => 
 
 test.describe('phone', () => {
   test.use({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true })
-  test('read-only sheet and plan list without horizontal overflow', async ({ page, request }) => {
+  test('read-only sheet and plan list without horizontal overflow', { tag: '@browser' }, async ({ page, request }) => {
     const created = await (await request.post('/api/plans', { data: { name: 'Mobil', template: 'demo' } })).json()
     await page.goto(`/plans/${created.plan.id}`)
     await expect(page.getByTestId('mobile-notice')).toBeVisible()
@@ -119,7 +119,7 @@ test.describe('phone', () => {
   })
 })
 
-test('trace a room along its inner faces: corners close at the centre lines', async ({ page, request }) => {
+test('trace a room along its inner faces: corners close at the centre lines', { tag: '@browser' }, async ({ page, request }) => {
   const created = await (await request.post('/api/plans', { data: { name: 'Vägglivs-test' } })).json()
   const id = created.plan.id as string
   await page.goto(`/plans/${id}`)

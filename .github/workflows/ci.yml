@@ -1,6 +1,6 @@
 name: CI
 
-# Typecheck, lint and the whole test suite on every push and pull request. Vercel deploys main by itself;
+# Typecheck, lint and the tests that need no browser (the ones tagged @browser run locally: npm test) on every push and pull request. Vercel deploys main by itself;
 # this tells you whether what was pushed is sound (turn on "Require status checks" in the branch settings
 # to hold a merge back, where the plan allows it).
 on:
@@ -14,8 +14,7 @@ concurrency:
 
 jobs:
   check:
-    # Pinned: ubuntu-latest moved to 26.04, which this Playwright version cannot install a browser on.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +25,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npx playwright install --with-deps chromium
       - run: npm test
         env:
           CI: '1'

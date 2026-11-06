@@ -221,7 +221,7 @@ test('invited people only count while PLAN_USERS is set (locked and legacy modes
 
 // The pages, against the running app (open locally: everyone is an administrator).
 test.describe('pages', () => {
-  test('make a link, open it as the friend, get a key; the admin can remove the person', async ({ page, browser }) => {
+  test('make a link, open it as the friend, get a key; the admin can remove the person', { tag: '@browser' }, async ({ page, browser }) => {
     const name = `ui${Date.now() % 1_000_000}`
     await page.goto('/plans/people')
     await page.getByTestId('invite-label').fill('Testvän')
@@ -279,7 +279,7 @@ test.describe('pages', () => {
     await expect(page.getByTestId('person-row').filter({ hasText: name })).toHaveCount(0)
   })
 
-  test('the login page takes a pasted invitation link', async ({ page, browser }) => {
+  test('the login page takes a pasted invitation link', { tag: '@browser' }, async ({ page, browser }) => {
     await page.goto('/plans/people')
     await page.getByTestId('invite-label').fill('Klistra')
     await page.getByTestId('invite-create').click()

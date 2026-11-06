@@ -177,7 +177,7 @@ test('restore:backup puts the plans back for a person, skipping what exists', as
   }
 })
 
-test('the plan list: delete moves a plan to the trash, restore brings it back, backup link is there', async ({ page, request }) => {
+test('the plan list: delete moves a plan to the trash, restore brings it back, backup link is there', { tag: '@browser' }, async ({ page, request }) => {
   const name = `Papperskorg ${Date.now()}`
   const made = await request.post('/api/plans', { data: { name } })
   const id = (await made.json()).plan.id as string

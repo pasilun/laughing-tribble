@@ -80,7 +80,7 @@ test('the upload route refuses what it cannot use', async ({ request }) => {
   expect(tif.status()).toBe(201)
 })
 
-test('the page: pick a file, it uploads at once and says what to tell Claude', async ({ page, request }) => {
+test('the page: pick a file, it uploads at once and says what to tell Claude', { tag: '@browser' }, async ({ page, request }) => {
   const id = await newPlan(request)
   await page.goto(`/plans/${id}/upload`)
   await page.getByTestId('upload-file').setInputFiles({ name: 'källare.png', mimeType: 'image/png', buffer: await png() })
@@ -122,7 +122,7 @@ test('pieces: bad ids, a missing piece and an oversized piece are refused', asyn
   expect((await request.post(`/api/plans/${id}/sources?id=a&filename=a.png&upload=abc123xyz&parts=9`)).status()).toBe(400)
 })
 
-test('the page: a file over 4.5 MB is uploaded as it is, in pieces', async ({ page, request }) => {
+test('the page: a file over 4.5 MB is uploaded as it is, in pieces', { tag: '@browser' }, async ({ page, request }) => {
   const id = await newPlan(request)
   await page.goto(`/plans/${id}/upload`)
   await page.getByTestId('upload-file').setInputFiles({ name: 'stor ritning.png', mimeType: 'image/png', buffer: await bigPng() })

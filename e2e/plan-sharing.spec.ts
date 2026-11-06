@@ -211,7 +211,7 @@ test('local development without sign-in has no sharing', async () => {
   expect((await runAs(legacy, () => listPlans()))).toHaveLength(1)
 })
 
-test('the plan list: a Dela form per plan; without personal keys it says why it cannot share', async ({ page, request }) => {
+test('the plan list: a Dela form per plan; without personal keys it says why it cannot share', { tag: '@browser' }, async ({ page, request }) => {
   const made = await request.post('/api/plans', { data: { name: 'Delningstest UI', template: 'empty' } })
   expect(made.status()).toBe(201)
   await page.goto('/plans')

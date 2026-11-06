@@ -85,7 +85,7 @@ async function fixtures(request: APIRequestContext) {
 }
 
 for (const scheme of ['light', 'dark'] as const) {
-  test(`text is readable on every page with a ${scheme} system theme`, { tag: '@slow' }, async ({ browser, request }) => {
+  test(`text is readable on every page with a ${scheme} system theme`, { tag: ['@slow', '@browser'] }, async ({ browser, request }) => {
     test.setTimeout(120_000)
     const { plan, slug } = await fixtures(request)
     const ctx = await browser.newContext({ colorScheme: scheme, viewport: { width: 1280, height: 900 } })

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-test('plan list: search, pages of ten, delete with a confirmation step', async ({ page, request }) => {
+test('plan list: search, pages of ten, delete with a confirmation step', { tag: '@browser' }, async ({ page, request }) => {
   const tag = `Listtest${Date.now()}`
   for (let i = 1; i <= 12; i++) await request.post('/api/plans', { data: { name: `${tag} plan ${String(i).padStart(2, '0')}` } })
 
@@ -40,7 +40,7 @@ test('plan list: search, pages of ten, delete with a confirmation step', async (
   for (const p of trashed.filter((x: { name: string }) => x.name.startsWith(tag))) await request.delete(`/api/plans/${p.id}?permanent=1`)
 })
 
-test('plan list: tags are set per plan, shown as filters, searchable and kept when the plan is saved', async ({ page, request }) => {
+test('plan list: tags are set per plan, shown as filters, searchable and kept when the plan is saved', { tag: '@browser' }, async ({ page, request }) => {
   const tag = `Tagtest${Date.now()}`
   const proj = `Projekt ${tag}`
   const prop = `förslag ${tag}`

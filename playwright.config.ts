@@ -10,9 +10,11 @@ export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.ts',
   fullyParallel: true,
-  // The slow checks (scan readers, golden score, contrast sweeps: about two thirds of the run time) are tagged @slow and
-  // skipped by `npm test`; CI and `npm run test:all` run everything.
-  grepInvert: process.env.CI || process.env.PW_ALL ? undefined : /@slow/,
+  // Two kinds of test are left out of a plain `npm test`/CI run:
+  //  @slow     scan readers, golden score, contrast sweeps (about two thirds of the run time): skipped by `npm test`,
+  //            run by CI and `npm run test:all`.
+  //  @browser  the tests that open a page: skipped by CI (it installs no browser), run by `npm test` and `test:all`.
+  grepInvert: process.env.PW_ALL ? undefined : process.env.CI ? /@browser/ : /@slow/,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
@@ -42,7 +44,7 @@ export default defineConfig({
 
   // In CI the built app is started (what is deployed); locally the dev server. A cold start can take a minute or two.
   webServer: {
-    command: process.env.CI ? 'npm run build && npm run start' : 'npm run dev',
+    command: process.env.CI ? 'npm run build && npm run start -- --keepAliveTimeout 120000' : 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 300_000,

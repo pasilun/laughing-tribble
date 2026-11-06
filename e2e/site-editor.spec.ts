@@ -103,7 +103,7 @@ test('Claude: site_get reads what is drawn in local metres, site_edit adds a rec
   await request.delete(`/api/sites/${slug}`)
 })
 
-test('the page: draw an area by clicking, a point, a line freehand; name it; save; it is there after a reload', async ({ page, request }) => {
+test('the page: draw an area by clicking, a point, a line freehand; name it; save; it is there after a reload', { tag: '@browser' }, async ({ page, request }) => {
   const { slug } = await makeSite(request)
   await page.goto(`/plans/site/${slug}`)
   const svg = page.getByTestId('site-svg')
@@ -154,7 +154,7 @@ test('the page: draw an area by clicking, a point, a line freehand; name it; sav
   await request.delete(`/api/sites/${slug}`)
 })
 
-test('the page: a change made by Claude after the page was opened is a conflict, not an overwrite', async ({ page, request }) => {
+test('the page: a change made by Claude after the page was opened is a conflict, not an overwrite', { tag: '@browser' }, async ({ page, request }) => {
   const { slug } = await makeSite(request)
   await page.goto(`/plans/site/${slug}`)
   await expect(page.getByTestId('item-list')).toContainText('A1 Äng')
@@ -170,7 +170,7 @@ test('the page: a change made by Claude after the page was opened is a conflict,
   await request.delete(`/api/sites/${slug}`)
 })
 
-test('the list page offers the properties the repository knows, so the first site is one click', async ({ page, request }) => {
+test('the list page offers the properties the repository knows, so the first site is one click', { tag: '@browser' }, async ({ page, request }) => {
   const list = await (await request.get('/api/sites')).json()
   expect(list.suggestions).toContain('Strängnäs Lövinge 3:2')
   await page.goto('/plans/site')
