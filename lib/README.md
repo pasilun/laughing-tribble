@@ -33,4 +33,4 @@ does (editPlan, replacePlan, tagPlan, importPlan, addShare, deleteDoc …), so t
 
 A new kind of document (like site plans) gets sharing, trash, list and backup by adding a `DocKind` in
 `storage/docs.ts`; the share/delete/restore routes are `app/api/plans/doc-routes.ts`, the UI `components/DocShare.tsx`
-and `components/DocTrash.tsx`.
+and `components/DocTrash.tsx`; for Claude, `mcp/tools-share.ts` (a share tool per kind, one `doc_trash` for all).
