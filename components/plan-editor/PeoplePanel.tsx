@@ -7,6 +7,66 @@ import { Keep } from './clipboard'
 type Person = { id: string; label?: string; createdAt: string }
 type Invite = { id: string; label: string; createdAt: string; expiresAt: string }
 type State = { me: string; people: Person[]; invites: Invite[] }
+type Storage = { kind: 'blob' | 'fs' | 'turso'; blob: boolean; turso: boolean }
+
+// Where the data lives, and the move from Vercel Blob to Turso when both are set up: it copies a stretch at a
+// time until done, and can be repeated (it overwrites). Switching is then PLAN_STORE=turso in Vercel.
+function StoragePanel() {
+  const [st, setSt] = useState<Storage | null>(null)
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/plans/storage')
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setSt)
+      .catch(() => undefined)
+  }, [])
+  if (!st) return null
+
+  const copy = async () => {
+    setBusy(true)
+    let cursor: string | undefined
+    let total = 0
+    try {
+      for (let guard = 0; guard < 200; guard++) {
+        setMsg(`Kopierar… ${total} filer`)
+        const r = await fetch('/api/plans/storage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cursor }) })
+        const b = await r.json().catch(() => ({}))
+        if (!r.ok) return setMsg(b.errors?.[0] ?? 'Kopieringen misslyckades.')
+        total += b.copied ?? 0
+        if (b.missing?.length) setMsg(`Kopierar… ${total} filer (${b.missing.length} kunde inte läsas)`)
+        if (b.done) return setMsg(`Klart: ${total} filer kopierade, ${b.inTurso ?? '?'} finns nu i Turso. Ändrade du något under tiden: kör igen. Sätt sedan PLAN_STORE=turso i Vercel och bygg om.`)
+        cursor = b.cursor
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const label = st.kind === 'turso' ? 'Turso' : st.kind === 'blob' ? 'Vercel Blob' : 'filer på servern (lokalt)'
+  return (
+    <section className="mt-8 rounded border bg-white p-3 text-sm" data-testid="storage-panel">
+      <h2 className="font-semibold">Lagring</h2>
+      <p className="mt-1 text-zinc-700">
+        Data ligger i <strong data-testid="storage-kind">{label}</strong>.
+      </p>
+      {st.kind === 'blob' && !st.turso && <p className="mt-1 text-xs text-zinc-600">Vill du flytta till Turso (gratis, utan operationstak): skapa en databas och lägg TURSO_DATABASE_URL och TURSO_AUTH_TOKEN i Vercel. Se docs/deploy.md.</p>}
+      {st.kind === 'blob' && st.turso && (
+        <div className="mt-2">
+          <button type="button" data-testid="storage-copy" disabled={busy} className="rounded border bg-white px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-50" onClick={copy}>
+            Kopiera lagringen till Turso
+          </button>
+        </div>
+      )}
+      {msg && (
+        <p className="mt-2 text-xs text-zinc-800" role="status" data-testid="storage-msg">
+          {msg}
+        </p>
+      )}
+    </section>
+  )
+}
 
 export function PeoplePanel() {
   const [state, setState] = useState<State | null>(null)
@@ -129,6 +189,8 @@ export function PeoplePanel() {
               </li>
             ))}
           </ul>
+          <StoragePanel />
+
           <p className="mt-3 text-xs text-zinc-600">
             <a href="/api/plans/backup?all=1" download data-testid="backup-all" className="text-blue-700 underline">
               Ladda ner allas planer (zip)

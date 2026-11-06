@@ -4,6 +4,7 @@ import path from 'path'
 import { accessMode } from './access'
 import type { Plan, Revision } from './types'
 import { currentUser, scopeOf, type User } from './user'
+import { tursoFromEnv, type TursoBackend } from './turso'
 
 // Append-only revision history per plan. Every save — from the editor or
 // from Claude — writes a new immutable revision; nothing is overwritten
@@ -144,6 +145,11 @@ class BlobBackend implements Backend {
   async remove(keys: string[]) {
     for (let i = 0; i < keys.length; i += 100) await withToken((token) => del(keys.slice(i, i + 100), { token }))
   }
+  // One page of every key in the store (for the migration): a page is one billed listing.
+  async page(cursor?: string, limit = 100) {
+    const p = await withToken((token) => list({ token, cursor, limit }))
+    return { keys: p.blobs.map((b) => b.pathname), cursor: p.hasMore ? p.cursor : undefined }
+  }
   async keys(prefix: string) {
     const out: string[] = []
     let cursor: string | undefined
@@ -164,13 +170,38 @@ function tokenNames(): { found: string[]; using: string | null } {
 }
 
 // The whole store, every person's data. Only for migration and the health probe.
-export function systemBackend(): Backend {
-  if (tokens().length && process.env.PLAN_STORE !== 'fs') return new BlobBackend()
-  return new FsBackend(path.resolve(process.env.PLAN_DATA_DIR ?? '.data'))
+// Where the data lives: PLAN_STORE=turso (a Turso database, TURSO_DATABASE_URL and TURSO_AUTH_TOKEN), PLAN_STORE=fs
+// (files under .data), otherwise Vercel Blob when it has a token and files when it has not. Turso is only used
+// when it is asked for, so a store can be filled (see migrate-store.ts) while the app keeps using Blob.
+export function storageKind(): 'blob' | 'fs' | 'turso' {
+  if (process.env.PLAN_STORE === 'turso') return 'turso'
+  if (process.env.PLAN_STORE === 'fs') return 'fs'
+  return tokens().length ? 'blob' : 'fs'
 }
 
-export function storageKind(): 'blob' | 'fs' {
-  return tokens().length && process.env.PLAN_STORE !== 'fs' ? 'blob' : 'fs'
+let turso: TursoBackend | undefined
+let tursoOverride: TursoBackend | undefined
+// The tests hand in a local database; null puts the real client back.
+export function useTursoForTests(b: TursoBackend | null) {
+  tursoOverride = b ?? undefined
+  turso = undefined
+}
+export function tursoBackend(): TursoBackend {
+  return tursoOverride ?? (turso ??= tursoFromEnv())
+}
+export const tursoConfigured = () => !!(process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN)
+export const blobConfigured = () => tokens().length > 0
+
+// The Blob store itself, whatever PLAN_STORE says (the migration reads from it).
+export function blobBackend(): Backend & { page(cursor?: string, limit?: number): Promise<{ keys: string[]; cursor?: string }> } {
+  return new BlobBackend()
+}
+
+export function systemBackend(): Backend {
+  const kind = storageKind()
+  if (kind === 'turso') return tursoBackend()
+  if (kind === 'blob') return new BlobBackend()
+  return new FsBackend(path.resolve(process.env.PLAN_DATA_DIR ?? '.data'))
 }
 
 // One person's view of the store: every key is under their prefix, and what
@@ -322,7 +353,7 @@ export function userBackend(): Backend {
 }
 
 // Writes, reads back and removes a small file outside any person's prefix.
-export async function storageProbe(): Promise<{ kind: 'blob' | 'fs'; ok: boolean; ms: number; tokens?: { found: string[]; using: string | null }; error?: string }> {
+export async function storageProbe(): Promise<{ kind: 'blob' | 'fs' | 'turso'; ok: boolean; ms: number; tokens?: { found: string[]; using: string | null }; error?: string }> {
   const t = Date.now()
   const b = systemBackend()
   const key = `_health/${Math.random().toString(36).slice(2)}.txt`

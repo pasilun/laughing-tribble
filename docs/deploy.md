@@ -97,6 +97,23 @@ an index (`u/<person>/shared.json`, rebuilt from the pointers when missing or a 
 (`Personer` in the menu) is answered from `GET /api/plans/accounts` without listing people. Watch
 *Usage* in the Vercel dashboard; a store that hits a limit stops working until the next period.
 
+## Moving the data to Turso (free, no operation caps that lock the store)
+
+Vercel Blob on Hobby locks the store for 30 days when a monthly limit is hit. Turso (libSQL, SQLite over HTTP)
+has a free plan with far higher limits (about 5 GB, 500 M row reads and 10 M row writes a month; check
+turso.tech/pricing) and the app can use it instead of Blob. Nothing changes until `PLAN_STORE=turso` is set.
+
+1. Make a free account at turso.tech and a database (a region near Stockholm, e.g. Frankfurt or Ireland).
+   Copy its URL (`libsql://…turso.io`) and make a token (dashboard → the database → generate token).
+2. In Vercel (Production) add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, redeploy. The app keeps using Blob.
+3. Open `/plans/people` → *Lagring* → *Kopiera lagringen till Turso*. It copies every file a stretch at a time and
+   says when it is done and how many files Turso holds. It only reads from Blob, and can be repeated (it overwrites).
+   It reads each file once (a few thousand reads and a few dozen listings, well inside Hobby's monthly limits).
+4. Stop editing, press the copy once more (it picks up what changed), then set `PLAN_STORE=turso` in Vercel and
+   redeploy. `/api/health` and the *Lagring* box now say Turso.
+5. Keep the Blob store for a while as a copy; delete it when everything has been checked. The backup download
+   (see below) works the same on either store.
+
 ## Trash and backup
 
 - **Trash.** Deleting a plan moves it to the trash: hidden for the owner, kept 30 days, restorable from

@@ -16,6 +16,7 @@
     "eval:agent": "tsx scripts/eval-agent.mts"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "@napi-rs/canvas": "^0.1.100",
     "@resvg/resvg-js": "^2.6.2",
     "@vercel/blob": "^2.4.0",
