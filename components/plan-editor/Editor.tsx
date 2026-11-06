@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { checkPlan, type Finding } from '@/lib/plan/domain/checks'
 import { refPoint } from '@/lib/plan/domain/names'
+import { asUnderlay, isShown, newSourceId, syncSource, underlayAsSource } from './sources'
 import { dist } from '@/lib/plan/domain/geometry'
 import { applyOps, type Op } from '@/lib/plan/domain/ops'
 import { hasChanges, renderSheet } from '@/lib/plan/domain/sheet'
-import type { FixtureKind, Plan, Pt, Revision, View } from '@/lib/plan/domain/types'
+import type { FixtureKind, Plan, Pt, Revision, Source, View } from '@/lib/plan/domain/types'
 import { Canvas, type Selection, type Tool, type ToolOptions } from './Canvas'
 import { initHistory, push, redo, undo, type History } from './history'
 import { FIXTURE_LABEL, Inspector, PHASE_LABEL } from './Inspector'
@@ -86,7 +87,7 @@ export function Editor({ id }: { id: string }) {
 
   // ── editing ──────────────────────────────────────────────────────────────
   const commit = useCallback((next: Plan, message: string, key?: string) => {
-    setHist((h) => (h ? push(h, next, key) : h))
+    setHist((h) => (h ? push(h, syncSource(next), key) : h))
     setMessages((m) => (m[m.length - 1] === message ? m : [...m, message]))
     setStatus(message)
   }, [])
@@ -191,8 +192,17 @@ export function Editor({ id }: { id: string }) {
       // First guess from the scan's dpi and the drawing's stated scale.
       // Archive copies are often 1–3 % off, so calibration is still needed.
       const mmPerPx = (25.4 / (raster.dpi ?? 300)) * scanScale
+      // The drawing that was under the plan is kept as a source, so a second drawing adds to the first instead of replacing it.
+      const old = underlayAsSource(plan)
+      const label = file.name.replace(/\.[a-z0-9]+$/i, '') || 'Ritning'
+      const known = old ? { ...plan, sources: [...(plan.sources ?? []), old] } : plan
+      const added: Source = { id: newSourceId(known, label), name: label, role: 'other', src: body.url, widthPx: raster.width, heightPx: raster.height, mmPerPx, x: 0, y: 0, rotation: 0 }
       applyAndCommit(
-        [{ op: 'setUnderlay', underlay: { src: body.url, widthPx: raster.width, heightPx: raster.height, mmPerPx, x: 0, y: 0, rotation: 0, opacity: 0.5 } }],
+        [
+          ...(old ? [{ op: 'add' as const, kind: 'source' as const, item: old }] : []),
+          { op: 'add', kind: 'source', item: added },
+          { op: 'setUnderlay', underlay: asUnderlay(added) },
+        ],
         'underlay',
         'Lade in underlagsritning',
       )
@@ -506,7 +516,50 @@ export function Editor({ id }: { id: string }) {
                     ))}
                   </select>
                 </label>
-                <input ref={fileRef} type="file" accept=".pdf,.tif,.tiff,.png,.jpg,.jpeg,application/pdf,image/tiff,image/png,image/jpeg" data-testid="underlay-file" className="block w-full text-sm" onChange={(e) => e.target.files?.[0] && void uploadUnderlay(e.target.files[0])} />
+                <label className="block text-xs text-zinc-600">
+                  Lägg till en ritning
+                  <input ref={fileRef} type="file" accept=".pdf,.tif,.tiff,.png,.jpg,.jpeg,application/pdf,image/tiff,image/png,image/jpeg" data-testid="underlay-file" className="mt-1 block w-full text-sm" onChange={(e) => e.target.files?.[0] && void uploadUnderlay(e.target.files[0])} />
+                </label>
+                {(plan.sources?.length ?? 0) > 0 && (
+                  <div data-testid="sources">
+                    <h3 className="text-xs font-semibold text-zinc-700">Ritningar i planen ({plan.sources!.length})</h3>
+                    <ul className="mt-1 divide-y rounded border">
+                      {plan.sources!.map((src) => (
+                        <li key={src.id} data-testid="source-row" className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium" data-testid="source-name">
+                              {src.name}
+                            </span>
+                            <span className="text-zinc-500">
+                              {src.year ? `${src.year} · ` : ''}
+                              {Math.round(src.widthPx * src.mmPerPx)} × {Math.round(src.heightPx * src.mmPerPx)} mm{src.calibration ? ' · kalibrerad' : ''}
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1">
+                            {isShown(plan, src) ? (
+                              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-800" data-testid="source-shown">
+                                visas
+                              </span>
+                            ) : (
+                              <button type="button" data-testid="source-show" className="rounded border px-2 py-0.5 hover:bg-zinc-50" onClick={() => applyAndCommit([{ op: 'setUnderlay', underlay: asUnderlay(src) }], 'underlay:show', `Visar ${src.name} under planen`)}>
+                                Visa
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              data-testid="source-remove"
+                              aria-label={`Ta bort ${src.name}`}
+                              className="rounded border border-red-300 px-2 py-0.5 text-red-700 hover:bg-red-50"
+                              onClick={() => applyAndCommit([...(isShown(plan, src) ? [{ op: 'setUnderlay' as const, underlay: null }] : []), { op: 'delete', kind: 'source', id: src.id }], 'source:rm', `Tog bort ritningen ${src.name}`)}
+                            >
+                              Ta bort
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {plan.underlay && (
                   <div className="space-y-2">
                     <label className="block text-xs text-zinc-600">

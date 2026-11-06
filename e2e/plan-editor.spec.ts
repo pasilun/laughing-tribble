@@ -159,3 +159,37 @@ test('the checks name what they point at in words and number it on the drawing',
   await expect(page.getByTestId('marker-1')).toHaveCount(0)
   await request.delete(`/api/plans/${id}`)
 })
+
+test('a second drawing is added to the first, not put in its place: both are listed and either can be shown', { tag: '@browser' }, async ({ page, request }) => {
+  const created = await (await request.post('/api/plans', { data: { name: 'Flera ritningar' } })).json()
+  const id = created.plan.id as string
+  await page.goto(`/plans/${id}`)
+  await expect(page.getByTestId('plan-name')).toContainText('Flera ritningar')
+  await page.getByTestId('tab-underlay').click()
+  const rows = page.getByTestId('source-row')
+
+  await page.getByTestId('underlay-file').setInputFiles(path.join(__dirname, 'fixtures/cellar/kallare.png'))
+  await expect(page.getByTestId('underlay')).toBeVisible({ timeout: 20_000 })
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first().getByTestId('source-shown')).toBeVisible()
+
+  await page.getByTestId('underlay-file').setInputFiles(path.join(__dirname, 'fixtures/golden/drawing.png'))
+  await expect(rows).toHaveCount(2, { timeout: 20_000 })
+  // The new one is shown, the first one is still there and can be brought back.
+  await expect(rows.nth(1).getByTestId('source-shown')).toBeVisible()
+  await rows.first().getByTestId('source-show').click()
+  await expect(rows.first().getByTestId('source-shown')).toBeVisible()
+  await expect(rows.nth(1).getByTestId('source-show')).toBeVisible()
+
+  await page.getByTestId('save').click()
+  await expect(page.getByTestId('save-state')).not.toContainText('osparade')
+  const saved = (await (await request.get(`/api/plans/${id}`)).json()).plan
+  expect(saved.sources).toHaveLength(2)
+  expect(saved.underlay.src).toBe(saved.sources[0].src)
+
+  // Taking away the one that is shown takes it from under the plan too.
+  await rows.first().getByTestId('source-remove').click()
+  await expect(rows).toHaveCount(1)
+  await expect(page.getByTestId('underlay')).toHaveCount(0)
+  await request.delete(`/api/plans/${id}`)
+})

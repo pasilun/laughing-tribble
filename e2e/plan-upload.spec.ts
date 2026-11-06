@@ -86,7 +86,10 @@ test('the page: pick a file, it uploads at once and says what to tell Claude', {
   await page.getByTestId('upload-file').setInputFiles({ name: 'källare.png', mimeType: 'image/png', buffer: await png() })
   const result = page.getByTestId('upload-result')
   await expect(result).toContainText('Klart')
-  await expect(result).toContainText('Ritningen är uppladdad som källa kallare-')
+  // For a person: a way into the plan. For Claude: what to say.
+  await expect(page.getByTestId('upload-open-plan')).toBeVisible()
+  await expect(page.getByText('Ritningen är uppladdad som källa kallare-')).toBeVisible()
+  await expect(page.getByTestId('upload-back')).toContainText('←')
   const got = await call(request, 'plan_get', { plan_id: id })
   expect(got.content[0].text).toMatch(/Källa kallare-[a-z0-9]{4} \(archive\)/)
 })

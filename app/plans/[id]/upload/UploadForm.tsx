@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
 
 // One button: pick the drawing, it is uploaded and becomes a source of the plan.
 // Claude calibrates it afterwards from the dimensions printed on it, so no scale or
@@ -29,7 +30,16 @@ async function errorOf(res: Response): Promise<string> {
 
 export function UploadForm({ planId }: { planId: string }) {
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; sourceId?: string } | null>(null)
+  const [planName, setPlanName] = useState('')
+
+  // Which plan this is for, so the page is not a blank form.
+  useEffect(() => {
+    fetch(`/api/plans/${planId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setPlanName(b?.plan?.name ?? ''))
+      .catch(() => undefined)
+  }, [planId])
 
   async function pick(file: File | undefined) {
     if (!file) return
@@ -60,7 +70,7 @@ export function UploadForm({ planId }: { planId: string }) {
       const res = await fetch(`/api/plans/${planId}/sources?${q}`, { method: 'POST', body })
       if (!res.ok) throw new Error(await errorOf(res))
       const j = await res.json()
-      setMsg({ ok: true, text: `Klart. Gå tillbaka till chatten och skriv: "Ritningen är uppladdad som källa ${j.source.id}".` })
+      setMsg({ ok: true, text: `Klart. ”${label}” är nu en av planens ritningar.`, sourceId: j.source.id })
     } catch (err) {
       setMsg({ ok: false, text: (err as Error).message })
     } finally {
@@ -70,9 +80,13 @@ export function UploadForm({ planId }: { planId: string }) {
 
   return (
     <main className="mx-auto w-full max-w-md px-4 py-10">
-      <h1 className="text-xl font-bold">Ladda upp ritning</h1>
+      <Link href={`/plans/${planId}`} className="text-sm text-blue-700 underline" data-testid="upload-back">
+        ← {planName || 'Till planen'}
+      </Link>
+      <h1 className="mt-3 text-xl font-bold">Ladda upp ritning</h1>
+      {planName && <p className="mt-1 text-sm text-gray-600">Läggs till i planen ”{planName}”. Du kan ladda upp flera.</p>}
       <label className={`mt-6 flex cursor-pointer items-center justify-center rounded bg-blue-600 px-4 py-4 text-lg text-white ${busy ? 'opacity-50' : ''}`}>
-        {busy ? 'Laddar upp…' : 'Välj bild'}
+        {busy ? 'Laddar upp…' : 'Välj ritning'}
         <input data-testid="upload-file" type="file" accept=".png,.jpg,.jpeg,.tif,.tiff,.pdf,image/*,application/pdf" disabled={busy} className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
       </label>
       <p className="mt-2 text-sm text-gray-600">PNG, JPG, TIF eller PDF.</p>
@@ -80,6 +94,16 @@ export function UploadForm({ planId }: { planId: string }) {
         <p data-testid="upload-result" className={`mt-4 whitespace-pre-wrap text-base ${msg.ok ? 'text-green-800' : 'text-red-700'}`}>
           {msg.text}
         </p>
+      )}
+      {msg?.ok && msg.sourceId && (
+        <div className="mt-3 space-y-2 text-sm text-gray-700">
+          <Link href={`/plans/${planId}`} className="inline-block rounded border px-3 py-1.5 text-blue-700" data-testid="upload-open-plan">
+            Öppna planen
+          </Link>
+          <p>
+            Använder du Claude? Skriv i chatten: ”Ritningen är uppladdad som källa <span className="font-mono">{msg.sourceId}</span>”.
+          </p>
+        </div>
       )}
     </main>
   )
