@@ -10,7 +10,7 @@ import { allowed, fail, ok, resetLimits } from '../app/api/plans/login/limit'
 
 test.describe.configure({ mode: 'serial' })
 
-const ENV = ['PLAN_USERS', 'PLAN_PASSWORD', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
+const ENV = ['PLAN_USERS', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
 const saved: Record<string, string | undefined> = {}
 test.beforeEach(() => {
   for (const k of ENV) {
@@ -71,15 +71,19 @@ test('removing someone from PLAN_USERS ends their sessions; broken entries are i
   expect(authenticate(req('http://x/?key=annas-nyckel'))).toBeNull()
 })
 
-test('single-password mode still works and keeps the old shared layout', () => {
+test('the old single password is gone: it opens nothing, with or without PLAN_USERS', () => {
   process.env.PLAN_PASSWORD = 'hemligt'
-  expect(accessMode()).toBe('legacy')
-  expect(authenticate(req())).toBeNull()
-  expect(authenticate(req('http://x/api/mcp?key=hemligt'))).toEqual({ id: 'legacy', legacy: true })
-  expect(authenticate(req('http://x/api/plans', { authorization: 'Bearer hemligt' }))?.legacy).toBe(true)
-  // PLAN_USERS wins when both are set
-  process.env.PLAN_USERS = users()
+  // On Vercel without PLAN_USERS nothing gets in, whatever else is set.
+  process.env.VERCEL = '1'
+  expect(accessMode()).toBe('locked')
   expect(authenticate(req('http://x/api/mcp?key=hemligt'))).toBeNull()
+  expect(authenticate(req('http://x/api/plans', { authorization: 'Bearer hemligt' }))).toBeNull()
+  // With PLAN_USERS only personal keys count.
+  process.env.PLAN_USERS = users()
+  expect(accessMode()).toBe('users')
+  expect(authenticate(req('http://x/api/mcp?key=hemligt'))).toBeNull()
+  expect(authenticate(req('http://x/api/mcp?key=bos-nyckel'))?.id).toBe('bo')
+  delete process.env.PLAN_PASSWORD
 })
 
 test('login attempts: five wrong keys lock an address for ten minutes', () => {

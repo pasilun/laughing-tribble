@@ -25,7 +25,7 @@ test.describe.configure({ mode: 'serial' })
 const ANNA = { id: 'anna' }
 const BO = { id: 'bo' }
 let dir = ''
-const ENV = ['PLAN_USERS', 'PLAN_PASSWORD', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
+const ENV = ['PLAN_USERS', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
 const saved: Record<string, string | undefined> = {}
 
 test.beforeEach(() => {
@@ -33,7 +33,6 @@ test.beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'plan-users-'))
   process.env.PLAN_DATA_DIR = dir
   process.env.PLAN_STORE = 'fs'
-  delete process.env.PLAN_PASSWORD
   delete process.env.VERCEL
   process.env.PLAN_USERS = `anna:${hashKey('ka')}, bo:${hashKey('kb')}`
 })
@@ -128,9 +127,8 @@ test("Claude's tools see only the connected person's plans", async () => {
 })
 
 test('migration moves the old shared plans to one person and verifies the copy', async () => {
-  // as before: single-password layout under plans/
+  // the unprefixed layout under plans/ (what local development without sign-in writes)
   delete process.env.PLAN_USERS
-  process.env.PLAN_PASSWORD = 'gammalt'
   const res = await runAs({ id: 'legacy', legacy: true }, () => createPlan({ name: 'Gammal plan', template: 'demo', author: 'user' }))
   if ('errors' in res) throw new Error('create')
   const id = res.plan.id
@@ -144,7 +142,6 @@ test('migration moves the old shared plans to one person and verifies the copy',
   expect(out).toContain('tog bort')
   expect(existsSync(path.join(dir, 'plans', id, 'head.json'))).toBe(false)
   // now with real users: anna has it, bo doesn't
-  delete process.env.PLAN_PASSWORD
   process.env.PLAN_USERS = `anna:${hashKey('ka')}, bo:${hashKey('kb')}`
   expect((await runAs(ANNA, () => getRevision(id)))!.plan.name).toBe('Gammal plan')
   expect((await runAs(ANNA, () => getAsset(id, 'a.png')))!.equals(Buffer.from([1, 2, 3]))).toBe(true)

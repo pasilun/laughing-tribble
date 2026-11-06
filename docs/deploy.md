@@ -27,8 +27,10 @@ with their own key, their own plans and their own storage.
    them to the first person, with the blob token in the environment:
    `npm run migrate:users -- --to <id> --dry-run`, then without `--dry-run`, check the
    plans in the app, then once more with `--delete-legacy`.
-4. **Remove `PLAN_PASSWORD`** once the migration is done (it is only the fallback
-   when `PLAN_USERS` is missing).
+4. **`PLAN_PASSWORD` is gone.** The single shared password no longer exists in the app; delete
+   the variable in Vercel if it is still there. The way in is a personal key (the people in
+   `PLAN_USERS`, who are the administrators) or an invitation link plus OAuth for the Claude
+   connector.
 5. **Smoke users** (for the automatic check after each deploy): make two more people,
    `smoke` and `smoke2`, add them to `PLAN_USERS`, and put their keys in GitHub as
    secrets `SMOKE_KEY` and `SMOKE_KEY_OTHER`.
@@ -75,7 +77,7 @@ on; the owner may take a person out (`DELETE /api/plans/:id/share?user=…`), an
   `shares.json` (`{ members, ownerRemoved? }`). A member has a pointer `u/<member>/shared/<id>.json`.
   All reads and writes of `plans/<id>/…` go to the owner's folder for a member (lib/plan/store.ts).
   The access is remembered for 10 s per server instance.
-- Not shared: tomter (site plans). Sharing needs personal keys (`PLAN_USERS`), not the single-password mode.
+- Not shared: tomter (site plans). Sharing needs personal keys (`PLAN_USERS`), and not local development without sign-in.
 
 ## Connecting Claude with sign-in (OAuth)
 

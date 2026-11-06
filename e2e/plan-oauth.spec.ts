@@ -21,7 +21,7 @@ import { checkAuthRequest } from '@/lib/plan/oauth'
 test.describe.configure({ mode: 'serial' })
 
 let dir = ''
-const ENV = ['PLAN_USERS', 'PLAN_PASSWORD', 'PLAN_ADMINS', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
+const ENV = ['PLAN_USERS', 'PLAN_ADMINS', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
 const saved: Record<string, string | undefined> = {}
 const HOST = 'https://plan.example'
 const CALLBACK = 'https://claude.ai/api/mcp/auth_callback'
@@ -31,7 +31,6 @@ test.beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'plan-oauth-'))
   process.env.PLAN_DATA_DIR = dir
   process.env.PLAN_STORE = 'fs'
-  delete process.env.PLAN_PASSWORD
   delete process.env.VERCEL
   process.env.PLAN_USERS = `anna:${hashKey('ka')}, bo:${hashKey('kb')}`
   forgetPeople()

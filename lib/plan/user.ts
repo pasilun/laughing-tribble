@@ -7,7 +7,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 
 export type User = {
   id: string
-  // Single-password mode and local development keep the old unprefixed layout.
+  // Local development (no sign-in configured) keeps the unprefixed layout.
   legacy?: boolean
 }
 

@@ -10,8 +10,9 @@ import { runAs, USER_ID, type User } from './user'
 //   PLAN_USERS   "anna:<sha256>, bo:<sha256>" – person id and the hash of the
 //                key (npm run user:add prints the pair; the key itself is
 //                never stored).
-//   PLAN_PASSWORD  older single-password mode: one shared key, everyone sees
-//                the same plans. Used only when PLAN_USERS is not set.
+//                The people in PLAN_USERS are the administrators' way in. Everyone else
+//                joins by an invitation link and signs the Claude connector in with
+//                OAuth; there is no shared password.
 //
 //   PLAN_ADMINS  "anna": who may invite people (the page /plans/people).
 //
@@ -19,13 +20,13 @@ import { runAs, USER_ID, type User } from './user'
 // and checked after PLAN_USERS, so adding someone needs no redeploy.
 //
 // The key is accepted as a login cookie (browser), a bearer token, or ?key=
-// (MCP connector URL). With neither variable set, access is open locally and
-// closed on Vercel.
+// (MCP connector URL). Without PLAN_USERS access is open locally and closed on
+// Vercel.
 
 export const ACCESS_COOKIE = 'plan_access'
 
 type Entry = { id: string; hash: string; sessionVersion?: number }
-export type AccessMode = 'users' | 'legacy' | 'open' | 'locked'
+export type AccessMode = 'users' | 'open' | 'locked'
 
 export function hashKey(key: string): string {
   return createHash('sha256').update(`plan-key:${key}`).digest('hex')
@@ -42,14 +43,12 @@ function parseUsers(raw: string): Entry[] {
 
 export function accessMode(): AccessMode {
   if (process.env.PLAN_USERS?.trim()) return 'users'
-  if (process.env.PLAN_PASSWORD) return 'legacy'
   return process.env.VERCEL ? 'locked' : 'open'
 }
 
 function entries(): Entry[] {
   const mode = accessMode()
   if (mode === 'users') return parseUsers(process.env.PLAN_USERS ?? '')
-  if (mode === 'legacy') return [{ id: 'legacy', hash: hashKey(process.env.PLAN_PASSWORD ?? '') }]
   return []
 }
 
@@ -63,7 +62,7 @@ function same(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y)
 }
 
-const userOf = (e: Entry): User => (e.id === 'legacy' ? { id: 'legacy', legacy: true } : { id: e.id })
+const userOf = (e: Entry): User => ({ id: e.id })
 
 // The cookie holds an id and a hash derived from the stored key hash, never
 // the key. Removing a person from PLAN_USERS ends their sessions.

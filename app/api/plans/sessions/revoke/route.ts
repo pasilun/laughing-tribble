@@ -12,7 +12,7 @@ export const runtime = 'nodejs'
 //
 // People in PLAN_USERS have no person record; their "logout everywhere" is rotating
 // the key there, which ends their sessions because the cookie is derived from the
-// key hash. Single-password mode has no per-person sessions at all.
+// key hash. Without sign-in configured (local development) there are no per-person sessions at all.
 export const POST = secured(async (req: Request): Promise<Response> => {
   const me = currentUser()!
   if (me.legacy) return Response.json({ errors: ['utloggning för alla enheter gäller bara med personliga nycklar'] }, { status: 400 })

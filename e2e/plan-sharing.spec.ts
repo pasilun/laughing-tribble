@@ -20,7 +20,7 @@ test.describe.configure({ mode: 'serial' })
 const ANNA = { id: 'anna' }
 const BO = { id: 'bo' }
 let dir = ''
-const ENV = ['PLAN_USERS', 'PLAN_PASSWORD', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
+const ENV = ['PLAN_USERS', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
 const saved: Record<string, string | undefined> = {}
 
 test.beforeEach(() => {
@@ -28,7 +28,6 @@ test.beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'plan-sharing-'))
   process.env.PLAN_DATA_DIR = dir
   process.env.PLAN_STORE = 'fs'
-  delete process.env.PLAN_PASSWORD
   delete process.env.VERCEL
   process.env.PLAN_USERS = `anna:${hashKey('ka')}, bo:${hashKey('kb')}, cy:${hashKey('kc')}`
   forgetPeople()
@@ -187,9 +186,8 @@ test("Claude's tools: plan_share, and plan_list tells who a plan is shared with"
   expect(await ids(BO)).toEqual([])
 })
 
-test('the single-password layout has no sharing', async () => {
+test('local development without sign-in has no sharing', async () => {
   delete process.env.PLAN_USERS
-  process.env.PLAN_PASSWORD = 'gammalt'
   forgetAccess()
   const legacy = { id: 'legacy', legacy: true }
   const res = await runAs(legacy, () => createPlan({ name: 'Gammal', template: 'demo', author: 'user' }))

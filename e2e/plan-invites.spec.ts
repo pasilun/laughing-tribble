@@ -17,7 +17,7 @@ import { resetLimits } from '../app/api/plans/login/limit'
 test.describe.configure({ mode: 'serial' })
 
 let dir = ''
-const ENV = ['PLAN_USERS', 'PLAN_PASSWORD', 'PLAN_ADMINS', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
+const ENV = ['PLAN_USERS', 'PLAN_ADMINS', 'VERCEL', 'PLAN_DATA_DIR', 'PLAN_STORE']
 const saved: Record<string, string | undefined> = {}
 
 test.beforeEach(() => {
@@ -25,7 +25,6 @@ test.beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'plan-invites-'))
   process.env.PLAN_DATA_DIR = dir
   process.env.PLAN_STORE = 'fs'
-  delete process.env.PLAN_PASSWORD
   delete process.env.VERCEL
   process.env.PLAN_USERS = `anna:${hashKey('ka')}, bo:${hashKey('kb')}`
   process.env.PLAN_ADMINS = 'anna'

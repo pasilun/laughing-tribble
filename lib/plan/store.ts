@@ -240,7 +240,7 @@ export async function readShares(ownerScope: string, id: string): Promise<Shares
 
 // Which folder holds this plan for this person, and in what role.
 export async function accessFor(user: User, id: string): Promise<Access> {
-  // The single-password and local layouts have one shared folder and no sharing.
+  // Local development has one shared folder and no sharing.
   if (user.legacy) return { scope: '', owner: user.id, role: 'owner' }
   const ck = `${user.id}:${id}`
   const hit = accessCache.get(ck)
