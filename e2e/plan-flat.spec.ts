@@ -107,7 +107,8 @@ test('walls: 120 mm off, a fit that rests on noise leaves the wall alone instead
   expect(snap).toContain('OSÄKER')
 })
 
-test('openings and windows: what the readers find in the 1999 survey, against the model (baseline)', async ({ request }, info) => {
+test('openings and windows: what the readers find in the 1999 survey, against the model (baseline)', { tag: '@slow' }, async ({ request }, info) => {
+  test.setTimeout(120_000)
   const { id, ref } = await setup(request, 60)
   const cur = await get(request, id)
   const base = await ops(request, id, cur.plan.openings.map((o) => ({ op: 'delete', kind: 'opening', id: o.id })), cur.rev, 'utan öppningar')

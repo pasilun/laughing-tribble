@@ -68,7 +68,7 @@ test('plan_next asks for the drawing first, then for calibration', async ({ requ
   expect(second).toContain('plan_trace')
 })
 
-test('plan_trace calibrates from the printed dimensions, fits walls, reads openings and says what is left', async ({ request }) => {
+test('plan_trace calibrates from the printed dimensions, fits walls, reads openings and says what is left', { tag: '@slow' }, async ({ request }) => {
   test.setTimeout(120_000)
   const id = await planWithSource(request, 'Trace')
   const out = await call(request, 'plan_trace', { plan_id: id, printed_outer_mm: { width: 6080, length: 10500 }, dimensions: DIMS })
@@ -138,7 +138,7 @@ test('plan_audit finds a wall moved off the drawing; plan_fix mends it by id; sm
   expect(view.content.at(-1)!.type).toBe('image')
 })
 
-test('a stretched source drawing is named as such, and the walls are not pulled off the printed size', async ({ request }) => {
+test('a stretched source drawing is named as such, and the walls are not pulled off the printed size', { tag: '@slow' }, async ({ request }) => {
   test.setTimeout(180_000)
   const id = await planWithSource(request, 'Sträckt')
   await call(request, 'plan_trace', { plan_id: id, dimensions: DIMS })

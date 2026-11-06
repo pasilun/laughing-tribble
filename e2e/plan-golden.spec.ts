@@ -6,7 +6,7 @@ import { generate, judge, reference } from './golden'
 // score is attached to the report; the limits are today's baseline, to be
 // tightened as generation improves.
 
-test('golden: a plan generated from the known drawing scores within limits', async ({ request }) => {
+test('golden: a plan generated from the known drawing scores within limits', { tag: '@slow' }, async ({ request }) => {
   test.setTimeout(120_000)
   const call = async (name: string, args: Record<string, unknown>) => {
     const res = await request.post('/api/mcp', { data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } } })

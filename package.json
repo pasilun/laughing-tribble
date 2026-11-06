@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
+    "test:all": "PW_ALL=1 playwright test",
     "user:add": "tsx scripts/user-add.ts",
     "smoke": "node scripts/smoke.mjs",
     "migrate:users": "tsx scripts/migrate-to-users.ts",
