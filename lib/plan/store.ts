@@ -1,5 +1,5 @@
 import { currentUser } from './user'
-import { assertDocId, deleteDoc, headKey as docHeadKey, listDocs, PLANS, purgeDoc, restoreDoc, userBackend, type Listed, type Trashed } from './docs'
+import { assertDocId, headKey as docHeadKey, listDocs, PLANS, userBackend, type Listed, type Trashed } from './docs'
 import { ConflictError, PublicError, type Backend } from './storage'
 import type { Plan, Revision } from './types'
 
