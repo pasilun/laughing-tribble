@@ -68,7 +68,7 @@ const plen = (p: Prop) => Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y)
 // specks), found from the pieces the detector returns: pieces on one line, however broken, add
 // up to a wall line; the outline is the outermost wall lines that run most of the way across.
 // Pieces are grouped by centre line, so a slightly skewed or hand drawn wall still counts as one.
-export function houseBox(props: Prop[]): { x0: number; x1: number; y0: number; y1: number } | null {
+function houseBox(props: Prop[]): { x0: number; x1: number; y0: number; y1: number } | null {
   const TOL = 250
   const line = (vertical: boolean) => {
     const ps = props

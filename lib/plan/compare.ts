@@ -8,9 +8,9 @@ import type { Opening, Plan, Pt, Wall } from './types'
 // different origins). Reported per wall: centreline offset and thickness
 // difference; per opening: matched (and how far off), missed, or extra.
 
-export type AxisFit = { scale: number; offset: number; rmsMm: number; n: number }
-export type WallDiff = { id: string; axis: 'x' | 'y'; refPos: number; pos: number; diffMm: number; refThickness: number; thickness: number; thicknessDiffMm: number }
-export type OpeningMatch = { id: string; refId: string; wallId: string; centreDiffMm: number; widthDiffMm: number }
+type AxisFit = { scale: number; offset: number; rmsMm: number; n: number }
+type WallDiff = { id: string; axis: 'x' | 'y'; refPos: number; pos: number; diffMm: number; refThickness: number; thickness: number; thicknessDiffMm: number }
+type OpeningMatch = { id: string; refId: string; wallId: string; centreDiffMm: number; widthDiffMm: number }
 export type Comparison = {
   fit: { x: AxisFit; y: AxisFit }
   walls: WallDiff[]

@@ -10,7 +10,7 @@ export type StoredSite = { doc: SiteDoc; meta: SiteRevision }
 const revKey = (slug: string, n: number) => `sites/${slug}/rev-${String(n).padStart(4, '0')}.json`
 const headKey = (slug: string) => `sites/${slug}/head.json`
 
-export function assertSlug(slug: string) {
+function assertSlug(slug: string) {
   if (!SLUG.test(slug)) throw new PublicError(`ogiltigt tomt-id "${slug}"`)
 }
 

@@ -4,7 +4,7 @@ import { demoPlan } from './demo'
 import { getHead, getRevision, nextLetter, saveRevision, type StoredRevision } from './store'
 import type { Plan, Revision } from './types'
 
-export function emptyPlan(id: string, name: string): Plan {
+function emptyPlan(id: string, name: string): Plan {
   return {
     id,
     name,
@@ -24,7 +24,7 @@ export function emptyPlan(id: string, name: string): Plan {
   }
 }
 
-export function slugId(name: string): string {
+function slugId(name: string): string {
   const base = name
     .toLowerCase()
     .normalize('NFD')

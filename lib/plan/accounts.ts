@@ -5,11 +5,11 @@ import { ACCESS_COOKIE, cookieOf, resolveCookie } from './access'
 // switching needs no key. Both are httpOnly. A cookie in the list is only as good as it was when saved:
 // it is checked again whenever the list is read, and a dead one is dropped.
 
-export const ACCOUNTS_COOKIE = 'plan_accounts'
+const ACCOUNTS_COOKIE = 'plan_accounts'
 const MAX_OTHERS = 4
 const MAX_AGE = 60 * 60 * 24 * 90
 
-export const idOfCookie = (c: string) => c.split('.')[0]
+const idOfCookie = (c: string) => c.split('.')[0]
 
 function readCookie(req: Request, name: string): string | undefined {
   return (req.headers.get('cookie') ?? '')
@@ -20,7 +20,7 @@ function readCookie(req: Request, name: string): string | undefined {
 }
 
 // The login cookies of the other signed-in people (not checked).
-export function savedAccounts(req: Request): string[] {
+function savedAccounts(req: Request): string[] {
   return (readCookie(req, ACCOUNTS_COOKIE) ?? '').split('|').filter(Boolean)
 }
 

@@ -5,7 +5,7 @@ import { area, bbox, dist, type P } from './geometry'
 // in what is said about the land are the same. `origin` is that corner in the map's grid (SWEREF 99 TM).
 
 export const STATUSES = ['befintlig', 'idé', 'planerad', 'ansökan'] as const
-export type Status = (typeof STATUSES)[number]
+type Status = (typeof STATUSES)[number]
 export const KINDS = ['äng', 'gräsmatta', 'byggnad', 'odling', 'skog', 'vatten', 'väg / stig', 'stängsel', 'ledning', 'annat'] as const
 export type ItemType = 'area' | 'line' | 'point'
 

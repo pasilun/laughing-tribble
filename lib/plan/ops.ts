@@ -15,7 +15,7 @@ type Kinds = {
   note: Note
   source: Source
 }
-export type Kind = keyof Kinds
+type Kind = keyof Kinds
 
 const COLLECTION: { [K in Kind]: 'walls' | 'masses' | 'zones' | 'openings' | 'fixtures' | 'rooms' | 'dimensions' | 'notes' | 'sources' } = {
   wall: 'walls',
@@ -29,7 +29,7 @@ const COLLECTION: { [K in Kind]: 'walls' | 'masses' | 'zones' | 'openings' | 'fi
   source: 'sources',
 }
 
-export const KINDS = Object.keys(COLLECTION) as Kind[]
+const KINDS = Object.keys(COLLECTION) as Kind[]
 
 export type Op =
   | { op: 'add'; kind: Kind; item: Kinds[Kind] }

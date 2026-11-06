@@ -39,8 +39,8 @@ export async function findProperty(designation: string): Promise<Property> {
 
 // WMTS in SWEREF 99 TM (tilematrixset 3006): origin (-1 200 000, 8 500 000), 256 px tiles,
 // 4096 m per pixel at level 0, halved each level; the finest level is 13 (0.5 m per pixel).
-export const LEVEL = 13
-export const RES = 4096 / 2 ** LEVEL
+const LEVEL = 13
+const RES = 4096 / 2 ** LEVEL
 const ORIGIN = { x: -1_200_000, y: 8_500_000 }
 
 export type Mosaic = { png: Buffer; width: number; height: number; origin: P; res: number } // origin: top left corner, metres

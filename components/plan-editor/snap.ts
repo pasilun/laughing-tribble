@@ -1,7 +1,7 @@
 import { dist, pointSegmentDistance, wallQuad } from '@/lib/plan/geometry'
 import type { Plan, Pt } from '@/lib/plan/types'
 
-export type SnapKind = 'endpoint' | 'corner' | 'onwall' | 'face' | 'axis' | 'align' | 'grid'
+type SnapKind = 'endpoint' | 'corner' | 'onwall' | 'face' | 'axis' | 'align' | 'grid'
 export type Snap = { pt: Pt; kind: SnapKind; wallId?: string; guide?: { from: Pt; to: Pt } }
 
 export type SnapOptions = {

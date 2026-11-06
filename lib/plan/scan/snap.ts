@@ -212,7 +212,7 @@ function intersect(p: Pt, d: Pt, q: Pt, e: Pt): Pt | null {
 
 // Moves each snapped end onto the centreline of the wall it meets (L-corner
 // or T-junction), when that wall is within joinMm.
-export function joinEnds(walls: Wall[], others: Wall[], joinMm: number): Wall[] {
+function joinEnds(walls: Wall[], others: Wall[], joinMm: number): Wall[] {
   const out = walls.map((w) => ({ ...w }))
   const all = () => [...out, ...others]
   for (const w of out) {

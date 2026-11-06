@@ -20,7 +20,7 @@ export type StoredRevision = { plan: Plan; meta: Revision }
 export type Head = { revision: number; name: string; updatedAt: string; issued: string[]; tags?: string[] }
 
 // Trimmed, no empty or duplicate (any case) tags, at most 10 of at most 30 characters.
-export function cleanTags(input: unknown): string[] {
+function cleanTags(input: unknown): string[] {
   if (!Array.isArray(input)) return []
   const out: string[] = []
   for (const t of input) {
@@ -253,7 +253,7 @@ export const isTrashed = (sh: Shares | null | undefined) => !!(sh && (sh.trashed
 const DAY_MS = 86_400_000
 const trashedAtMs = (sh: Shares) => (sh.trashedAt ? new Date(sh.trashedAt).getTime() : 0)
 const expired = (sh: Shares) => isTrashed(sh) && !sh.members.length && Date.now() - trashedAtMs(sh) > TRASH_DAYS * DAY_MS
-export type SharePointer = { owner: string; addedAt: string; addedBy: string }
+type SharePointer = { owner: string; addedAt: string; addedBy: string }
 export type Access = { scope: string; owner: string; role: 'owner' | 'member' | 'none' }
 
 const NONE: Access = { scope: '', owner: '', role: 'none' }
@@ -381,7 +381,7 @@ export async function storageProbe(): Promise<{ kind: 'blob' | 'fs' | 'turso'; o
 
 const ID = /^[a-z0-9][a-z0-9-]{0,80}$/
 
-export function assertId(id: string) {
+function assertId(id: string) {
   if (!ID.test(id)) throw new PublicError(`ogiltigt plan-id "${id}"`)
 }
 

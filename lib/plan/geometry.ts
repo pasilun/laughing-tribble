@@ -87,6 +87,3 @@ export function bounds(plan: Plan): { minX: number; minY: number; maxX: number; 
   }
 }
 
-export function roundMm(v: number): number {
-  return Math.round(v)
-}

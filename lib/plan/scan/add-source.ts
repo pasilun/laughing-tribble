@@ -37,7 +37,7 @@ export type AddedSource = {
   note: string
 }
 
-export const SOURCE_ID = /^[a-z0-9][a-z0-9-]{0,40}$/
+const SOURCE_ID = /^[a-z0-9][a-z0-9-]{0,40}$/
 
 export async function addSource(planId: string, input: SourceInput, data: Buffer): Promise<AddedSource | { errors: string[]; status: number }> {
   if (!SOURCE_ID.test(input.id)) return { errors: ['id: gemener, siffror och bindestreck'], status: 400 }

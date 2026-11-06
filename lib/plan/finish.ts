@@ -28,8 +28,8 @@ export type Finish = {
   plan: Plan
 }
 
-export const OUTER_TOLERANCE = 30 // mm
-export const FIT_MAX = 0.03 // the largest correction fit_outer will make (3 %)
+const OUTER_TOLERANCE = 30 // mm
+const FIT_MAX = 0.03 // the largest correction fit_outer will make (3 %)
 
 const FIELD: Array<[keyof TitleBlock, string]> = [
   ['property', 'fastighetsbeteckning (t.ex. "Stockholm Gnejsen 6")'],

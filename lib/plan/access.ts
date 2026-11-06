@@ -89,7 +89,7 @@ export function cookieFor(user: User): string {
   return e ? cookieValue(e) : ''
 }
 
-export function userFromCookie(cookie: string | undefined): User | null {
+function userFromCookie(cookie: string | undefined): User | null {
   if (!cookie) return null
   const id = cookie.split('.')[0]
   const e = entries().find((x) => x.id === id)

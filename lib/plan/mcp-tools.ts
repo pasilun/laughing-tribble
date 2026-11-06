@@ -278,11 +278,11 @@ function links(plan: Plan, rev: number): string {
   ].join('\n')
 }
 
-export const SECTIONS = ['sheet', 'walls', 'openings', 'fixtures', 'rooms', 'sources'] as const
-export type Section = (typeof SECTIONS)[number]
+const SECTIONS = ['sheet', 'walls', 'openings', 'fixtures', 'rooms', 'sources'] as const
+type Section = (typeof SECTIONS)[number]
 
 // only: just these parts (a review or a rework rarely needs all of the plan again).
-export function summarisePlan(plan: Plan, only?: Section[]): string {
+function summarisePlan(plan: Plan, only?: Section[]): string {
   const want = (k: Section) => !only || only.includes(k)
   const tb = plan.sheet.titleBlock
   const lines: string[] = []
@@ -334,7 +334,7 @@ export function summarisePlan(plan: Plan, only?: Section[]): string {
 }
 
 // What differs between two revisions, by id: added, changed, removed.
-export function changedSince(old: Plan, now: Plan): string {
+function changedSince(old: Plan, now: Plan): string {
   const out: string[] = []
   const lists: Array<[string, Array<{ id: string }>, Array<{ id: string }>]> = [
     ['vägg', old.walls, now.walls],

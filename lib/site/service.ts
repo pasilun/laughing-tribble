@@ -41,7 +41,7 @@ export function buildingFixes(slug: string): BuildingFix[] {
   if (!existsSync(file)) return []
   return ((JSON.parse(readFileSync(file, 'utf8')) as { buildings?: BuildingFix[] }).buildings ?? []).filter((b) => b.id && Array.isArray(b.corners) && b.corners.length >= 3)
 }
-export function applyBuildingFixes(buildings: SiteBuilding[], fixes: BuildingFix[]): SiteBuilding[] {
+function applyBuildingFixes(buildings: SiteBuilding[], fixes: BuildingFix[]): SiteBuilding[] {
   return buildings.map((b) => {
     const f = fixes.find((x) => x.id === b.id && (!x.kind || x.kind === b.kind))
     return f ? { ...b, corners: f.corners, area: f.area ?? Math.round(polygonArea(f.corners)), label: f.label, note: f.note } : b
@@ -135,7 +135,7 @@ export async function underlayImage(doc: SiteDoc, layer: 'karta' | 'flyg'): Prom
   return out
 }
 
-export function sheetOf(doc: SiteDoc, o: { underlay?: Mosaic; photo?: boolean; grid?: number; paper?: 'A3' | 'A4'; scale?: number } = {}): SiteSheet {
+function sheetOf(doc: SiteDoc, o: { underlay?: Mosaic; photo?: boolean; grid?: number; paper?: 'A3' | 'A4'; scale?: number } = {}): SiteSheet {
   const O = doc.origin
   const map = (p: P): P => ({ x: p.x + O.x, y: p.y + O.y })
   const legendOf = (it: SiteItem) => `${it.kind}${it.status !== 'befintlig' ? ` – ${it.status}` : ''}`

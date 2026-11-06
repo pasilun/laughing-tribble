@@ -17,7 +17,7 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex')
 const tokenHash = (t: string) => sha(`plan-oauth:${t}`)
 const rand = (prefix: string) => `${prefix}${randomBytes(32).toString('base64url')}`
 
-export const ACCESS_TTL_S = 3600
+const ACCESS_TTL_S = 3600
 const REFRESH_TTL_S = 90 * 86_400
 const CODE_TTL_S = 600
 
@@ -29,7 +29,7 @@ export type Client = { id: string; name: string; redirectUris: string[]; created
 // stranger cannot register a client that sends a signed-in person's code to a site of theirs.
 const FIXED_REDIRECTS = ['https://claude.ai/api/mcp/auth_callback', 'https://claude.com/api/mcp/auth_callback']
 
-export function redirectAllowed(uri: string): boolean {
+function redirectAllowed(uri: string): boolean {
   let u: URL
   try {
     u = new URL(uri)
@@ -60,7 +60,7 @@ export async function registerClient(body: Record<string, unknown>): Promise<{ o
 
 const clientKey = (id: string) => `system/oauth/clients/${id}.json`
 
-export async function getClient(id: string): Promise<Client | null> {
+async function getClient(id: string): Promise<Client | null> {
   if (!/^c_[0-9a-f]{32}$/.test(id)) return null
   const c = await cached(`oc:${id}`, () => readJson<Omit<Client, 'id'>>(clientKey(id)))
   return c ? { id, ...c } : null

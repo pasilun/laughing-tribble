@@ -10,7 +10,7 @@ import type { Plan, Pt, Wall } from '@/lib/plan/types'
 // doors), then judge it against the plan the drawing was made from.
 // Fixtures: e2e/fixtures/golden (scripts/make-golden.ts).
 
-export const GOLDEN = 'e2e/fixtures/golden'
+const GOLDEN = 'e2e/fixtures/golden'
 
 // The same flat drawn with door symbols, and in the 1936 style (doorways as
 // a dashed face or a centre mark: kind and swing can't be read).

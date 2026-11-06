@@ -7,7 +7,7 @@ import type { Plan, Pt, Source, Underlay } from '../types'
 // access for the scan tools. Coordinates: plan mm ↔ image px through the
 // source's mmPerPx and position (rotation 0 only).
 
-export const PDF_DPI = 200
+const PDF_DPI = 200
 
 export type Converted = { png: Buffer; widthPx: number; heightPx: number; dpi?: number; kind: 'pdf' | 'tif' | 'image' }
 
@@ -80,7 +80,7 @@ export function toMm(r: Raster, p: Pt): Pt {
   return { x: r.x + p.x * r.mmPerPx, y: r.y + p.y * r.mmPerPx }
 }
 
-export function assetName(src: string): string {
+function assetName(src: string): string {
   return decodeURIComponent(src.split('/').pop() ?? '')
 }
 

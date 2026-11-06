@@ -5,7 +5,7 @@ import type { Fixture, Mass, Opening, Phase, Plan, Pt, SheetScale, View, Wall, Z
 // Renders a plan as a printable drawing sheet. All output coordinates are
 // paper millimetres, so the SVG prints at true scale at 100%.
 
-export const PAPER: Record<'A4' | 'A3', { w: number; h: number }> = {
+const PAPER: Record<'A4' | 'A3', { w: number; h: number }> = {
   A4: { w: 297, h: 210 },
   A3: { w: 420, h: 297 },
 }
@@ -18,7 +18,7 @@ const TEXT = 2.5 // minimum readable text height on paper
 // Text inside the drawing (room names, areas, fixture labels) shrinks with the
 // scale, so a whole floor at 1:150 isn't buried under its labels; the title
 // block, legend and notes keep TEXT.
-export function planText(scale: number): { name: number; text: number } {
+function planText(scale: number): { name: number; text: number } {
   if (scale <= 50) return { name: 3, text: 2.5 }
   if (scale <= 100) return { name: 2.5, text: 2 }
   if (scale <= 150) return { name: 1.8, text: 1.4 }
@@ -159,7 +159,7 @@ function dimension(a: Pt, b: Pt, offset: number, label: string): string {
 
 // ── plan elements ──────────────────────────────────────────────────────────
 
-export function wallOpeningsIn(plan: Plan, w: Wall, view: View): Opening[] {
+function wallOpeningsIn(plan: Plan, w: Wall, view: View): Opening[] {
   return plan.openings.filter((o) => o.wallId === w.id && (view === 'fore' ? o.phase !== 'new' : o.phase !== 'demolish'))
 }
 
@@ -206,7 +206,7 @@ export function wallPieces(plan: Plan, view: View): WallPiece[] {
 // Shaded areas (an apartment that is merged into another) in the view: a light
 // grey, under the walls.
 const ZONE_FILL = '#e4e4e4'
-export function zonesIn(plan: Plan, view: View): Zone[] {
+function zonesIn(plan: Plan, view: View): Zone[] {
   return (plan.zones ?? []).filter((z) => !z.views || z.views.includes(view))
 }
 
@@ -450,11 +450,11 @@ function renderFixture(plan: Plan, fx: Fixture, view: View, L: SheetLayout): str
   return `<g data-fixture="${esc(fx.id)}" data-phase="${st}"${rot}>${out.join('')}</g>`
 }
 
-export function fmtArea(mm2: number): string {
+function fmtArea(mm2: number): string {
   return `${(mm2 / 1e6).toFixed(1).replace('.', ',')} m²`
 }
 
-export function fmtMm(mm: number): string {
+function fmtMm(mm: number): string {
   return String(Math.round(mm))
 }
 
@@ -656,7 +656,7 @@ function legend(view: View, L: SheetLayout, plan: Plan): string {
   return `<g data-testid="legend">${out.join('')}</g>`
 }
 
-export const VIEW_TITLE: Record<View, string> = { fore: 'Planritning före', efter: 'Planritning efter' }
+const VIEW_TITLE: Record<View, string> = { fore: 'Planritning före', efter: 'Planritning efter' }
 
 // A plan with nothing demolished, added or renamed is a record of what exists: one
 // sheet ("befintlig"), not a före/efter pair that would show the same drawing twice.

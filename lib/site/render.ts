@@ -7,7 +7,7 @@ import type { Mosaic } from './lantmateriet'
 // and title block. Scale and paper are chosen so the whole property fits at the largest
 // standard scale. Map coordinates are SWEREF 99 TM metres (y up); the sheet is y down.
 
-export type SiteTitle = { designation: string; municipality: string; address?: string; drawingNumber?: string; author?: string; date?: string; revision?: string; note?: string }
+type SiteTitle = { designation: string; municipality: string; address?: string; drawingNumber?: string; author?: string; date?: string; revision?: string; note?: string }
 
 // A marked area: a meadow, a garden, a planned plot. Ring in map metres (SWEREF 99 TM).
 // An item of the plan that covers ground: a meadow, a lawn, a garden, a planned plot. On the drawing it is
@@ -36,7 +36,7 @@ export type SiteSheet = {
   scale?: number
 }
 
-export const SITE_SCALES = [200, 250, 400, 500, 1000, 2000, 5000]
+const SITE_SCALES = [200, 250, 400, 500, 1000, 2000, 5000]
 const PAPER = { A3: [297, 420], A4: [210, 297] } as const
 const FRAME = 8 // mm from the paper edge to the frame
 const TITLE_H = 34 // mm, the title block

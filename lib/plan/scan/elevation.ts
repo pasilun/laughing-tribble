@@ -90,7 +90,7 @@ function toPxInv(r: Raster, px: number, py: number): Pt {
 }
 
 // Facade x → distance along the wall from its a-end, through two anchors.
-export function facadeToWall(wall: Wall, anchors: [Anchor, Anchor]): (fx: number) => number {
+function facadeToWall(wall: Wall, anchors: [Anchor, Anchor]): (fx: number) => number {
   const d = wallDir(wall)
   const t = (p: Pt) => (p.x - wall.a.x) * d.x + (p.y - wall.a.y) * d.y
   const [p, q] = anchors

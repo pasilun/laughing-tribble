@@ -16,7 +16,7 @@ const user = () => {
   return u
 }
 
-export async function userExists(id: string): Promise<boolean> {
+async function userExists(id: string): Promise<boolean> {
   return USER_ID.test(id) && (takenByEnv(id) || !!(await personById(id)))
 }
 

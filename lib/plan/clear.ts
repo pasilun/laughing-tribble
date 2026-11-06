@@ -5,13 +5,13 @@ import type { Phase, Plan, Wall } from './types'
 // corner wall, and a door must not sit against a stair wall. Positions are
 // along the wall, in mm from its a-end.
 
-export const CLEAR_MM = 100
+const CLEAR_MM = 100
 
 // Other walls (and masses) whose outline lies inside this wall's band, as
 // spans along it. Outlines are sampled, so oblique walls work too.
 // `phase` is the opening's: one that exists only after the change (new) is not blocked by a wall that is
 // demolished (it is gone by then), and one that exists only before (demolish) is not blocked by a new wall.
-export function blockers(plan: Plan, wall: Wall, phase?: Phase): Array<{ id: string; a: number; b: number }> {
+function blockers(plan: Plan, wall: Wall, phase?: Phase): Array<{ id: string; a: number; b: number }> {
   const present = (p: Phase) => !(phase === 'new' && p === 'demolish') && !(phase === 'demolish' && p === 'new')
   const d = wallDir(wall)
   const n = leftNormal(d)
@@ -50,7 +50,7 @@ export function clashes(plan: Plan, wall: Wall, offset: number, width: number, p
 }
 
 // Where an opening can go along the wall: clear of the blockers by CLEAR_MM.
-export function freeSpans(plan: Plan, wall: Wall): Array<[number, number]> {
+function freeSpans(plan: Plan, wall: Wall): Array<[number, number]> {
   const len = wallLength(wall)
   const blocked = blockers(plan, wall)
     .map((b) => [b.a - CLEAR_MM, b.b + CLEAR_MM] as [number, number])

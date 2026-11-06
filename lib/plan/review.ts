@@ -25,8 +25,8 @@ export function roomKind(r: Pick<Room, 'name' | 'apartment'>): RoomKind {
 }
 
 // A passage: a door, or an opening without a door (a gap, an arch).
-export type Link = { opening: Opening; wall: Wall; a: number; b: number } // space index per side, -1 = solid/outside the grid
-export type Flat = { apartment: string; rooms: string[]; entrances: string[]; area: number }
+type Link = { opening: Opening; wall: Wall; a: number; b: number } // space index per side, -1 = solid/outside the grid
+type Flat = { apartment: string; rooms: string[]; entrances: string[]; area: number }
 export type Review = { findings: Finding[]; flats: Flat[]; links: Link[]; spaces: Space[] }
 
 const STEP = 60 // mm past the wall face where a side is sampled

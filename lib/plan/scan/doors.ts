@@ -9,7 +9,7 @@ import { dark, toPx, type Gray, type Raster } from './raster'
 // Drawings show leaves at anything from 30° to 90° open, so only the part of
 // the arc nearest the closed position is required.
 
-export type DoorCandidate = { hinge: 'a' | 'b'; swing: 'left' | 'right'; score: number; shiftMm?: number }
+type DoorCandidate = { hinge: 'a' | 'b'; swing: 'left' | 'right'; score: number; shiftMm?: number }
 export type DoorReading = {
   id: string
   best?: DoorCandidate
@@ -19,7 +19,7 @@ export type DoorReading = {
   changed: boolean
 }
 
-export const ray = (closedDir: Pt, openDir: Pt, deg: number): Pt => {
+const ray = (closedDir: Pt, openDir: Pt, deg: number): Pt => {
   const t = (deg * Math.PI) / 180
   return { x: closedDir.x * Math.cos(t) + openDir.x * Math.sin(t), y: closedDir.y * Math.cos(t) + openDir.y * Math.sin(t) }
 }
@@ -118,7 +118,7 @@ function arcFit(g: Gray, r: Raster, hinge: Pt, closedDir: Pt, openDir: Pt, psi: 
   return (ts.length / n) * shapeFactor(rms)
 }
 
-export function hingeScore(g: Gray, r: Raster, hinge: Pt, closedDir: Pt, openDir: Pt, w: number, threshold: number) {
+function hingeScore(g: Gray, r: Raster, hinge: Pt, closedDir: Pt, openDir: Pt, w: number, threshold: number) {
   let leaf = 0
   let psi = 0
   for (let deg = 25; deg <= 92; deg += 2) {
@@ -195,7 +195,7 @@ export function readDoors(g: Gray, r: Raster, plan: Plan, ids?: string[], thresh
 const COMPASS = ['öster', 'sydost', 'söder', 'sydväst', 'väster', 'nordväst', 'norr', 'nordost']
 
 // Direction in plain words (plan y points down, north up).
-export function compass(v: Pt): string {
+function compass(v: Pt): string {
   const deg = (Math.atan2(v.y, v.x) * 180) / Math.PI // 0 = east, 90 = south
   return COMPASS[((Math.round(deg / 45) % 8) + 8) % 8]
 }

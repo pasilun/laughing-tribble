@@ -71,7 +71,7 @@ export function shortest(a: P[], b: P[]): { from: P; to: P; d: number } {
   return best
 }
 
-export function hull(points: P[]): P[] {
+function hull(points: P[]): P[] {
   const pts = [...points].sort((p, q) => p.x - q.x || p.y - q.y)
   if (pts.length < 3) return pts
   const cross = (o: P, a: P, b: P) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)

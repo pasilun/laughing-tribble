@@ -18,7 +18,7 @@ function inkNear(g: Gray, r: Raster, x: number, y: number, threshold: number): b
   return false
 }
 
-export function findGaps(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: number; maxWidth?: number; endMargin?: number; threshold?: number } = {}): Gap[] {
+function findGaps(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: number; maxWidth?: number; endMargin?: number; threshold?: number } = {}): Gap[] {
   const minW = opts.minWidth ?? 450
   const maxW = opts.maxWidth ?? 2600
   const th = opts.threshold ?? 128
@@ -84,7 +84,7 @@ export function findGaps(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: numb
 // solid); a wall drawn as two face lines all along would be one long window. The
 // whole hollow stretch between two solid parts is reported: its width is the
 // stretch's, not a measured window, and says so.
-export const WINDOW_BAND = 'fönsterband (hela det ihåliga stycket – kontrollera bredd)'
+const WINDOW_BAND = 'fönsterband (hela det ihåliga stycket – kontrollera bredd)'
 
 export function findWindowBands(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: number; maxWidth?: number; endMargin?: number; threshold?: number; debug?: (kinds: string, step: number) => void } = {}): Gap[] {
   const minW = opts.minWidth ?? 500
@@ -192,9 +192,9 @@ export function findWindowBands(g: Gray, r: Raster, wall: Wall, opts: { minWidth
 // chamfered reveals. A stretch of an exterior wall whose core carries thin line ink (and no thick
 // stroke, which would be a pier or a wall crossing) is a window. Stretches that touch a crossing
 // wall (junctions) are left out. The width is the stretch's (flagged to check).
-export const WINDOW_LINES = 'fönsterlinjer (kontrollera bredd)'
+const WINDOW_LINES = 'fönsterlinjer (kontrollera bredd)'
 
-export function findWindowLines(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: number; maxWidth?: number; threshold?: number; junctions?: Array<[number, number]>; core?: number[]; thick?: number } = {}): Gap[] {
+function findWindowLines(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: number; maxWidth?: number; threshold?: number; junctions?: Array<[number, number]>; core?: number[]; thick?: number } = {}): Gap[] {
   const minW = opts.minWidth ?? 500
   const maxW = opts.maxWidth ?? 2600
   const th = opts.threshold ?? 128
@@ -352,7 +352,7 @@ export function findDashed(g: Gray, r: Raster, wall: Wall, opts: { minWidth?: nu
 // beside it (so not a crossing wall), and ending within ~0.6 m (so not a
 // wall continuing). The drawing gives no width: a standard width is used,
 // marked as estimated in the method name.
-export const CENTRE_MARK_WIDTH = 800
+const CENTRE_MARK_WIDTH = 800
 
 export function findCentreMarks(g: Gray, r: Raster, wall: Wall, opts: { threshold?: number; junctions?: Array<[number, number]>; width?: number; oneSided?: boolean; oneSidedWidth?: number } = {}): Gap[] {
   const th = opts.threshold ?? 128
@@ -430,7 +430,7 @@ function mergeGaps(gs: Gap[]): Gap[] {
 // Each stretch between crossing walls is located on its own instead.
 const PART_RMS = 40
 
-export function locateParts(g: Gray, r: Raster, wall: Wall, plan: Plan, threshold?: number): Array<{ t0: number; t1: number; part: Wall; drawn?: Wall }> {
+function locateParts(g: Gray, r: Raster, wall: Wall, plan: Plan, threshold?: number): Array<{ t0: number; t1: number; part: Wall; drawn?: Wall }> {
   const len = wallLength(wall)
   const cuts = junctionsOn(wall, plan)
     .filter(([t]) => t > 0 && t < len)
@@ -537,7 +537,7 @@ function junctionsOn(w: Wall, plan: Plan): Array<[number, number]> {
   return out
 }
 
-export const METHODS = ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge', 'fönsterband', 'fönsterlinjer'] as const
+const METHODS = ['mellanrum', 'streckad', 'mittstreck', 'dörrbåge', 'fönsterband', 'fönsterlinjer'] as const
 type Find = Gap & { hinge?: 'a' | 'b'; swing?: 'left' | 'right' }
 
 // How each method fares on the openings the plan already has (doors and

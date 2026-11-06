@@ -18,7 +18,7 @@ export type Person = { id: string; keyHash: string; createdAt: string; label?: s
 export type Invite = { id: string; label: string; createdBy: string; createdAt: string; expiresAt: string; forUser?: string }
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex')
-export const keyHashOf = (key: string) => createHash('sha256').update(`plan-key:${key}`).digest('hex')
+const keyHashOf = (key: string) => createHash('sha256').update(`plan-key:${key}`).digest('hex')
 const tokenHashOf = (token: string) => sha(`plan-invite:${token}`)
 
 const RESERVED = new Set(['legacy', 'local', 'system'])

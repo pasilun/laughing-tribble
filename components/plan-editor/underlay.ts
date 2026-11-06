@@ -6,7 +6,7 @@ import UTIF from 'utif'
 
 // A PDF page is rendered at this resolution, so a drawing at a known scale
 // gets an exact mm-per-pixel without calibration.
-export const PDF_DPI = 200
+const PDF_DPI = 200
 const MAX_PIXELS = 40_000_000
 
 export type Raster = { blob: Blob; width: number; height: number; name: string; dpi?: number }

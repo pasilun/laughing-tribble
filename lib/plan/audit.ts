@@ -117,7 +117,7 @@ export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: s
 // How much the drawing is stretched against the plan, per axis, from where the snapper would put the
 // walls: the offset of a vertical wall against its x (a horizontal wall against its y) is a straight
 // line through the corner when the scan is stretched, and scatter around zero when it is not.
-export function sourceStretch(plan: Plan, snapped: Wall[]): string[] {
+function sourceStretch(plan: Plan, snapped: Wall[]): string[] {
   const out: string[] = []
   for (const vertical of [true, false]) {
     const pts: Array<[number, number]> = []
@@ -152,6 +152,3 @@ export function describeAudit(items: AuditItem[]): string {
   return `${head}\n${lines.join('\n')}${how}`
 }
 
-export function wallOf(plan: Plan, id: string): Wall | undefined {
-  return plan.walls.find((w) => w.id === id)
-}

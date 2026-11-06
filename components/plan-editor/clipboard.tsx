@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 // Copies text; a browser that refuses the clipboard API (some in-app browsers) gets the old way.
-export async function copyText(text: string): Promise<boolean> {
+async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)
     return true
