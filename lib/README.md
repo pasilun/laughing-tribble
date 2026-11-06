@@ -11,7 +11,8 @@ lib/plan/mcp/              the Claude connector – a second way in to the same 
 lib/plan/service.ts        use cases: createPlan, editPlan, replacePlan, loadPlan … (uploads.ts: getting a drawing in)
 lib/plan/export.ts         sheet → PDF/PNG
 lib/plan/assist/           help for drawing from a source: trace, audit, review, compare, finish, clear
-lib/plan/scan/             reading a scanned drawing (calibrate, walls, openings, doors …)
+lib/plan/scan/             reading a scanned drawing (calibrate, walls, openings, doors …); the Claude tools for it are
+                           tools-source.ts (placing a drawing) and tools-find.ts (finding things in it), listed in tools.ts
 lib/plan/domain/           the model and its rules: types, geometry, ops, checks, sheet, rooms, structure, demo
                            – plain TypeScript, also used by the browser editor (components/plan-editor)
 lib/plan/storage/          where data lives and who may see it
