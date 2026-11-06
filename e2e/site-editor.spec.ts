@@ -176,3 +176,31 @@ test('the list page offers the properties the repository knows, so the first sit
   await page.goto('/plans/site')
   await expect(page.getByTestId('suggested-site').first()).toContainText('Strängnäs Lövinge 3:2')
 })
+
+// On a phone there is no mouse wheel: the map zooms with two fingers and with the buttons beside it.
+test('the page: zoom with the buttons and with a two-finger pinch (a phone has no wheel)', { tag: '@browser' }, async ({ page, request }) => {
+  const { slug } = await makeSite(request)
+  await page.goto(`/plans/site/${slug}`)
+  const svg = page.getByTestId('site-svg')
+  await expect(svg).toBeVisible()
+  await expect(page.getByTestId('item-list')).toContainText('A1 Äng')
+  // How big the meadow is drawn: it grows with the zoom.
+  const width = () => svg.locator('path').first().evaluate((p) => p.getBoundingClientRect().width)
+  const w0 = await width()
+  await page.getByTestId('zoom-in').click()
+  await expect.poll(width).toBeGreaterThan(w0 * 1.3)
+  await page.getByTestId('zoom-fit').click()
+  await expect.poll(width).toBeCloseTo(w0, 0)
+
+  // Two fingers moving apart.
+  const box = (await svg.boundingBox())!
+  const cx = box.x + box.width / 2
+  const cy = box.y + box.height / 2
+  const cdp = await page.context().newCDPSession(page)
+  const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', pts: Array<{ x: number; y: number }>) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map((p, id) => ({ ...p, id })) })
+  await touch('touchStart', [{ x: cx - 40, y: cy }, { x: cx + 40, y: cy }])
+  for (const d of [60, 80, 100, 120]) await touch('touchMove', [{ x: cx - d, y: cy }, { x: cx + d, y: cy }])
+  await touch('touchEnd', [])
+  await expect.poll(width).toBeGreaterThan(w0 * 1.8)
+  await request.delete(`/api/sites/${slug}`)
+})

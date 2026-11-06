@@ -25,7 +25,7 @@ const TOOLS: Array<[Tool, string, string]> = [
 ]
 const HINT: Record<Tool, string> = {
   select: 'Klicka på ett objekt. Dra i det för att flytta, dra i en punkt för att ändra formen.',
-  hand: 'Dra för att flytta kartan. Mushjul zoomar.',
+  hand: 'Dra för att flytta kartan. Nyp med två fingrar eller mushjul för att zooma.',
   area: 'Klicka ut hörnen. Dubbelklicka, Enter eller klicka på första punkten för att stänga. Esc avbryter.',
   'free-area': 'Håll ner musen eller pennan och rita runt området. Det stängs när du släpper.',
   line: 'Klicka ut punkterna. Dubbelklicka eller Enter avslutar. Esc avbryter.',
@@ -62,6 +62,9 @@ function simplify(pts: P[], tol: number): P[] {
   return [a, b]
 }
 
+const MIN_ZOOM = 1.2
+const MAX_ZOOM = 80
+
 type Drag =
   | { kind: 'pan'; sx: number; sy: number; cx: number; cy: number }
   | { kind: 'move'; id: string; start: P; orig: P[]; moved: boolean }
@@ -90,6 +93,9 @@ export function SiteEditor({ slug }: { slug: string }) {
   const wrap = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const drag = useRef<Drag | null>(null)
+  // Fingers on the map: two of them pinch (zoom and pan together), and nothing else happens meanwhile.
+  const fingers = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<{ d: number; z: number; mid: { x: number; y: number }; wx: number; wy: number } | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
   const fitted = useRef(false)
   const space = useRef(false)
@@ -125,16 +131,23 @@ export function SiteEditor({ slug }: { slug: string }) {
     return () => ro.disconnect()
   }, [doc])
 
-  // Fit the property to the page once.
-  useEffect(() => {
-    if (!doc || fitted.current || size.w < 50 || size.h < 50) return
+  // Fit the property to the page (once on load, and with the "Passa" button).
+  const fitView = useCallback(() => {
+    if (!doc || size.w < 50 || size.h < 50) return
     const xs = doc.property.flatMap((p) => p[0].map((q) => q.x))
     const ys = doc.property.flatMap((p) => p[0].map((q) => q.y))
     const w = Math.max(...xs) - Math.min(...xs) + 20
     const h = Math.max(...ys) - Math.min(...ys) + 20
-    fitted.current = true
     setView({ cx: (Math.min(...xs) + Math.max(...xs)) / 2, cy: (Math.min(...ys) + Math.max(...ys)) / 2, z: Math.min(size.w / w, size.h / h) })
   }, [doc, size])
+  useEffect(() => {
+    if (!doc || fitted.current || size.w < 50 || size.h < 50) return
+    fitted.current = true
+    fitView()
+  }, [doc, size, fitView])
+
+  // Zoom by a factor about the middle of the map (the buttons).
+  const zoomBy = (k: number) => setView((v) => ({ ...v, z: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.z * k)) }))
 
   const loadLayer = useCallback(
     async (layer: 'karta' | 'flyg') => {
@@ -301,7 +314,7 @@ export function SiteEditor({ slug }: { slug: string }) {
       const sx = e.clientX - r.left
       const sy = e.clientY - r.top
       setView((v) => {
-        const z = Math.min(80, Math.max(1.2, v.z * Math.exp(-e.deltaY * 0.0015)))
+        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.z * Math.exp(-e.deltaY * 0.0015)))
         const wx = (sx - size.w / 2) / v.z + v.cx
         const wy = v.cy - (sy - size.h / 2) / v.z
         return { z, cx: wx - (sx - size.w / 2) / z, cy: wy + (sy - size.h / 2) / z }
@@ -312,7 +325,26 @@ export function SiteEditor({ slug }: { slug: string }) {
   }, [size, doc])
 
   // ── pointer ──────────────────────────────────────────────────────────────
+  // Runs first (capture phase) for every finger: a second finger down starts a pinch and cancels what the first began.
+  const onDownCapture = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch') return
+    fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (fingers.current.size !== 2) return
+    const [a, b] = [...fingers.current.values()]
+    const r = svgRef.current!.getBoundingClientRect()
+    const mid = { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top }
+    pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, z: view.z, mid, wx: (mid.x - size.w / 2) / view.z + view.cx, wy: view.cy - (mid.y - size.h / 2) / view.z }
+    drag.current = null
+    beforeDrag.current = null
+    setDraft([])
+    e.stopPropagation()
+  }
+  const endFinger = (e: React.PointerEvent) => {
+    if (fingers.current.delete(e.pointerId) && fingers.current.size < 2) pinch.current = null
+  }
+
   const onDown = (e: React.PointerEvent) => {
+    if (pinch.current) return
     const svg = svgRef.current!
     const w = evWorld(e)
     if (e.button === 1 || e.button === 2 || tool === 'hand' || space.current || (tool === 'select' && e.button === 0)) {
@@ -336,6 +368,18 @@ export function SiteEditor({ slug }: { slug: string }) {
   }
 
   const onMove = (e: React.PointerEvent) => {
+    if (fingers.current.has(e.pointerId)) fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    const pc = pinch.current
+    if (pc && fingers.current.size >= 2) {
+      const [a, b] = [...fingers.current.values()]
+      const r = svgRef.current!.getBoundingClientRect()
+      const mx = (a.x + b.x) / 2 - r.left
+      const my = (a.y + b.y) / 2 - r.top
+      const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pc.z * (Math.hypot(a.x - b.x, a.y - b.y) / pc.d)))
+      // The map point that was between the fingers stays between them.
+      setView({ z, cx: pc.wx - (mx - size.w / 2) / z, cy: pc.wy + (my - size.h / 2) / z })
+      return
+    }
     const w = evWorld(e)
     setCursor(w)
     const d = drag.current
@@ -355,6 +399,8 @@ export function SiteEditor({ slug }: { slug: string }) {
   }
 
   const onUp = (e: React.PointerEvent) => {
+    endFinger(e)
+    if (pinch.current) return
     const d = drag.current
     drag.current = null
     try {
@@ -514,9 +560,11 @@ export function SiteEditor({ slug }: { slug: string }) {
             data-testid="site-svg"
             className="absolute inset-0 h-full w-full touch-none select-none"
             style={{ cursor: cursorStyle }}
+            onPointerDownCapture={onDownCapture}
             onPointerDown={onDown}
             onPointerMove={onMove}
             onPointerUp={onUp}
+            onPointerCancel={endFinger}
             onPointerLeave={() => setCursor(null)}
             onContextMenu={(e) => e.preventDefault()}
             onDoubleClick={() => (tool === 'area' || tool === 'line') && finishDraft()}
@@ -581,6 +629,17 @@ export function SiteEditor({ slug }: { slug: string }) {
               </g>
             )}
           </svg>
+          <div className="absolute right-2 top-2 flex flex-col gap-1">
+            <button type="button" data-testid="zoom-in" aria-label="Zooma in" className="h-9 w-9 rounded border bg-white/90 text-lg leading-none shadow-sm hover:bg-white" onClick={() => zoomBy(1.5)}>
+              +
+            </button>
+            <button type="button" data-testid="zoom-out" aria-label="Zooma ut" className="h-9 w-9 rounded border bg-white/90 text-lg leading-none shadow-sm hover:bg-white" onClick={() => zoomBy(1 / 1.5)}>
+              −
+            </button>
+            <button type="button" data-testid="zoom-fit" aria-label="Visa hela tomten" className="h-9 w-9 rounded border bg-white/90 text-xs shadow-sm hover:bg-white" onClick={fitView}>
+              Hel
+            </button>
+          </div>
           <div className="pointer-events-none absolute bottom-1 left-2 right-2 flex justify-between text-xs text-zinc-700">
             <span className="rounded bg-white/80 px-1">{HINT[tool]}</span>
             <span className="rounded bg-white/80 px-1" data-testid="cursor">
