@@ -1,8 +1,7 @@
 import { secured } from '@/lib/plan/auth/access'
-import { validatePlan } from '@/lib/plan/domain/ops'
-import { loadPlan } from '@/lib/plan/service'
+import { loadPlan, replacePlan } from '@/lib/plan/service'
 import { PLANS } from '@/lib/plan/storage/docs'
-import { saveRevision, setTags } from '@/lib/plan/storage/store'
+import { setTags } from '@/lib/plan/storage/store'
 import type { Plan } from '@/lib/plan/domain/types'
 import { deleteRoute } from '../doc-routes'
 import { author, fail, readJson, revParam, type Ctx } from '../http'
@@ -26,12 +25,9 @@ export const PUT = secured(async (req: Request, { params }: Ctx): Promise<Respon
   const body = await readJson(req)
   const plan = body?.plan as Plan | undefined
   if (!body || !plan || typeof body.baseRevision !== 'number') return Response.json({ errors: ['plan och baseRevision krävs'] }, { status: 400 })
-  if (plan.id !== id) return Response.json({ errors: ['plan.id stämmer inte'] }, { status: 400 })
-  const errors = validatePlan(plan)
-  if (errors.length) return Response.json({ errors }, { status: 422 })
   try {
-    const revision = await saveRevision(plan, { author: author(body.author), message: String(body.message ?? 'Ändrad i editorn') }, body.baseRevision)
-    return Response.json({ revision })
+    const res = await replacePlan(id, plan, body.baseRevision, author(body.author), String(body.message ?? 'Ändrad i editorn'))
+    return 'errors' in res ? Response.json({ errors: res.errors }, { status: res.status }) : Response.json({ revision: res.revision })
   } catch (e) {
     return fail(e)
   }

@@ -1,7 +1,6 @@
 import { isAdmin, secured } from '@/lib/plan/auth/access'
-import { copyPages } from '@/lib/plan/storage/migrate-store'
-import { blobBackend, blobConfigured, storageKind, tursoBackend, tursoConfigured } from '@/lib/plan/storage/storage'
 import { currentUser } from '@/lib/plan/auth/user'
+import { copyBlobToTurso, storageStatus } from '@/lib/plan/storage/admin'
 import { fail, readJson } from '../http'
 
 export const runtime = 'nodejs'
@@ -16,7 +15,7 @@ const gate = (): Response | null => {
 export const GET = secured(async (): Promise<Response> => {
   const no = gate()
   if (no) return no
-  return Response.json({ kind: storageKind(), blob: blobConfigured(), turso: tursoConfigured() })
+  return Response.json(storageStatus())
 })
 
 // Copies the Blob store into Turso, a stretch at a time: { cursor? } in, { copied, bytes, missing, cursor, done } out.
@@ -24,14 +23,10 @@ export const GET = secured(async (): Promise<Response> => {
 export const POST = secured(async (req: Request): Promise<Response> => {
   const no = gate()
   if (no) return no
-  if (!blobConfigured() || !tursoConfigured()) return Response.json({ errors: ['Både Blob och Turso måste vara inställda (TURSO_DATABASE_URL, TURSO_AUTH_TOKEN).'] }, { status: 400 })
-  if (storageKind() !== 'blob') return Response.json({ errors: ['Appen använder redan inte Blob.'] }, { status: 400 })
   const body = await readJson(req)
   try {
-    const blob = blobBackend()
-    const target = tursoBackend()
-    const res = await copyPages(blob, target, { cursor: typeof body?.cursor === 'string' ? body.cursor : undefined })
-    return Response.json({ ...res, inTurso: res.done ? await target.count() : undefined })
+    const res = await copyBlobToTurso(typeof body?.cursor === 'string' ? body.cursor : undefined)
+    return 'errors' in res ? Response.json({ errors: res.errors }, { status: res.status }) : Response.json(res)
   } catch (e) {
     return fail(e)
   }

@@ -59,6 +59,14 @@ export async function editPlan(id: string, ops: Op[], base: number, author: Revi
   return { status: 200 as const, plan, revision }
 }
 
+// Saves a whole plan (what the editor sends) as a new revision, if it is a valid plan for this id.
+export async function replacePlan(id: string, plan: Plan, base: number, author: Revision['author'], message: string) {
+  if (plan.id !== id) return { status: 400 as const, errors: ['plan.id stämmer inte'] }
+  const errors = validatePlan(plan)
+  if (errors.length) return { status: 422 as const, errors }
+  return { status: 200 as const, revision: await saveRevision(plan, { author, message }, base) }
+}
+
 // Marks the current state as issued: next revision letter in the title block.
 export async function issuePlan(id: string, author: Revision['author']) {
   const head = await getHead(id)

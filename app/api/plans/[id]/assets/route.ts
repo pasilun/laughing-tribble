@@ -1,23 +1,16 @@
 import { secured } from '@/lib/plan/auth/access'
-import { putAsset } from '@/lib/plan/storage/store'
+import { storeImage } from '@/lib/plan/uploads'
 import { fail, type Ctx } from '../../http'
 
 export const runtime = 'nodejs'
-
-const TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' }
-const MAX = 15 * 1024 * 1024
 
 // POST raw image bytes, ?name=file.png. TIF/PDF are converted to PNG in the browser first.
 export const POST = secured(async (req: Request, { params }: Ctx): Promise<Response> => {
   const { id } = await params
   const name = new URL(req.url).searchParams.get('name') ?? ''
-  const ext = name.split('.').pop()?.toLowerCase() ?? ''
-  if (!TYPES[ext]) return Response.json({ errors: ['endast png/jpg'] }, { status: 400 })
-  const data = Buffer.from(await req.arrayBuffer())
-  if (data.length === 0 || data.length > MAX) return Response.json({ errors: ['filen är tom eller för stor (max 15 MB)'] }, { status: 400 })
   try {
-    const url = await putAsset(id, name, data, TYPES[ext])
-    return Response.json({ url }, { status: 201 })
+    const res = await storeImage(id, name, Buffer.from(await req.arrayBuffer()))
+    return 'errors' in res ? Response.json({ errors: res.errors }, { status: res.status }) : Response.json(res, { status: 201 })
   } catch (e) {
     return fail(e)
   }

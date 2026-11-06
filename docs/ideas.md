@@ -21,3 +21,14 @@ Saker vi har pratat om men inte byggt. Ta bort en idé när den är gjord eller 
 **Ej värt först:** Vercel Web Analytics (säger inget om Claude-anrop), Axiom via Vercels loggflöde (kräver troligen betalplan hos Vercel).
 
 **Öppet:** välja A eller B (eller A för fel och B för användning); mäta varaktighet per anrop; information till inbjudna.
+
+## Nattlig backup utanför appen
+
+**Varför:** data ligger nu bara i Turso (gratisnivån). Backupen i appen (`/api/plans/backup`) kräver att någon laddar ner den för hand. En databas som förloras eller ett misstag i koden tar då allt med sig.
+
+**Förslag:** ett schemalagt jobb (GitHub Actions, `schedule`, en gång per natt) som anropar `GET /api/plans/backup?all=1` med administratörens nyckel och lägger zip-filen någonstans utanför Turso:
+- Som artefakt i GitHub Actions (gratis, 90 dagar, men räknas mot lagringskvoten), eller
+- på Google Drive (något vi redan har), eller
+- i en privat release/gren (bara om innehållet är okej att ligga hos GitHub).
+
+**Att bestämma:** var filen ska ligga, hur länge den sparas (t.ex. 14 dagar rullande), och hur administratörens nyckel förvaras (som hemlighet i GitHub, aldrig i koden). Kontrollera zip-storleken mot gränserna (Vercel-funktionens tid och GitHubs artefaktgräns) innan det aktiveras. Prova återställning med `npm run restore:backup` mot en tom lagring minst en gång.
