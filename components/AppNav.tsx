@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { AccountSwitcher } from './AccountSwitcher'
 
 export type Section = 'planer' | 'tomter' | 'personer'
 
@@ -32,6 +33,7 @@ export function AppNav({ current }: { current: Section }) {
       {item('planer', '/plans', 'Planer', 'to-plans')}
       {item('tomter', '/plans/site', 'Tomter', 'to-sites')}
       {admin && item('personer', '/plans/people', 'Personer', 'to-people')}
+      <AccountSwitcher />
     </nav>
   )
 }

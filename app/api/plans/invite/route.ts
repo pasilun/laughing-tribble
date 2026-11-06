@@ -1,4 +1,5 @@
-import { ACCESS_COOKIE, cookieForAny, takenByEnv } from '@/lib/plan/access'
+import { cookieForAny, takenByEnv } from '@/lib/plan/access'
+import { cookiesForNewLogin } from '@/lib/plan/accounts'
 import { inviteInfo, redeemInvite } from '@/lib/plan/people'
 import { allowed, fail, ok } from '../login/limit'
 import { readJson } from '../http'
@@ -33,6 +34,7 @@ export async function POST(req: Request) {
   ok(ip)
   const headers = new Headers({ 'content-type': 'application/json' })
   const secure = new URL(req.url).protocol === 'https:' ? '; Secure' : ''
-  headers.append('Set-Cookie', `${ACCESS_COOKIE}=${await cookieForAny({ id: res.person.id })}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}`)
+  // The person who opened the link was perhaps signed in as someone else (an administrator trying it out): that account is kept for switching.
+  for (const c of await cookiesForNewLogin(req, await cookieForAny({ id: res.person.id }), !!secure)) headers.append('Set-Cookie', c)
   return new Response(JSON.stringify({ id: res.person.id, key: res.key, connector: `${new URL(req.url).origin}/api/mcp` }), { status: 201, headers })
 }

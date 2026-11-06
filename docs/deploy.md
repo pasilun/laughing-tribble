@@ -79,6 +79,14 @@ on; the owner may take a person out (`DELETE /api/plans/:id/share?user=…`), an
   The access is remembered for 10 s per server instance.
 - Not shared: tomter (site plans). Sharing needs personal keys (`PLAN_USERS`), and not local development without sign-in.
 
+## Several people on one browser
+
+Signing in (the key form or an invitation link) while someone else is signed in keeps the first person:
+the menu at the top right of the list pages (*patrik ▾*) shows who is in use, switches to the others
+(*Byt till …*, no key needed), signs in as someone else, and signs out. The browser holds the login
+cookies in `plan_access` (in use) and `plan_accounts` (the others, up to four, httpOnly); a dead one is
+dropped when read. Claude's connector is approved as the person in use when *Godkänn* is pressed, so switch first.
+
 ## Trash and backup
 
 - **Trash.** Deleting a plan moves it to the trash: hidden for the owner, kept 30 days, restorable from

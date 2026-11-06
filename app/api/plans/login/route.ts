@@ -1,4 +1,5 @@
-import { ACCESS_COOKIE, accessMode, cookieForAny, resolveKey } from '@/lib/plan/access'
+import { accessMode, cookieForAny, resolveKey } from '@/lib/plan/access'
+import { cookiesForNewLogin } from '@/lib/plan/accounts'
 import { allowed, fail, ok } from './limit'
 
 export const runtime = 'nodejs'
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
   ok(ip)
   const headers = new Headers({ Location: new URL(safeNext, req.url).toString() })
   const secure = new URL(req.url).protocol === 'https:' ? '; Secure' : ''
-  headers.append('Set-Cookie', `${ACCESS_COOKIE}=${await cookieForAny(user)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}`)
+  // Someone already signed in here stays signed in: they move to the account list (the menu switches between them).
+  for (const c of await cookiesForNewLogin(req, await cookieForAny(user), !!secure)) headers.append('Set-Cookie', c)
   return new Response(null, { status: 303, headers })
 }

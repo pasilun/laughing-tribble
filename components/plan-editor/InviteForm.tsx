@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { Keep } from './clipboard'
 import { looksLikeInAppBrowser } from '@/lib/plan/browser'
@@ -33,6 +33,15 @@ export function InviteForm({ token, label, expiresAt, forUser }: { token: string
   const [error, setError] = useState('')
   const [done, setDone] = useState<Done | null>(null)
   const [busy, setBusy] = useState(false)
+  const [other, setOther] = useState<string | null>(null)
+
+  // Someone already signed in here (an administrator trying the link) keeps their account in the menu.
+  useEffect(() => {
+    fetch('/api/plans/accounts')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setOther(b?.me ?? null))
+      .catch(() => undefined)
+  }, [])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -86,6 +95,11 @@ export function InviteForm({ token, label, expiresAt, forUser }: { token: string
   return (
     <>
       <InAppStrip />
+      {other && !forUser && (
+        <p className="mt-6 rounded border border-amber-400 bg-amber-50 p-3 text-sm text-zinc-900" data-testid="invite-already">
+          Du är redan inloggad som <strong>{other}</strong>. Skapar du kontot här blir du det nya kontot i den här webbläsaren. <strong>{other}</strong> finns kvar i kontomenyn uppe till höger, så du kan byta tillbaka.
+        </p>
+      )}
       <form onSubmit={submit} className="mt-6 space-y-3 rounded-lg border bg-white p-4 shadow-sm">
         {forUser ? (
           <p className="text-sm text-zinc-700">
