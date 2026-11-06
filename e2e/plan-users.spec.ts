@@ -111,6 +111,9 @@ test('over HTTP: wrong key 401, other persons plan 404 on every route, delete on
 
   expect((await planDELETE(as('ka', `http://x/api/plans/${id}`, { method: 'DELETE' }), ctx(id))).status).toBe(200)
   expect((await planGET(as('ka', `http://x/api/plans/${id}`), ctx(id))).status).toBe(404)
+  // in the trash, not gone: the files stay until it is removed for good
+  expect(existsSync(path.join(dir, 'u/anna/plans', id, 'head.json'))).toBe(true)
+  expect((await planDELETE(as('ka', `http://x/api/plans/${id}?permanent=1`, { method: 'DELETE' }), ctx(id))).status).toBe(200)
   expect(existsSync(path.join(dir, 'u/anna/plans', id))).toBe(false)
 })
 

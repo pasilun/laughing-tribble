@@ -16,7 +16,7 @@ test('plan list: search, pages of ten, delete with a confirmation step', async (
   await expect(page.getByTestId('page-info')).toHaveText('Sida 2 av 2')
   await expect(page.getByTestId('page-next')).toBeDisabled()
 
-  // Delete asks first: Avbryt leaves the plan, the second click removes it for good.
+  // Delete asks first: Avbryt leaves the plan, the second click moves it to the trash.
   const first = page.getByTestId('plan-row').first()
   const label = (await first.getByTestId('plan-name').textContent())!
   await first.getByTestId('delete-plan').click()
@@ -24,6 +24,7 @@ test('plan list: search, pages of ten, delete with a confirmation step', async (
   await expect(page.getByTestId('plan-row')).toHaveCount(2)
   await first.getByTestId('delete-plan').click()
   await first.getByTestId('delete-yes').click()
+  await expect(page.getByTestId('notice')).toContainText('papperskorgen')
   await expect(page.getByTestId('plan-row')).toHaveCount(1)
   await expect(page.getByTestId('plan-count')).toContainText('11 av')
 
@@ -35,6 +36,8 @@ test('plan list: search, pages of ten, delete with a confirmation step', async (
   // Clean up what the test made.
   const all = await (await request.get('/api/plans')).json()
   for (const p of all.plans.filter((x: { name: string }) => x.name.startsWith(tag))) await request.delete(`/api/plans/${p.id}`)
+  const trashed = (await (await request.get('/api/plans/trash')).json()).plans
+  for (const p of trashed.filter((x: { name: string }) => x.name.startsWith(tag))) await request.delete(`/api/plans/${p.id}?permanent=1`)
 })
 
 test('plan list: tags are set per plan, shown as filters, searchable and kept when the plan is saved', async ({ page, request }) => {
@@ -73,5 +76,8 @@ test('plan list: tags are set per plan, shown as filters, searchable and kept wh
   await page.getByTestId('plan-filter').fill(proj.toLowerCase())
   await expect(page.getByTestId('plan-row').filter({ hasText: tag })).toHaveCount(2)
 
-  for (const id of [a, b]) await request.delete(`/api/plans/${id}`)
+  for (const id of [a, b]) {
+    await request.delete(`/api/plans/${id}`)
+    await request.delete(`/api/plans/${id}?permanent=1`)
+  }
 })

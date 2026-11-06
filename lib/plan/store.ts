@@ -204,7 +204,13 @@ class Scoped implements Backend {
 // removes the plan for the person who deletes: a member leaves, the owner is marked
 // as removed; the data goes when the last person is gone.
 
-export type Shares = { members: string[]; ownerRemoved?: boolean }
+export type Shares = { members: string[]; ownerRemoved?: boolean; trashedAt?: string }
+// In the trash for the owner: hidden from them, kept for TRASH_DAYS, then removed (only while nobody else has it).
+export const TRASH_DAYS = 30
+export const isTrashed = (sh: Shares | null | undefined) => !!(sh && (sh.trashedAt || sh.ownerRemoved))
+const DAY_MS = 86_400_000
+const trashedAtMs = (sh: Shares) => (sh.trashedAt ? new Date(sh.trashedAt).getTime() : 0)
+const expired = (sh: Shares) => isTrashed(sh) && !sh.members.length && Date.now() - trashedAtMs(sh) > TRASH_DAYS * DAY_MS
 export type SharePointer = { owner: string; addedAt: string; addedBy: string }
 export type Access = { scope: string; owner: string; role: 'owner' | 'member' | 'none' }
 
@@ -255,7 +261,7 @@ export async function accessFor(user: User, id: string): Promise<Access> {
     v = sh?.members.includes(user.id) ? { scope: ownerScope, owner: ptr.owner, role: 'member' } : NONE
   } else {
     const sh = await readShares(own, id)
-    v = sh?.ownerRemoved ? NONE : { scope: own, owner: user.id, role: 'owner' }
+    v = isTrashed(sh) ? NONE : { scope: own, owner: user.id, role: 'owner' }
   }
   if (accessCache.size > 500) accessCache.clear()
   accessCache.set(ck, { v, until: Date.now() + ACCESS_TTL_MS })
@@ -303,8 +309,8 @@ function backend(): Backend {
   return new Routed(user)
 }
 
-// The person's own folder only (no routing): the plan list and the sharing bookkeeping.
-function ownBackend(): Backend {
+// The person's own folder only (no routing): the plan list, the trash, the sharing bookkeeping and the backup.
+export function ownBackend(): Backend {
   const user = currentUser()
   if (!user && accessMode() !== 'open') throw new Error('ingen användare för anropet – lagring nekas')
   return new Scoped(systemBackend(), user ? scopeOf(user) : '')
@@ -384,7 +390,10 @@ export async function listPlans(): Promise<PlanListing[]> {
       if (!h) return
       const sk = sharesKey(id)
       const sh = shareFiles.has(sk) ? await readJson<Shares>(b, sk) : null
-      if (sh?.ownerRemoved) return
+      if (isTrashed(sh)) {
+        if (sh && expired(sh)) await deleteAll(b, id)
+        return
+      }
       out.push({ id, ...h, ...(sh?.members.length ? { sharedWith: sh.members } : {}) })
     }),
   )
@@ -450,34 +459,82 @@ export async function setTags(id: string, tags: unknown): Promise<string[] | nul
   return clean
 }
 
-// Deletes a plan for the person who asks. Alone with it: everything goes (no undo). Shared: a
-// member leaves it, and an owner hides it from themselves; the others keep working on it, and
-// the data is removed when the last person has deleted it. False if the person has no such plan.
-export async function deletePlan(id: string): Promise<boolean> {
+// Deletes a plan for the person who asks, never for anyone else. The owner's plan goes to the trash
+// (hidden for them, kept for TRASH_DAYS, restorable); a member leaves, and the others keep working on it.
+// Returns 'trashed' or 'left', or false when the person has no such plan.
+export async function deletePlan(id: string): Promise<'trashed' | 'left' | false> {
   assertId(id)
   const user = currentUser()
-  if (!user) return deleteAll(scopedBackend(''), id)
-  const a = await accessFor(user, id)
+  const a: Access = user ? await accessFor(user, id) : { scope: '', owner: '', role: 'owner' }
   if (a.role === 'none') return false
   const holder = scopedBackend(a.scope)
   const sh = await readShares(a.scope, id)
   try {
-    if (a.role === 'member') {
+    if (a.role === 'member' && user) {
       await scopedBackend(scopeOf(user)).remove([pointerKey(id)])
-      const members = (sh?.members ?? []).filter((m) => m !== user.id)
-      if (sh?.ownerRemoved && !members.length) return await deleteAll(holder, id)
-      if (sh) await holder.write(sharesKey(id), JSON.stringify({ ...sh, members }), 'application/json')
-      return true
+      if (sh) await holder.write(sharesKey(id), JSON.stringify({ ...sh, members: sh.members.filter((m) => m !== user.id) }), 'application/json')
+      return 'left'
     }
-    if (sh?.members.length) {
-      if (!(await holder.keys(`plans/${id}`)).length) return false
-      await holder.write(sharesKey(id), JSON.stringify({ ...sh, ownerRemoved: true }), 'application/json')
-      return true
-    }
-    return await deleteAll(holder, id)
+    if (!(await holder.keys(`plans/${id}`)).length) return false
+    await holder.write(sharesKey(id), JSON.stringify({ ...(sh ?? { members: [] }), trashedAt: new Date().toISOString() }), 'application/json')
+    return 'trashed'
   } finally {
     forgetAccess()
   }
+}
+
+export type TrashedPlan = { id: string; name: string; deletedAt: string; daysLeft: number; sharedWith?: string[] }
+
+// The person's trash. Plans past their time are removed here (and in the plan list) when seen.
+export async function listTrash(): Promise<TrashedPlan[]> {
+  const b = ownBackend()
+  const files = (await b.keys('plans')).filter((k) => k.endsWith('/shares.json'))
+  const out: TrashedPlan[] = []
+  await Promise.all(
+    files.map(async (k) => {
+      const id = k.split('/')[1]
+      const sh = await readJson<Shares>(b, k)
+      if (!sh || !isTrashed(sh)) return
+      if (expired(sh)) return void (await deleteAll(b, id))
+      const head = await readJson<Head>(b, headKey(id))
+      if (!head) return
+      const at = trashedAtMs(sh)
+      out.push({
+        id,
+        name: head.name,
+        deletedAt: at ? new Date(at).toISOString() : head.updatedAt,
+        daysLeft: Math.max(0, Math.ceil((at + TRASH_DAYS * DAY_MS - Date.now()) / DAY_MS)),
+        ...(sh.members.length ? { sharedWith: sh.members } : {}),
+      })
+    }),
+  )
+  return out.sort((p, q) => q.deletedAt.localeCompare(p.deletedAt))
+}
+
+// Takes a plan out of the trash. False when it is not there.
+export async function restorePlan(id: string): Promise<boolean> {
+  assertId(id)
+  const b = ownBackend()
+  const sh = await readJson<Shares>(b, sharesKey(id))
+  if (!sh || !isTrashed(sh)) return false
+  const next: Shares = { members: sh.members }
+  if (next.members.length) await b.write(sharesKey(id), JSON.stringify(next), 'application/json')
+  else await b.remove([sharesKey(id)])
+  forgetAccess()
+  return true
+}
+
+// Removes a plan in the trash for good. 'shared' while others still have it (it goes to the trash for the owner only).
+export async function purgePlan(id: string): Promise<'ok' | 'notfound' | 'nottrashed' | 'shared'> {
+  assertId(id)
+  const b = ownBackend()
+  const sh = await readJson<Shares>(b, sharesKey(id))
+  if (!(await b.keys(`plans/${id}`)).length) return 'notfound'
+  if (!isTrashed(sh)) return 'nottrashed'
+  if (sh?.members.length) return 'shared'
+  await deleteAll(b, id)
+  forgetAccess()
+  return 'ok'
 }
 
 async function deleteAll(b: Backend, id: string): Promise<boolean> {

@@ -12,12 +12,14 @@
     "user:add": "tsx scripts/user-add.ts",
     "smoke": "node scripts/smoke.mjs",
     "migrate:users": "tsx scripts/migrate-to-users.ts",
+    "restore:backup": "tsx scripts/restore-backup.ts",
     "eval:agent": "tsx scripts/eval-agent.mts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",
     "@resvg/resvg-js": "^2.6.2",
     "@vercel/blob": "^2.4.0",
+    "fflate": "^0.8.3",
     "next": "16.2.5",
     "pdfjs-dist": "^4.10.38",
     "pdfkit": "^0.17.2",

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AppNav } from '@/components/AppNav'
 import { useRouter } from 'next/navigation'
 
+type Trashed = { id: string; name: string; deletedAt: string; daysLeft: number; sharedWith?: string[] }
 type Item = { id: string; name: string; revision: number; updatedAt: string; issued: string[]; tags?: string[]; owner?: string; sharedWith?: string[] }
 
 const PAGE_SIZE = 10
@@ -50,6 +51,8 @@ export function PlanList() {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [loadError, setLoadError] = useState('')
+  const [trash, setTrash] = useState<Trashed[]>([])
+  const [notice, setNotice] = useState('')
   const [sharing, setSharing] = useState<string | null>(null)
   const [shareWith, setShareWith] = useState('')
   const [shareMsg, setShareMsg] = useState('')
@@ -66,8 +69,15 @@ export function PlanList() {
       })
       .catch((e: Error) => setLoadError(e.message || 'Kunde inte läsa planerna'))
 
+  const loadTrash = () =>
+    fetch('/api/plans/trash')
+      .then((r) => (r.ok ? r.json() : { plans: [] }))
+      .then((b) => setTrash(b.plans ?? []))
+      .catch(() => undefined)
+
   useEffect(() => {
     load()
+    loadTrash()
   }, [])
 
   const create = async (e: React.FormEvent) => {
@@ -87,8 +97,30 @@ export function PlanList() {
       setConfirming(null)
       return setError(b.errors?.[0] ?? 'kunde inte radera planen')
     }
+    const b = await r.json().catch(() => ({}))
+    const gone = plans?.find((p) => p.id === id)
     setPlans((cur) => cur?.filter((p) => p.id !== id) ?? cur)
     setConfirming(null)
+    setNotice(b.how === 'trashed' ? `”${gone?.name ?? 'Planen'}” ligger nu i papperskorgen och kan återställas i 30 dagar.` : `Du har tagit bort ”${gone?.name ?? 'planen'}” för dig. De andra har kvar den.`)
+    void loadTrash()
+  }
+
+  const restore = async (id: string) => {
+    setError('')
+    const r = await fetch(`/api/plans/${id}/restore`, { method: 'POST' })
+    if (!r.ok) return setError((await r.json().catch(() => ({}))).errors?.[0] ?? 'kunde inte återställa planen')
+    setNotice('Planen är tillbaka i listan.')
+    void load()
+    void loadTrash()
+  }
+
+  const purge = async (id: string, name: string) => {
+    if (!window.confirm(`Radera ”${name}” för alltid? Det går inte att ångra.`)) return
+    setError('')
+    const r = await fetch(`/api/plans/${id}?permanent=1`, { method: 'DELETE' })
+    if (!r.ok) return setError((await r.json().catch(() => ({}))).errors?.[0] ?? 'kunde inte radera planen')
+    setNotice('')
+    void loadTrash()
   }
 
   const share = async (id: string) => {
@@ -182,6 +214,11 @@ export function PlanList() {
       {error && (
         <p className="mt-3 text-sm text-red-700" role="alert">
           {error}
+        </p>
+      )}
+      {notice && (
+        <p className="mt-3 rounded border border-zinc-300 bg-zinc-50 p-2 text-sm text-zinc-800" role="status" data-testid="notice">
+          {notice}
         </p>
       )}
 
@@ -389,7 +426,7 @@ export function PlanList() {
                 {confirming === p.id ? (
                   <span className="flex flex-col items-end gap-1 sm:flex-row sm:items-center" data-testid="confirm-delete">
                     <button type="button" data-testid="delete-yes" className="rounded bg-red-700 px-2 py-1 text-white hover:bg-red-800" onClick={() => remove(p.id)}>
-                      {p.owner || p.sharedWith?.length ? 'Ta bort för mig' : 'Radera för alltid'}
+                      {p.owner ? 'Ta bort för mig' : 'Flytta till papperskorgen'}
                     </button>
                     <button type="button" className="rounded border px-2 py-1" onClick={() => setConfirming(null)}>
                       Avbryt
@@ -406,6 +443,7 @@ export function PlanList() {
         ))}
       </ul>
 
+
       {pages > 1 && (
         <nav className="mt-4 flex items-center justify-between" aria-label="Sidor" data-testid="plan-pages">
           <button type="button" data-testid="page-prev" className={btn} disabled={current === 0} onClick={() => setPage(current - 1)}>
@@ -419,6 +457,42 @@ export function PlanList() {
           </button>
         </nav>
       )}
+
+      {trash.length > 0 && (
+        <details className="mt-6 rounded-lg border bg-white p-3 text-sm" data-testid="trash">
+          <summary className="cursor-pointer font-medium">Papperskorgen ({trash.length})</summary>
+          <p className="mt-2 text-xs text-zinc-600">Raderade planer ligger här i 30 dagar och kan återställas.</p>
+          <ul className="mt-2 divide-y">
+            {trash.map((t) => (
+              <li key={t.id} data-testid="trash-row" className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="min-w-0">
+                  <span className="break-words">{t.name}</span>
+                  <span className="ml-2 text-xs text-zinc-600">
+                    {t.daysLeft} dagar kvar{t.sharedWith?.length ? ` · delas med ${t.sharedWith.join(', ')}` : ''}
+                  </span>
+                </span>
+                <span className="flex shrink-0 gap-2 text-xs">
+                  <button type="button" data-testid="restore-plan" className="rounded border px-2 py-1 hover:bg-zinc-50" onClick={() => restore(t.id)}>
+                    Återställ
+                  </button>
+                  {!t.sharedWith?.length && (
+                    <button type="button" data-testid="purge-plan" className="rounded border border-red-300 px-2 py-1 text-red-700 hover:bg-red-50" onClick={() => purge(t.id, t.name)}>
+                      Radera för alltid
+                    </button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      <p className="mt-6 text-xs text-zinc-600">
+        <a href="/api/plans/backup" download data-testid="backup-download" className="text-blue-700 underline">
+          Ladda ner alla mina planer (zip)
+        </a>{' '}
+        – alla versioner, ritningarna och senaste versionen som PDF. Spara den någonstans utanför appen.
+      </p>
     </main>
   )
 }

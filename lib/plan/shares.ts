@@ -1,6 +1,6 @@
 import { takenByEnv } from './access'
 import { personById } from './people'
-import { accessFor, forgetAccess, type Access, pointerKey, readShares, scopedBackend, sharesKey, type Shares } from './store'
+import { accessFor, forgetAccess, isTrashed, type Access, pointerKey, readShares, scopedBackend, sharesKey, type Shares } from './store'
 import { currentUser, scopeOf, USER_ID } from './user'
 
 // Sharing a plan with another person. Both then make new revisions of the same plan
@@ -33,7 +33,7 @@ export async function participants(id: string): Promise<Participants | null> {
   const a = await accessTo(me, id)
   if (!a) return null
   const sh = await readShares(a.scope, id)
-  return { id, me: me.id, owner: a.owner, ownerRemoved: !!sh?.ownerRemoved, members: sh?.members ?? [], role: a.role }
+  return { id, me: me.id, owner: a.owner, ownerRemoved: isTrashed(sh), members: sh?.members ?? [], role: a.role }
 }
 
 // Adds a person. Returns an error text, or null when done (also when they were already in it).
@@ -48,8 +48,8 @@ export async function addShare(id: string, wanted: string): Promise<string | nul
   const sh: Shares = (await readShares(a.scope, id)) ?? { members: [] }
   // The owner comes back to a plan they had deleted: the same as being shared with again.
   if (target === a.owner) {
-    if (!sh.ownerRemoved) return 'Personen har redan planen.'
-    await holder.write(sharesKey(id), JSON.stringify({ ...sh, ownerRemoved: false }), 'application/json')
+    if (!isTrashed(sh)) return 'Personen har redan planen.'
+    await holder.write(sharesKey(id), JSON.stringify({ members: sh.members }), 'application/json')
     forgetAccess()
     return null
   }
@@ -74,10 +74,7 @@ export async function removeShare(id: string, who: string): Promise<string | nul
   await scopedBackend(scopeOf({ id: who })).remove([pointerKey(id)])
   const members = sh.members.filter((m) => m !== who)
   const holder = scopedBackend(a.scope)
-  if (sh.ownerRemoved && !members.length) {
-    const keys = await holder.keys(`plans/${id}`)
-    await holder.remove(keys)
-  } else await holder.write(sharesKey(id), JSON.stringify({ ...sh, members }), 'application/json')
+  await holder.write(sharesKey(id), JSON.stringify({ ...sh, members }), 'application/json')
   forgetAccess()
   return null
 }

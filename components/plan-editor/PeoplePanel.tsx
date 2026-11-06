@@ -130,6 +130,12 @@ export function PeoplePanel() {
             ))}
           </ul>
           <p className="mt-3 text-xs text-zinc-600">
+            <a href="/api/plans/backup?all=1" download data-testid="backup-all" className="text-blue-700 underline">
+              Ladda ner allas planer (zip)
+            </a>{' '}
+            – hela lagringen under u/, utan PDF:er. Bara för administratörer.
+          </p>
+          <p className="mt-3 text-xs text-zinc-600">
             Du är inloggad som <strong>{state.me}</strong>. Personer som står i PLAN_USERS i Vercel visas inte här; de tas bort där.
           </p>
         </>

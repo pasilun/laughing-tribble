@@ -1,7 +1,7 @@
 import { secured } from '@/lib/plan/access'
 import { validatePlan } from '@/lib/plan/ops'
 import { loadPlan } from '@/lib/plan/service'
-import { deletePlan, saveRevision, setTags } from '@/lib/plan/store'
+import { deletePlan, purgePlan, saveRevision, setTags } from '@/lib/plan/store'
 import type { Plan } from '@/lib/plan/types'
 import { author, fail, readJson, revParam, type Ctx } from '../http'
 
@@ -49,12 +49,21 @@ export const PATCH = secured(async (req: Request, { params }: Ctx): Promise<Resp
   }
 })
 
-// Deletes the plan with every revision and asset. No undo.
-export const DELETE = secured(async (_req: Request, { params }: Ctx): Promise<Response> => {
+// Deletes the plan for the one who asks: the owner's plan goes to the trash (restorable for 30 days),
+// a member only leaves it. ?permanent=1 removes a plan that is in the trash for good (not while others have it).
+export const DELETE = secured(async (req: Request, { params }: Ctx): Promise<Response> => {
   const { id } = await params
   try {
-    if (!(await deletePlan(id))) return Response.json({ errors: ['planen finns inte'] }, { status: 404 })
-    return Response.json({ deleted: id })
+    if (new URL(req.url).searchParams.get('permanent')) {
+      const r = await purgePlan(id)
+      if (r === 'notfound') return Response.json({ errors: ['planen finns inte'] }, { status: 404 })
+      if (r === 'nottrashed') return Response.json({ errors: ['Flytta planen till papperskorgen först.'] }, { status: 400 })
+      if (r === 'shared') return Response.json({ errors: ['Planen delas fortfarande med någon och kan inte raderas för alltid.'] }, { status: 400 })
+      return Response.json({ purged: id })
+    }
+    const how = await deletePlan(id)
+    if (!how) return Response.json({ errors: ['planen finns inte'] }, { status: 404 })
+    return Response.json({ deleted: id, how })
   } catch (e) {
     return fail(e)
   }

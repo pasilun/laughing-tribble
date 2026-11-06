@@ -71,13 +71,28 @@ overwriting the other; the version list shows who saved what). Anyone who has th
 on; the owner may take a person out (`DELETE /api/plans/:id/share?user=…`), anyone may leave.
 
 - **Delete only removes it for the one who deletes.** A member who deletes leaves the plan; an owner
-  who deletes hides it from themselves while the others keep it. The data is removed when the last
-  person has deleted it. If someone shares it back with the owner, the owner has it again.
+  who deletes puts it in their trash while the others keep it (see Trash and backup). If someone shares
+  it back with the owner, the owner has it again.
 - **Storage:** the data stays under the owner (`u/<owner>/plans/<id>/`), together with
   `shares.json` (`{ members, ownerRemoved? }`). A member has a pointer `u/<member>/shared/<id>.json`.
   All reads and writes of `plans/<id>/…` go to the owner's folder for a member (lib/plan/store.ts).
   The access is remembered for 10 s per server instance.
 - Not shared: tomter (site plans). Sharing needs personal keys (`PLAN_USERS`), and not local development without sign-in.
+
+## Trash and backup
+
+- **Trash.** Deleting a plan moves it to the trash: hidden for the owner, kept 30 days, restorable from
+  *Papperskorgen* at the bottom of the plan list (`POST /api/plans/:id/restore`). *Radera för alltid* there
+  (`DELETE /api/plans/:id?permanent=1`) removes it at once, but not while someone else still has the plan.
+  After 30 days a plan nobody else has is removed when the trash or the list is next read. A member who
+  deletes a shared plan only leaves it.
+- **Backup.** *Ladda ner alla mina planer (zip)* at the bottom of the plan list (`GET /api/plans/backup`)
+  streams a zip: every revision, the drawings, the latest revision as PDF, plans in the trash, plans shared
+  with the person, site plans. Administrators get everyone's data (`?all=1`, linked on `/plans/people`, no PDFs).
+  Keep the file somewhere outside the app.
+- **Restore.** With the store's token in the environment (or against `.data`):
+  `npm run restore:backup -- <file.zip> --to <person> [--overwrite] [--dry-run]`. Plans that already exist are
+  skipped without `--overwrite`; sharing, the trash marker and PDFs are not put back.
 
 ## Connecting Claude with sign-in (OAuth)
 

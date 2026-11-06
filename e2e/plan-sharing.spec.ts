@@ -12,6 +12,8 @@ import { DELETE as planDELETE, GET as planGET, PUT as planPUT } from '../app/api
 import { GET as listGET } from '../app/api/plans/route'
 import { GET as revisionsGET } from '../app/api/plans/[id]/revisions/route'
 import { DELETE as shareDELETE, GET as shareGET, POST as sharePOST } from '../app/api/plans/[id]/share/route'
+import { POST as restorePOST } from '../app/api/plans/[id]/restore/route'
+import { GET as trashGET } from '../app/api/plans/trash/route'
 
 // Sharing a plan: both make revisions of the same plan, and "delete" only removes it for the one who deletes.
 
@@ -125,10 +127,11 @@ test('deleting a shared plan only removes it for the one who deletes', async () 
   expect((await runAs(ANNA, () => getRevision(id)))!.meta.n).toBe(1)
 })
 
-test('the owner deleting a shared plan hides it for them; the data goes when the last person is gone', async () => {
+test('the owner deleting a shared plan hides it for them; it stays in their trash while others have it', async () => {
   const id = await annaMakes()
   await share('ka', id, 'bo')
-  expect((await planDELETE(as('ka', `http://x/api/plans/${id}`, { method: 'DELETE' }), ctx(id))).status).toBe(200)
+  const del = await planDELETE(as('ka', `http://x/api/plans/${id}`, { method: 'DELETE' }), ctx(id))
+  expect(await del.json()).toMatchObject({ deleted: id, how: 'trashed' })
   // gone for anna ...
   expect(await ids(ANNA)).toEqual([])
   expect((await planGET(as('ka', `http://x/api/plans/${id}`), ctx(id))).status).toBe(404)
@@ -138,17 +141,25 @@ test('the owner deleting a shared plan hides it for them; the data goes when the
   expect(forBo[0]).toMatchObject({ id, owner: 'anna' })
   expect((await runAs(BO, () => editPlan(id, [], 1, 'user', 'Bo jobbar vidare'))).status).toBe(200)
   expect(existsSync(own('anna', id))).toBe(true)
+  // it cannot be removed for good while bo has it
+  const purge = await planDELETE(as('ka', `http://x/api/plans/${id}?permanent=1`, { method: 'DELETE' }), ctx(id))
+  expect(purge.status).toBe(400)
   // anna cannot share it from the outside, but bo can put anna back
   expect((await shareGET(as('ka', `http://x/api/plans/${id}/share`), ctx(id))).status).toBe(404)
   expect((await share('kb', id, 'anna')).status).toBe(201)
   expect(await ids(ANNA)).toEqual([id])
-  // anna deletes again, then bo, the last one: everything is removed
+  // anna deletes again, then bo leaves: nobody has it, but it waits in anna's trash
   await planDELETE(as('ka', `http://x/api/plans/${id}`, { method: 'DELETE' }), ctx(id))
-  expect(existsSync(own('anna', id))).toBe(true)
-  expect((await planDELETE(as('kb', `http://x/api/plans/${id}`, { method: 'DELETE' }), ctx(id))).status).toBe(200)
-  expect(existsSync(own('anna', id))).toBe(false)
+  const left = await planDELETE(as('kb', `http://x/api/plans/${id}`, { method: 'DELETE' }), ctx(id))
+  expect(await left.json()).toMatchObject({ how: 'left' })
   expect(existsSync(path.join(dir, 'u/bo/shared', `${id}.json`))).toBe(false)
   expect(await ids(BO)).toEqual([])
+  expect(existsSync(own('anna', id))).toBe(true)
+  const trash = (await (await trashGET(as('ka', 'http://x/api/plans/trash'))).json()).plans
+  expect(trash.map((t: { id: string }) => t.id)).toEqual([id])
+  // anna can restore it, or remove it for good
+  expect((await restorePOST(as('ka', `http://x/api/plans/${id}/restore`, { method: 'POST' }), ctx(id))).status).toBe(200)
+  expect(await ids(ANNA)).toEqual([id])
   expect((await planDELETE(as('kb', `http://x/api/plans/${id}`, { method: 'DELETE' }), ctx(id))).status).toBe(404)
 })
 
