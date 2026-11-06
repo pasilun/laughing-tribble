@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { inviteInfo } from '@/lib/plan/auth/people'
 import { InviteForm } from '@/components/plan-editor/InviteForm'
 
@@ -20,7 +21,9 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
         <div className="mt-6 space-y-3 text-sm" data-testid="invite-invalid">
           <p className="text-red-700">Inbjudan finns inte längre, har redan använts eller har gått ut. Be om en ny länk av den som bjöd in dig.</p>
           <p className="text-zinc-600">
-            Har du redan ett konto? <a href="/plans/login" className="text-blue-700 underline">Logga in här</a>.
+            Har du redan ett konto? <Link href="/plans/login" className="text-blue-700 underline">
+              Logga in här
+            </Link>.
           </p>
         </div>
       )}
