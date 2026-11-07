@@ -98,7 +98,7 @@ Candidate list from memory. **Phase 0 includes a spike** that verifies each one 
 - **Collaboration (later):** Yjs, Automerge or Loro, or server-authoritative commands.
 - **Scan pipeline:** OpenCV, and check for pretrained floor-plan parsing models before porting v1's custom scanner.
 - **Tests and evals:** `proptest`, `insta`, Playwright, and an existing eval harness instead of a custom one.
-- **Check first:** open-source floor-plan editors (for example `react-planner`) in case their model fits. Expected not to.
+- **Checked, not adopted:** `react-planner` (cvdlab, MIT). Its model is vertices, lines between shared vertices, holes with an `offset`, and auto-detected areas, with wall thickness only as a free-form property. There is no face reference, no dimensions or constraints, and its state lives in Redux and Immutable.js, which conflicts with a kernel that owns the truth. Upstream looks stale (last push April 2024 per an aggregator; a TypeScript fork, `archef2000/react-planner`, shows October 2025 commits). Useful only as a UI reference (catalog, plugins, 2D plus 3D). Confirms explicit shared vertices as the right topology.
 - **Stays custom:** the intent layer and command API, over-constraint diagnostics, the scene model and the Swedish permit checks.
 - All of the above are compatible with GPL-3.0 (permissive, MPL and LGPL), subject to the LGPL relinking terms noted above.
 
