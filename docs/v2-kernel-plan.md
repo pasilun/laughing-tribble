@@ -82,6 +82,26 @@ Prices: Fable 5.1 $10 in / $50 out; Opus 5.5 $4 / $20; Sonnet 5.5 $2 / $10; Haik
 - Browser delivery of the WASM kernel counts as distribution, so GPL source must be offered alongside the web app. Record this in the repo's README and release process.
 - A GPL solver compiled into the WASM bundle is fine under this choice. An LGPL one still needs the relinking terms honoured (build instructions or object files published).
 
+## Reuse, don't build
+
+Candidate list from memory. **Phase 0 includes a spike** that verifies each one (current licence, WASM compatibility, maintenance) before any dependency is adopted.
+
+- **Auth, accounts, sharing, MCP OAuth:** use an auth provider with OAuth 2.1 support (for example WorkOS AuthKit, Clerk or Auth.js). Do not port v1's home-built accounts, invitations and OAuth.
+- **Geometry:** `geo`, `i_overlay`, `cavalier_contours` for union, area, offsets and containment. Rooms are the holes of the union of wall polygons, so no custom half-edge code.
+- **Solver:** `nalgebra` or `faer` for the axis-aligned linear system. For general constraints evaluate SolveSpace's solver or FreeCAD's `planegcs`.
+- **Types and contracts:** `serde`, `schemars`, `ts-rs` or `specta`, `utoipa`. **WASM:** `wasm-bindgen`, `wasm-pack`, `wasm-opt`.
+- **MCP and HTTP:** the official Rust MCP SDK (`rmcp`) and `axum`.
+- **DSL parser:** `winnow` or `chumsky`.
+- **Export:** `svg2pdf` and `resvg` for PDF and PNG, the `dxf` crate for DXF, IFC (IfcOpenShell) as an export only.
+- **Storage:** SQLite or libSQL with a command-log table (v1 already uses Turso). Blobs on Vercel Blob, S3 or R2. Managed hosting.
+- **Web editor and viewer:** render the kernel's SVG scene with a pan/zoom library. No custom rendering engine.
+- **Collaboration (later):** Yjs, Automerge or Loro, or server-authoritative commands.
+- **Scan pipeline:** OpenCV, and check for pretrained floor-plan parsing models before porting v1's custom scanner.
+- **Tests and evals:** `proptest`, `insta`, Playwright, and an existing eval harness instead of a custom one.
+- **Check first:** open-source floor-plan editors (for example `react-planner`) in case their model fits. Expected not to.
+- **Stays custom:** the intent layer and command API, over-constraint diagnostics, the scene model and the Swedish permit checks.
+- All of the above are compatible with GPL-3.0 (permissive, MPL and LGPL), subject to the LGPL relinking terms noted above.
+
 ## Repo layout (new repo)
 
 - `crates/core`: model, faces, solver, commands, diagnostics
