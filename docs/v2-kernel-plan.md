@@ -74,6 +74,14 @@ Prices: Fable 5.1 $10 in / $50 out; Opus 5.5 $4 / $20; Sonnet 5.5 $2 / $10; Haik
 - Thinking can't be disabled on Opus 5.5. Effort defaults to `medium` on Opus 5.5 and Haiku 5.5. The eval sweeps effort per tier.
 - Keep Haiku prompts under 100K tokens, since beyond that its price is five times higher.
 
+## Licence and constraint solver
+
+- v2 is **GPL-3.0**, like v1 (decided with the user). GPL and LGPL dependencies are therefore allowed.
+- The first solver (axis-aligned dimensions, a small linear system per axis) is written in-house, so licence does not constrain Phases 0–4.
+- For general constraints later, evaluate an existing solver (SolveSpace's solver, FreeCAD's `planegcs`; D-Cubed is commercial and out). Verify each licence against its current licence file first.
+- Browser delivery of the WASM kernel counts as distribution, so GPL source must be offered alongside the web app. Record this in the repo's README and release process.
+- A GPL solver compiled into the WASM bundle is fine under this choice. An LGPL one still needs the relinking terms honoured (build instructions or object files published).
+
 ## Repo layout (new repo)
 
 - `crates/core`: model, faces, solver, commands, diagnostics
