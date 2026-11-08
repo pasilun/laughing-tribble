@@ -102,6 +102,38 @@ Candidate list from memory. **Phase 0 includes a spike** that verifies each one 
 - **Stays custom:** the intent layer and command API, over-constraint diagnostics, the scene model and the Swedish permit checks.
 - All of the above are compatible with GPL-3.0 (permissive, MPL and LGPL), subject to the LGPL relinking terms noted above.
 
+## Desktop editor: SketchUp-style 2D
+
+The user knows SketchUp and wants the same experience, tools and shortcuts on desktop, in 2D. The editor copies SketchUp's interaction model. Underneath, every tool produces kernel commands on walls, rooms and openings that carry meaning, instead of free lines and faces. Desktop first, mouse and keyboard; touch is secondary, and mobile stays view-only.
+
+| SketchUp tool (key) | v2 tool, same key by default |
+|---|---|
+| Select (Space) | Select walls, rooms, openings, fixtures. Double-click a room to select its walls. |
+| Entity Info | Inspector panel: thickness, reference face, phase, flags, measured values and their source |
+| Line (L) | Wall: click-click chain. Type a length in the Measurements box, or `length;thickness`. Tab or the arrow keys pick the reference face (left/centre/right). |
+| Rectangle (R) | Room by clear size: type `1860,2360` and the walls are placed around it at the chosen thickness |
+| Push/Pull (P) | Drag a wall face to resize a room; type the distance or the new clear size |
+| Offset (F) | New parallel wall at a typed distance from a face (for example a partition 1060 from the north face) |
+| Move (M) | Move walls, openings, fixtures. Ctrl to copy, arrow keys to lock an axis. |
+| Rotate (Q) | Fixtures and furniture; walls only through an explicit angle |
+| Tape Measure (T) | Measure and place guides. A "record" toggle stores the reading as a dimension with `source: measured`. Also used to scale an imported photo or scan, like SketchUp's resize trick. |
+| Dimension (D) | Place a dimension. Double-click the value to edit it: a driving dimension moves the geometry, a reference one only displays. Conflicts are shown with the numbers. |
+| Eraser (E) | Delete |
+| Paint Bucket (B) | Paint the phase (existing, demolish, new) onto walls and openings |
+| Tags | Layers: före/efter, furniture, dimensions, underlay |
+| Scenes | Saved views: Före, Efter, permit sheet, working view |
+| Components / 3D Warehouse | Fixture and furniture library (kitchen, WC, shower, beds, wardrobes) |
+| Groups / Outliner | Apartments and rooms as groups; an outliner tree of apartments, rooms, walls |
+| Measurements box | Always active, bottom right: type without clicking first. Accepts mm and `1.86 m`. |
+
+**Inference and navigation:**
+- SketchUp-style coloured hints: endpoint, midpoint, on face, red/green axis locks, parallel and perpendicular, and dotted inference lines from points you hover over. Shift locks the current inference.
+- Scroll to zoom at the cursor, middle-drag to pan, Shift+Z for zoom extents.
+- Esc cancels, and Ctrl+Z / Ctrl+Y undo and redo.
+- Shortcuts can be changed; SketchUp's are the defaults.
+
+**Acceptance:** a SketchUp user redraws lgh 154 from the laser measurements in under 15 minutes without reading docs, and any conflicting measurements are flagged on the way.
+
 ## Repo layout (new repo)
 
 - `crates/core`: model, faces, solver, commands, diagnostics
@@ -143,6 +175,7 @@ Candidate list from memory. **Phase 0 includes a spike** that verifies each one 
 
 **Phase 5: Web editor**
 - WASM kernel, canvas rendering from the scene, drag as a command preview, typed dimensions that drive geometry, face-referenced wall drawing.
+- SketchUp-style tools, shortcuts, inference and Measurements box, as described in "Desktop editor: SketchUp-style 2D". Build the Select, Wall, Room, Push/Pull, Tape Measure and Dimension tools first, then the rest.
 
 **Phase 6: Mobile viewer**
 - Read-only PWA with pan, zoom, share links and offline view.
