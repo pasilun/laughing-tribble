@@ -426,7 +426,7 @@ Files live in `v2/fixtures/`, next to the `.plan` files. Tests compare the solve
 Rules for tests:
 - `diagnostics` is compared as a multiset on `code`, `severity`, and any other fields present in the expected object (`axis`, `residual_mm`, `tolerance_mm`, `refs`). Extra fields in the actual output are ignored. Message text is tested separately (W1-04, W1-13).
 - `residual_mm` is **stated minus implied**: B is 4490 − 4540 = −50, C is 0 − 53 = −53.
-- `interior_walls` (wall id, thickness, x and y extent) is **not** in the week-one expected files. See the note in §9.2 on the corner square; the spec run adds `interior_walls` when it resolves the rules.
+- `interior_walls` is a list of `{ "id", "thickness", "x": [min,max], "y": [min,max] }` giving each interior wall's body extents. Compared as a set by id; outer walls are not asserted in week one.
 
 ### 7.6 Expected results (put in `*.expected.json`; tests compare exactly unless a tolerance is given)
 
@@ -444,13 +444,14 @@ Also for fixture A:
 - **Diagnostics:** exactly `W003` (facade step) and two `I010` (derived walls Garderob.east|Vardagsrum.west and Sovrum.east|Vardagsrum.west, both 121 mm), no errors.
 - **W003 text:** `Facade not straight: Sovrum.south 4540 vs Vardagsrum.south 4593 (53 mm). Add "align south Sovrum Vardagsrum" if it is straight.`
 - **Areas, m², 2 decimals:** Garderob 4.39, Sovrum 3.89, Hall 1.22, WC 2.35, Vardagsrum 12.39. Space {Hall, Vardagsrum} 13.61.
-- **Interior walls that must exist (provisional until the corner rule in §9.2 is fixed; not yet in the expected files):**
-  - Garderob.south|Sovrum.north, 90 thick, x 0–1860;
-  - Garderob.east|Hall.west, 121, y 0–1113;
-  - Garderob.east|Vardagsrum.west, 121, y 1113–2450 (bridged across the end of the Garderob/Sovrum wall);
-  - Sovrum.east|Vardagsrum.west, 121, y 2450–4593 (extended 53 mm past Sovrum's south face);
-  - Hall.east|WC.west, 90, y 0–990;
-  - Vardagsrum.north|WC.south, 123, x 3171–5541.
+- **Interior walls that must exist** (also in the expected file; x and y are the extents of the wall's body in mm):
+  - Garderob.east|Hall.west, 121 thick, x 1860–1981, y 0–1113;
+  - Garderob.east|Vardagsrum.west, 121, x 1860–1981, y 1113–2450 (bridged across the end of the Garderob/Sovrum wall);
+  - Garderob.south|Sovrum.north, 90, x 0–1860, y 2360–2450;
+  - Hall.east|WC.west, 90, x 3081–3171, y 0–1113 (extended 123 mm past WC's south face);
+  - Sovrum.east|Vardagsrum.west, 121, x 1860–1981, y 2450–4593 (extended 53 mm past Sovrum's south face);
+  - Vardagsrum.north|WC.south, 123, x 3081–5541, y 990–1113 (extended 90 mm west to Hall.east's face).
+  The last two walls overlap in the corner square x 3081–3171, y 990–1113. That is intended.
 - **No wall** between Hall and Vardagsrum (`open`).
 - **South facade:** the Sovrum.south outer wall continues east across the partition's end to x 1981, where the Vardagsrum.south outer wall (53 mm further south) begins. There is no notch.
 
@@ -532,7 +533,7 @@ For every room face:
    - Covered by a facing face with no explicit relation: interior wall with the derived thickness (distance between faces), source `Assumed`, and I010.
    - Not covered: outer wall, thickness from a `wall` override on that face or else `default_outer_wall`. Its inner face is the room face, and it grows outward.
 3. **Bridge.** An uncovered segment no longer than 600 mm that lies between two interior segments of the same thickness on the same face becomes interior with that thickness. Example: where the Garderob/Sovrum wall ends against the partition.
-4. **Extend.** An uncovered segment no longer than 100 mm at the end of a face, next to an interior segment, extends that interior segment. Example: the 53 mm below Sovrum on Vardagsrum's west face.
+4. **Extend.** An uncovered segment no longer than 150 mm that touches an interior segment on at least one side joins that interior segment and takes its thickness. If it touches two, it joins the one whose room pair sorts first. Examples: the 53 mm below Sovrum on Vardagsrum's west face; the 123 mm at the south end of Hall's east face; the 90 mm of Vardagsrum's north face between the open stretch and the WC wall. Walls may overlap at corners; renderers draw the union, and areas are never computed from wall rectangles.
 5. **Corner continuation.** Outer walls on the same compass side are extended across the end of an interior wall between them, so the facade has no notch.
 6. **Merge.** Merge collinear adjacent segments of the same kind, thickness and room pair.
 7. **Deduplicate.** An interior wall is produced once, from the face that comes first in sort order.
@@ -545,7 +546,6 @@ For every room face:
 **Facade step check (W003):** for each compass side, compare the inner faces of outer walls on that side whose spans are separated only by one interior wall. Emit W003 when the difference is 1–100 mm.
 
 
-**Known gap (found 2026-11-09, to be resolved by the spec run before card W1-17):** in fixture A, the corner square x 3081–3171, y 990–1113 (where the Hall/WC wall meets the WC/Vardagsrum wall) is covered by no segment: the uncovered piece of `Hall.east` (123 mm) is longer than the 100 mm extend limit, and the uncovered piece of `Vardagsrum.north` (90 mm) is in the middle of a face, not at its end. Proposed fix, to be checked: step 4 becomes "an uncovered segment no longer than 150 mm that touches an interior segment on at least one side joins that interior segment", and the corner then lies under both walls, which is fine for the union. The §7.6 wall list changes to match.
 
 ### 9.3 Openings
 
