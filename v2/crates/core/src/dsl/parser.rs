@@ -644,7 +644,7 @@ fn describe(kind: &TokenKind) -> String {
         TokenKind::Keyword(kw) => quoted_text(kw),
         TokenKind::Name(name) => quoted_text(name),
         TokenKind::Int(value) => quoted_text(&value.to_string()),
-        TokenKind::Str(text) => quoted_text(&format!("\"{text}\"")),
+        TokenKind::Str(text) => format!("\"{text}\""),
         TokenKind::Dot => quoted_text("."),
         TokenKind::Eq => quoted_text("="),
         TokenKind::Question => quoted_text("?"),
@@ -954,6 +954,17 @@ mod tests {
         assert_eq!(
             d.message,
             r#"Line 2, column 13: expected "open" or "gap", found end of line."#
+        );
+    }
+
+    #[test]
+    fn e006_string_token_found_is_quoted_once() {
+        // `"A"` starts at column 6 (r=1 ... space=5, quote=6).
+        let d = e006_of("room \"A\" 1 x 2\n");
+        assert_eq!(d.code, Code::E006);
+        assert_eq!(
+            d.message,
+            r#"Line 1, column 6: expected a room name, found "A"."#
         );
     }
 
