@@ -32,6 +32,7 @@ Decisions made with the user:
    - **Openings.** Anchored to a wall end or centre with a distance and a width.
    - **Rooms.** Derived closed regions from the planar graph of wall faces, with exact polygon area and clear sizes.
    - **Dimensions.** Driving or reference. A driving dimension is a constraint, solved by SolidCraft's sketch solver (see "Research"), which reports over-constraint. Messages are in domain terms, for example "4.49 measured, 4.54 implied, 50 mm apart".
+   - **Missing measurements.** The solver's degree-of-freedom analysis also finds what nothing pins down. The kernel turns that into a list of measurements to take next, for example "Garderob depth not measured; laser from the north wall to the partition". This follows Q12 (see "Research").
    - **Phases.** The per-element `phase` tag (`existing|demolish|new`) is carried over unchanged.
 2. **Command API (the only way to change a plan).** A tagged `Command` enum, applied all-or-nothing, with a `dry_run` that returns a diff and diagnostics.
    - Commands are semantic: `SetClearSize`, `PlaceWall`, `MoveNode`, `SetDimension`, `AddOpening`.
@@ -50,13 +51,44 @@ Models are good at names, topology, small integers, editing structured text and 
 1. **Intent layer is the source of truth.** The document stores what was measured: rooms with clear sizes, partitions with thickness, openings addressed by room and side. The kernel resolves coordinates, so a model never computes one. Resolved geometry is a build artefact. Every dimension carries `source: measured | printed | estimated | assumed` (and optional tolerance), so reports can say what was measured and what was estimated.
 2. **A compact text DSL that round-trips.** `get` returns it and `apply` accepts patches to it. Example: `Garderob 1860×2360; Sovrum below Garderob, wall 90; Sovrum.south window 1350 from west 380`. Units are mm, with `1.86 m` parsed as well.
 3. **Names and compass directions, not a/b and left/right.** `hinge south, opens into Vardagsrum`. Ids are semantic (`Garderob.east`). Commands upsert by name, so retries are safe.
-4. **About 7 tools:** `apply` (all-or-nothing, with `dry_run`), `get` (views: summary, dsl, json, svg), `check`, `render`, `find`, `import`, `history`. Verbs live in the DSL, so a cheap model has fewer choices. A basic profile exposes the minimum.
-5. **Structured verification instead of vision.** `apply` returns the diff and diagnostics with numbers, plus suggested next steps. The picture is optional and small.
+4. **About 7 tools:** `apply` (all-or-nothing, with `dry_run`), `get` (views: summary, dsl, json, svg), `check`, `render` (labelled, zoomable, diagnostic views; see "Giving the model vision"), `find`, `import` (drawings, photos of laser displays, sketches), `history`. Verbs live in the DSL, so a cheap model has fewer choices. A basic profile exposes the minimum.
+5. **Structured verification first, vision on demand.** `apply` returns the diff and diagnostics with numbers, plus suggested next steps. Labelled, zoomable renders are available when judgement is needed (see "Giving the model vision").
 6. **Actionable errors.** "Unknown room 'Sovrun', did you mean 'Sovrum'?" and "over-constrained: 4.49 measured vs 4.54 implied; choose which to trust". Conflicts are where the model should ask the user.
 7. **Axis-aligned first-class.** Angled walls only through an explicit angle.
 8. **MCP details:** output schemas, read-only and idempotent hints, the plan as an MCP resource, and prompts for the working order. SolidCraft's `solidcraft-cli mcp`, which can drive the live app, is a reference design.
 9. **Cost control.** Deltas after edits, not full state. Pagination and field selection on `get`. Small images only on request.
-10. **Eval gate.** A fixed task set (for example draw lgh 154 from a measurement list) runs on Opus, Sonnet and Haiku, with pass rate and tokens per task. The target is that the cheapest tier passes.
+10. **Eval gate.** A fixed task set (for example draw lgh 154 from a measurement list) runs on Opus, Sonnet and Haiku, with pass rate and tokens per task. The target is that the cheapest tier passes. Benchmarks are varied and not cherry-picked, as HN commenters demanded of text-to-CAD tools.
+11. **Next-step guidance.** `check` returns what to do next (missing measurements, unresolved conflicts, open review findings), like v1's `plan_next`. The wedge-ramp Ask HN found that splitting the work into ordered steps is the hard part for a model.
+12. **Lessons from text-to-CAD threads** (see "Research"): give the model a verification loop and queryable summaries instead of full files, make frames and orientation explicit, run automated checks, and keep a context budget. Visual feedback is covered in "Giving the model vision".
+
+## Giving the model vision (researched 2026-11-09)
+
+**Principle: vision for judgement, numbers from the kernel.** Benchmarks are consistent:
+- On AECV-Bench, models read text on drawings well (up to 0.95) but count door and window symbols badly (0.40–0.55) ([arXiv 2601.04819](https://arxiv.org/abs/2601.04819v1)).
+- A 2026 study found vision models' room-area estimates far worse than deterministic image analysis ([Periodica Polytechnica](https://pp.omikk.bme.hu/ci/article/download/44138/24640/262788)).
+- Anthropic's own docs say pixel positions Claude reports are approximate and should be checked ([Vision](https://platform.claude.com/docs/en/build-with-claude/vision), [Coordinates](https://platform.claude.com/docs/en/build-with-claude/vision-coordinates)).
+
+So the model never measures from pixels. It looks at pictures to decide what is wrong, where to look next, or which element a photo or note refers to, and every number comes from the kernel or a laser.
+
+**Costs and limits:**
+- An image costs ⌈w/28⌉ × ⌈h/28⌉ tokens. Current models (4.7 and later) take up to 2,576 px on the long edge and 4,784 tokens per image.
+- A full A3 sheet at maximum resolution is about 4.7k tokens, roughly $0.0005 on Haiku 5.5 and $0.02 on Opus 5.5.
+- Small symbols are lost when a large image is scaled down, so detail needs crops, not bigger images.
+
+**What the MCP server provides:**
+1. **Pictures only on request.** `render` takes a view, an optional region (by element id or a rectangle in mm) and a token budget. Edits return text diagnostics. A picture is suggested only when the diagnostics say something is ambiguous.
+2. **Labels on every render (set-of-marks).** Walls, nodes, rooms, openings and dimensions are drawn with their semantic ids or names. The model then refers to "wall Garderob.east" instead of a pixel position, and its answer becomes a command directly. Labelled overlays clearly improve how accurately vision models refer to parts of an image ([Set-of-Mark prompting, arXiv 2310.11441](https://huggingface.co/papers/2310.11441), [code](https://github.com/microsoft/SoM)).
+3. **Exact pixel-to-mm mapping.** Renders are pre-sized to fit the model's limits, using Anthropic's resize rule and `transformations: {oversized_image: "error"}` so nothing is resized silently. Each render carries mm-per-pixel and the origin in its metadata, and draws a mm grid and scale bar, as v1's `plan_view` already does.
+4. **Zoom like computer use's zoom action.** The model asks for a high-resolution crop around an id or rectangle, for example a door swing or a wall joint. Crops are the main tool, not full sheets.
+5. **Diagnostic views that make the kernel's findings visible:**
+   - **Conflict view:** walls coloured by how far they are from the measurements that place them.
+   - **Missing-measurement view:** what isn't pinned down is highlighted, with suggested laser shots drawn as arrows.
+   - **Before/after diff:** what an edit changed, in red and green.
+   - **Overlay on the source:** the plan over a scan, photo or SketchUp screenshot, to check alignment.
+6. **Reading user images into structured data.** Photos of a laser display, sketches and SketchUp screenshots are read with structured outputs into readings. A labelled render of the current plan comes alongside so the model can propose which wall each reading spans. Ambiguity goes back to the user; this session hit exactly that, with display order and wall faces.
+7. **Human in the loop through MCP Apps.** When the model can't tell which wall a reading belongs to, it shows an interactive plan in the chat and the user taps the wall, instead of the model guessing ([MCP Apps](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/), stable since 2026-01-26). AECV-Bench's authors also recommend tool-augmented, human-in-the-loop workflows.
+8. **Scan to vector, later.** Specialised models convert raster plans to vectors far better than general vision models; FloorplanVLM reports 92.5% exterior-wall overlap ([arXiv 2602.06507](https://arxiv.org/abs/2602.06507)). Evaluate one as the replacement for v1's scanner, with calibration kept deterministic.
+9. **Eval.** The eval gate includes vision tasks (a laser photo plus notes, and spotting a misaligned wall in a labelled render), scored on correctness and image tokens used.
 
 ## Models and cost (estimates, prices cached 2026-10-06, per 1M tokens)
 
@@ -122,6 +154,23 @@ Prompted by the Hacker News thread ["KetchUp – Open-source SketchUp alternativ
 - Reads SketchUp files from 2013 onward (both the classic and the 2021+ container). Per its README it also **writes** `.skp`, in the 2013–2020 container.
 - **Why it matters:** SketchUp for Web on the free plan imports only `.skp`, `.jpg` and `.png`; DXF and DWG import need a paid plan ([SketchUp help: file management](https://help.sketchup.com/en/sketchup-web/file-management)). A native `.skp` export is therefore what lets the user open plans in their SketchUp. OpenSKP avoids depending on Trimble's hosted SketchUp service.
 - **Verify in the Phase 0 spike:** a file OpenSKP writes opens in SketchUp for Web, with walls, tags and groups intact.
+
+### Related Hacker News discussions (searched 2026-11-09)
+- **[Show HN: OpenPlan – 2D CAD for floor plans, in the browser](https://news.ycombinator.com/item?id=49547056)** ([openplan.am](https://openplan.am/)): the closest competitor.
+  - **Has:** walls with typed lengths and real thickness that join cleanly at corners, doors and windows that cut walls, rooms that appear when walls close with live areas, snapping, a check for broken wall joints, DXF import and export, a furniture library. Free with no account.
+  - **Lacks, per its homepage:** measurement-driven dimensions, permit checks, AI, and any stated licence or repo.
+  - **Use:** the UX reference for drawing walls and rooms.
+- **[Show HN: Q12 – A constraint-based 2D drawing tool](https://news.ycombinator.com/item?id=47064580)** ([q12.app](https://q12.app/)): inequality, area and expression constraints. One of its examples is checking land areas against survey dimensions and identifying missing measurements. That's the source of the kernel's missing-measurement report.
+- **[SolveSpace – Parametric 2D/3D CAD](https://news.ycombinator.com/item?id=31468017)**, also praised in the [Nasscad thread](https://news.ycombinator.com/item?id=50273201): repeatedly named the most stable, fastest sketcher and solver among open-source tools. It's GPL C++, so it's the benchmark to compare SolidCraft's solver against in the Phase 0 spike, not a dependency.
+- **[Show HN: SolidCraft](https://news.ycombinator.com/item?id=50064840)**: commenters call it early-stage and worry about long-term maintenance of AI-built CAD. That supports vendoring a pinned copy behind an adapter. The repo moved from `bherbruck/solidcraft` to `tangency-labs/solidcraft`.
+- **[Text-to-CAD (earthtojake)](https://news.ycombinator.com/item?id=47970497)** and **[Ask HN: Why can AI generate Super Mario but not a wedge ramp?](https://news.ycombinator.com/item?id=49405520)**: what works for LLM-driven CAD:
+  - render-and-fix loops;
+  - topology summaries instead of full files;
+  - explicit frames and orientation;
+  - automated geometric checks;
+  - honest benchmarks;
+  - breaking the work into ordered, specified steps run through MCP.
+- **Smaller references:** [Arxel](https://news.ycombinator.com/item?id=47249511) (constraint-driven building masses), [Cota](https://news.ycombinator.com/item?id=50188230) (browser CAD with automatic dimensions).
 
 ### Checked, not adopted
 - **Hew** ([listing](https://alternativeto.net/software/hew/about/)): a SketchUp-like modeller where every shape is a solid. AGPL-3.0, early-stage with a small community, imports `.skp` only from 2017. Nothing it offers isn't already covered by BenchUp and OpenSKP.
