@@ -1,0 +1,17 @@
+---
+source: crates/cli/src/main.rs
+expression: "solve_text(FIXTURE_C, \"lgh154-c\")"
+---
+{
+  "diagnostics": [
+    {
+      "axis": "y",
+      "code": "E003",
+      "residual_mm": -53,
+      "severity": "error",
+      "tolerance_mm": 52
+    }
+  ],
+  "fixture": "lgh154-c",
+  "resolved": false
+}

@@ -10,6 +10,7 @@ pub mod commands;
 pub mod diagnostics;
 pub mod dsl;
 pub mod intent;
+pub mod report;
 pub mod resolved;
 pub mod solve;
 pub mod units;
@@ -20,5 +21,6 @@ pub use intent::{
     FaceRef, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room, RoomName,
     RoomNameError, Side, WallOverride,
 };
+pub use report::solve_json;
 pub use resolved::{Resolved, resolve};
 pub use units::{Mm, Quantity, Source};
