@@ -13,7 +13,8 @@ use crate::intent::{Gap, Plan, Relation, RoomName, Side};
 use crate::units::{Mm, Source};
 
 /// The axis an edge lies on. `X` is east–west, `Y` is north–south.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Axis {
     /// East–west (x).
     X,
