@@ -290,28 +290,27 @@ mod tests {
         assert_eq!(e003.data["axis"], "y");
         assert_eq!(int(&e003.data, "tolerance"), 19);
 
-        // The measure is a tree edge here (the BFS reaches Sovrum.south
-        // straight from Garderob.north), so the non-tree edge is Sovrum's depth.
-        // The sign follows `v − (coord[b] − coord[a])` on that edge: 2090 −
-        // (4490 − 2450) = +50. The spec's −50 is measure-based; see the report.
-        assert_eq!(int(&e003.data, "residual"), 50);
+        // The measure is the non-tree edge (stated side). Measured 4490 minus
+        // implied 4540 (2360 + 90 + 2090 along the room chain) = −50.
+        assert_eq!(int(&e003.data, "residual"), -50);
 
         let chain_b = e003.data["chain_b"].as_array().expect("chain_b");
         assert_eq!(chain_b.len(), 1);
-        assert_eq!(chain_b[0]["origin"], "room Sovrum depth");
-        assert_eq!(chain_b[0]["from"], "Sovrum.north");
+        assert_eq!(
+            chain_b[0]["origin"],
+            "measure Garderob.north to Sovrum.south"
+        );
+        assert_eq!(chain_b[0]["from"], "Garderob.north");
         assert_eq!(chain_b[0]["to"], "Sovrum.south");
-        assert_eq!(int(&chain_b[0], "value"), 2090);
+        assert_eq!(int(&chain_b[0], "value"), 4490);
 
-        // The implied side walks Sovrum.north → Garderob.south → Garderob.north
-        // → Sovrum.south: −90 − 2360 + 4490 = 2040.
         let chain_a = e003.data["chain_a"].as_array().expect("chain_a");
         assert_eq!(chain_a.len(), 3);
-        assert_eq!(chain_a[0]["from"], "Sovrum.north");
+        assert_eq!(chain_a[0]["from"], "Garderob.north");
         assert_eq!(chain_a[2]["to"], "Sovrum.south");
         let implied: i64 = chain_a.iter().map(|s| int(s, "value")).sum();
-        assert_eq!(implied, 2040);
-        assert_eq!(2090 - implied, int(&e003.data, "residual"));
+        assert_eq!(implied, 4540);
+        assert_eq!(4490 - implied, int(&e003.data, "residual"));
     }
 
     #[test]
@@ -347,27 +346,26 @@ mod tests {
 
     #[test]
     fn small_residual_within_tolerance_is_w004() {
-        // The measure is a tree edge (A.north → B.south), so the non-tree edge
-        // is B's depth: 2000 − (4095 − 2090) = −5, within 12.
+        // The measure is the non-tree edge: 4095 − 4090 = +5, within 12.
         let got = check(&two_rooms_with_measure(4095), Axis::Y);
         assert_eq!(got.len(), 1, "{got:?}");
         let w004 = &got[0];
         assert_eq!(w004.code, Code::W004);
         assert_eq!(w004.severity, Severity::Warning);
         assert_eq!(w004.message, "");
-        assert_eq!(int(&w004.data, "residual"), -5);
+        assert_eq!(int(&w004.data, "residual"), 5);
         let cycle = w004.data["edges"].as_array().expect("edges");
         assert_eq!(cycle.len(), 4, "three path edges plus the non-tree edge");
-        assert_eq!(cycle[3]["origin"], "room B depth");
+        assert_eq!(cycle[3]["origin"], "measure A.north to B.south");
     }
 
     #[test]
     fn residual_beyond_tolerance_is_e003_on_synthetic_plan() {
-        // 2000 − (4110 − 2090) = −20 against a cycle tolerance of 12.
+        // 4110 − 4090 = +20 against a cycle tolerance of 12.
         let got = check(&two_rooms_with_measure(4110), Axis::Y);
         assert_eq!(got.len(), 1, "{got:?}");
         assert_eq!(got[0].code, Code::E003);
-        assert_eq!(int(&got[0].data, "residual"), -20);
+        assert_eq!(int(&got[0].data, "residual"), 20);
         assert_eq!(int(&got[0].data, "tolerance"), 12);
     }
 }

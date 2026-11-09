@@ -59,9 +59,15 @@ pub fn assign_coords(
         adj.entry(to).or_default().push((i, from, -edge.value));
     }
 
-    let mut coord: BTreeMap<FaceKey, Mm> = BTreeMap::new();
-    let mut tree = Vec::new();
+    let mut state = Search {
+        coord: BTreeMap::new(),
+        depth: BTreeMap::new(),
+        order: Vec::new(),
+        tree: Vec::new(),
+    };
 
+    // Pass 1: each component's root, then BFS over the non-measure edges only,
+    // so the room sizes and relations form the tree wherever they can.
     for component in components {
         // Components list their faces in declaration order, so the first face
         // is the anchor for the anchored component and the first face otherwise.
@@ -69,36 +75,85 @@ pub fn assign_coords(
             continue;
         };
         let root = key(first);
-        if coord.contains_key(&root) {
+        if state.coord.contains_key(&root) {
             continue;
         }
-        coord.insert(root.clone(), 0);
+        state.visit(root.clone(), 0, 0);
+        state.grow(&adj, edges, vec![root], false);
+    }
 
-        let mut queue: VecDeque<(FaceKey, usize)> = VecDeque::from([(root, 0)]);
-        while let Some((a, depth_a)) = queue.pop_front() {
-            let Some(&base) = coord.get(&a) else {
+    // Pass 2: a measure becomes a tree edge only when it is needed to reach a
+    // face that pass 1 could not. Every face reached so far is a seed.
+    let seeds = state.order.clone();
+    state.grow(&adj, edges, seeds, true);
+
+    (state.coord, state.tree)
+}
+
+/// The search state shared by both passes of [`assign_coords`].
+struct Search {
+    /// Coordinate of every face reached so far.
+    coord: BTreeMap<FaceKey, Mm>,
+    /// Tree depth of every face reached so far.
+    depth: BTreeMap<FaceKey, usize>,
+    /// Faces in the order they were reached.
+    order: Vec<FaceKey>,
+    /// Tree edges in the order they were found.
+    tree: Vec<TreeEdge>,
+}
+
+impl Search {
+    /// Record `face` at coordinate `coord` and tree depth `depth`.
+    fn visit(&mut self, face: FaceKey, coord: Mm, depth: usize) {
+        self.coord.insert(face.clone(), coord);
+        self.depth.insert(face.clone(), depth);
+        self.order.push(face);
+    }
+
+    /// Breadth-first search from `seeds`, which already have coordinates.
+    /// Measure edges are followed only when `measures` is true.
+    fn grow(
+        &mut self,
+        adj: &BTreeMap<FaceKey, Vec<(usize, FaceKey, Mm)>>,
+        edges: &[Edge],
+        seeds: Vec<FaceKey>,
+        measures: bool,
+    ) {
+        let mut queue: VecDeque<FaceKey> = seeds.into();
+        while let Some(a) = queue.pop_front() {
+            let (Some(&base), Some(&depth_a)) = (self.coord.get(&a), self.depth.get(&a)) else {
                 continue;
             };
             let Some(neighbours) = adj.get(&a) else {
                 continue;
             };
             for (i, b, v) in neighbours {
-                if coord.contains_key(b) {
+                if !measures && is_measure(edges, *i) {
                     continue;
                 }
-                coord.insert(b.clone(), base + v);
-                tree.push(TreeEdge {
+                if self.coord.contains_key(b) {
+                    continue;
+                }
+                self.visit(b.clone(), base + v, depth_a + 1);
+                self.tree.push(TreeEdge {
                     edge: *i,
                     parent: a.clone(),
                     child: b.clone(),
                     depth: depth_a + 1,
                 });
-                queue.push_back((b.clone(), depth_a + 1));
+                queue.push_back(b.clone());
             }
         }
     }
+}
 
-    (coord, tree)
+/// True for the edge of a `measure` statement, which has origin
+/// `measure A.side to B.side`. Room sizes and relations never have
+/// " to " in their origin.
+fn is_measure(edges: &[Edge], i: usize) -> bool {
+    edges
+        .get(i)
+        .is_some_and(|e| e.origin.starts_with("measure ") && e.origin.contains(" to "))
 }
 
 /// The map key of a face.
