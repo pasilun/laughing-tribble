@@ -54,7 +54,7 @@ pub enum Code {
     /// E002: duplicate room.
     #[serde(rename = "E002")]
     E002,
-    /// E003: measurement conflict. Message body is pending spec §6.3.
+    /// E003: measurement conflict on an axis (spec §6.3 wording, multi-line).
     #[serde(rename = "E003")]
     E003,
     /// E004: opening outside its face.
@@ -72,7 +72,7 @@ pub enum Code {
     /// E010: measure between non-parallel faces.
     #[serde(rename = "E010")]
     E010,
-    /// W001: under-constrained. Message body is pending spec §6.4.
+    /// W001: under-constrained (spec §6.4 wording; depth-unknown variant when `unknown_depth` is given).
     #[serde(rename = "W001")]
     W001,
     /// W003: facade step of 1 to 100 mm.
@@ -134,7 +134,7 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             args,
         ),
         Code::E003 => fill(
-            "Measurement conflict (message body pending spec §6.3).",
+            "E003 Conflict on the north–south axis: {residual} mm.\n  {chain_a} = {implied}\n  {measure_from} → {measure_to} = {measured} (laser)\n  Allowed difference: {tolerance} mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall ({wall_from} → {wall_to} would fit).",
             args,
         ),
         Code::E004 => fill(
@@ -154,7 +154,19 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             "{from} and {to} are not parallel; measure between two north/south or two east/west faces.",
             args,
         ),
-        Code::W001 => fill("Under-constrained (message body pending spec §6.4).", args),
+        Code::W001 => {
+            if lookup(args, "unknown_depth").is_some() {
+                fill(
+                    "W001 {room} depth unknown; measure {room}.north to {room}.south",
+                    args,
+                )
+            } else {
+                fill(
+                    r#"W001 Not tied {axis}: {room}. Measure from {from} to {to}, or add "{room} {relation} {of} gap {gap}"."#,
+                    args,
+                )
+            }
+        }
         Code::W003 => fill(
             r#"Facade not straight: {a} {ya} vs {b} {yb} ({d} mm). Add "align {side} {ra} {rb}" if it is straight."#,
             args,
@@ -240,13 +252,38 @@ mod tests {
         assert_eq!(text, r#"Room "Kitchen" is declared twice (lines 2 and 9)."#);
     }
 
+    fn e003_args() -> Vec<(&'static str, String)> {
+        vec![
+            arg("residual", "120"),
+            arg(
+                "chain_a",
+                "Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser)",
+            ),
+            arg("implied", "4540"),
+            arg("measure_from", "Garderob north"),
+            arg("measure_to", "Sovrum south"),
+            arg("measured", "4660"),
+            arg("tolerance", "10"),
+            arg("wall_from", "90"),
+            arg("wall_to", "40"),
+        ]
+    }
+
     #[test]
-    fn e003_placeholder_wording() {
-        let text = message(Code::E003, &[]);
+    fn e003_exact_multiline_wording() {
+        let text = message(Code::E003, &e003_args());
         assert_eq!(
             text,
-            "Measurement conflict (message body pending spec §6.3)."
+            "E003 Conflict on the north–south axis: 120 mm.\n  Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser) = 4540\n  Garderob north → Sovrum south = 4660 (laser)\n  Allowed difference: 10 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
         );
+    }
+
+    #[test]
+    fn e003_missing_args_stay_visible() {
+        let text = message(Code::E003, &[arg("residual", "120")]);
+        assert!(text.starts_with(
+            "E003 Conflict on the north–south axis: 120 mm.\n  {chain_a} = {implied}\n"
+        ));
     }
 
     #[test]
@@ -317,9 +354,35 @@ mod tests {
     }
 
     #[test]
-    fn w001_placeholder_wording() {
-        let text = message(Code::W001, &[]);
-        assert_eq!(text, "Under-constrained (message body pending spec §6.4).");
+    fn w001_exact_wording() {
+        let text = message(
+            Code::W001,
+            &[
+                arg("axis", "north–south"),
+                arg("room", "Kitchen"),
+                arg("from", "Kitchen north"),
+                arg("to", "Kitchen south"),
+                arg("relation", "east of"),
+                arg("of", "Hall"),
+                arg("gap", "90"),
+            ],
+        );
+        assert_eq!(
+            text,
+            r#"W001 Not tied north–south: Kitchen. Measure from Kitchen north to Kitchen south, or add "Kitchen east of Hall gap 90"."#
+        );
+    }
+
+    #[test]
+    fn w001_depth_unknown_variant() {
+        let text = message(
+            Code::W001,
+            &[arg("room", "Kitchen"), arg("unknown_depth", "true")],
+        );
+        assert_eq!(
+            text,
+            "W001 Kitchen depth unknown; measure Kitchen.north to Kitchen.south"
+        );
     }
 
     #[test]
