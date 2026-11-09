@@ -224,7 +224,7 @@ fn span(room: &RoomName, side: Side, coords: &Coords) -> Option<(Mm, Mm)> {
 }
 
 /// The map key of a room face, using the same side index as the solver.
-fn face_key(room: &RoomName, side: Side) -> FaceKey {
+pub(super) fn face_key(room: &RoomName, side: Side) -> FaceKey {
     let index: u8 = match side {
         Side::North => 0,
         Side::East => 1,
