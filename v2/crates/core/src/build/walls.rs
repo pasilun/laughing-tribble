@@ -44,7 +44,8 @@ pub struct WallSegment {
     /// Where the thickness comes from; `None` for `Open`.
     pub source: Option<Source>,
     /// The facing face that covers the segment, if any. When several cover it,
-    /// the first in `facing_faces` order is taken.
+    /// the one with the smallest distance is taken; ties go to the first in
+    /// `facing_faces` order.
     pub covered_by: Option<FaceRef>,
     /// `true` when the interior thickness is derived from the distance between
     /// the faces because no explicit relation gives one (the I010 marker).
@@ -132,9 +133,13 @@ fn classify(
         covered_by,
         derived,
     };
-    let Some(cover) = facing
+    // Several facing faces may cover the piece: the nearest one wins, and ties
+    // fall back to the room order of `facing_faces`, not declaration accidents.
+    let Some((_, cover)) = facing
         .iter()
-        .find(|neighbour| neighbour.span.0 <= from && to <= neighbour.span.1)
+        .enumerate()
+        .filter(|(_, neighbour)| neighbour.span.0 <= from && to <= neighbour.span.1)
+        .min_by_key(|(index, neighbour)| (neighbour.distance, *index))
     else {
         let (thickness, source) = outer_thickness(plan, face);
         return segment(
@@ -459,6 +464,31 @@ mod tests {
             outer(("Vardagsrum", Side::West), (4540, 4593), d),
         ];
         assert_eq!(wall_segments(&plan, &coords), want);
+    }
+
+    #[test]
+    fn nearest_covering_face_wins_over_declaration_order() {
+        // B is a 200 mm closet 90 mm east of A. C sits 90 mm past B, so A.east
+        // also faces C.west at 380 mm. C is declared before B, so C comes first
+        // in room order; the nearer B.west (90 mm) must still cover A.east.
+        let plan = parse(
+            "room A 1000 x 2000\nroom C 1000 x 2000\nroom B 200 x 2000\n  east_of A gap 90\nC east_of B gap 90\nalign north A B C\n",
+        )
+        .expect("parse");
+        let coords = solved(&plan);
+        let segments = wall_segments(&plan, &coords);
+        let a_east: Vec<WallSegment> = segments
+            .into_iter()
+            .filter(|s| s.face == at("A", Side::East))
+            .collect();
+        let want = vec![interior(
+            ("A", Side::East),
+            (0, 2000),
+            ("B", Side::West),
+            (90, Source::Assumed),
+            false,
+        )];
+        assert_eq!(a_east, want);
     }
 
     #[test]
