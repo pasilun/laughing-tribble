@@ -49,6 +49,80 @@
       "area_mm2": 13613100
     }
   ],
+  "interior_walls": [
+    {
+      "id": "W:Garderob.east|Hall.west",
+      "thickness": 121,
+      "x": [
+        1860,
+        1981
+      ],
+      "y": [
+        0,
+        1113
+      ]
+    },
+    {
+      "id": "W:Garderob.east|Vardagsrum.west",
+      "thickness": 121,
+      "x": [
+        1860,
+        1981
+      ],
+      "y": [
+        1113,
+        2450
+      ]
+    },
+    {
+      "id": "W:Garderob.south|Sovrum.north",
+      "thickness": 90,
+      "x": [
+        0,
+        1860
+      ],
+      "y": [
+        2360,
+        2450
+      ]
+    },
+    {
+      "id": "W:Hall.east|WC.west",
+      "thickness": 90,
+      "x": [
+        3081,
+        3171
+      ],
+      "y": [
+        0,
+        1113
+      ]
+    },
+    {
+      "id": "W:Sovrum.east|Vardagsrum.west",
+      "thickness": 121,
+      "x": [
+        1860,
+        1981
+      ],
+      "y": [
+        2450,
+        4593
+      ]
+    },
+    {
+      "id": "W:Vardagsrum.north|WC.south",
+      "thickness": 123,
+      "x": [
+        3081,
+        5541
+      ],
+      "y": [
+        990,
+        1113
+      ]
+    }
+  ],
   "openings": [
     {
       "id": "O:Garderob.east:1",
