@@ -12,7 +12,7 @@ pub mod graph;
 pub mod tree;
 
 pub use components::{Component, components};
-pub use conflicts::conflict_diagnostic;
+pub use conflicts::{conflict_diagnostic, within_tolerance_diagnostic};
 pub use cycles::{CycleCheck, check_cycles};
 pub use graph::{Axis, Edge, FaceId, Origin, edges};
 pub use tree::{FaceKey, TreeEdge, assign_coords};
