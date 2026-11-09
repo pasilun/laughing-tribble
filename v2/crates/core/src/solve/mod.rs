@@ -6,11 +6,9 @@
 //! 3). The cycle check and the least-squares step come in later cards.
 
 pub mod components;
-pub mod cycles;
 pub mod graph;
 pub mod tree;
 
 pub use components::{Component, components};
-pub use cycles::check_cycles;
 pub use graph::{Axis, Edge, FaceId, Origin, edges};
 pub use tree::{FaceKey, TreeEdge, assign_coords};
