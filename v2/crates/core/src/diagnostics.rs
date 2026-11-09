@@ -72,6 +72,9 @@ pub enum Code {
     /// E010: measure between non-parallel faces.
     #[serde(rename = "E010")]
     E010,
+    /// E013: door hinge not along its face (spec §9.3, D19).
+    #[serde(rename = "E013")]
+    E013,
     /// W001: under-constrained (spec §6.4 wording; depth-unknown variant when `unknown_depth` is given).
     #[serde(rename = "W001")]
     W001,
@@ -98,6 +101,7 @@ impl Code {
             Code::E006 => "E006",
             Code::E007 => "E007",
             Code::E010 => "E010",
+            Code::E013 => "E013",
             Code::W001 => "W001",
             Code::W003 => "W003",
             Code::W004 => "W004",
@@ -163,6 +167,7 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             "{from} and {to} are not parallel; measure between two north/south or two east/west faces.",
             args,
         ),
+        Code::E013 => fill(r#"Hinge "{found}" on {face} must be {a} or {b}."#, args),
         Code::W001 => {
             if lookup(args, "unknown_depth").is_some() {
                 fill(
@@ -390,6 +395,34 @@ mod tests {
             text,
             "Kitchen north and Hall east are not parallel; measure between two north/south or two east/west faces."
         );
+    }
+
+    #[test]
+    fn e013_exact_wording_north_face() {
+        let text = message(
+            Code::E013,
+            &[
+                arg("found", "south"),
+                arg("face", "WC.north"),
+                arg("a", "west"),
+                arg("b", "east"),
+            ],
+        );
+        assert_eq!(text, r#"Hinge "south" on WC.north must be west or east."#);
+    }
+
+    #[test]
+    fn e013_exact_wording_west_face() {
+        let text = message(
+            Code::E013,
+            &[
+                arg("found", "east"),
+                arg("face", "WC.west"),
+                arg("a", "north"),
+                arg("b", "south"),
+            ],
+        );
+        assert_eq!(text, r#"Hinge "east" on WC.west must be north or south."#);
     }
 
     #[test]

@@ -9,9 +9,9 @@
 //! face with no wall overlapping it is E007 (open side). An opening that runs
 //! past the face, or that no single wall covers, is E004.
 //!
-//! The hinge check of §9.3 is not implemented: the E004 template has no slot
-//! for its text ("hinge must be west or east on a north face"), and §8 forbids
-//! new templates.
+//! A door hinge must lie along its face (west or east on a north or south
+//! face, north or south on an east or west face). Otherwise the door is E013
+//! (spec §9.3, D19). A door with no hinge is not an error.
 
 use serde_json::json;
 
@@ -104,15 +104,31 @@ pub fn place_openings(
         }
 
         match on_face.iter().find(|(_, (a, b))| *a <= start && end <= *b) {
-            Some((wall, _)) => placed.push(PlacedOpening {
-                id: id.clone(),
-                kind: opening.kind,
-                face: face.clone(),
-                start,
-                end,
-                wall: wall.id.clone(),
-                hinge: opening.hinge,
-            }),
+            Some((wall, _)) => match opening.hinge {
+                Some(hinge) if !hinge_along_face(face.side, hinge) => {
+                    let (a, b) = hinge_choices(face.side);
+                    diagnostics.push(error(
+                        Code::E013,
+                        &id,
+                        &[
+                            ("found", side_word(hinge).to_string()),
+                            ("face", label.clone()),
+                            ("a", a.to_string()),
+                            ("b", b.to_string()),
+                        ],
+                        json!({ "hinge": side_word(hinge) }),
+                    ));
+                }
+                _ => placed.push(PlacedOpening {
+                    id: id.clone(),
+                    kind: opening.kind,
+                    face: face.clone(),
+                    start,
+                    end,
+                    wall: wall.id.clone(),
+                    hinge: opening.hinge,
+                }),
+            },
             None => diagnostics.push(error(
                 Code::E004,
                 &id,
@@ -189,6 +205,23 @@ fn error(code: Code, id: &str, args: &[(&str, String)], data: serde_json::Value)
         span: None,
         refs: vec![id.to_string()],
         data,
+    }
+}
+
+/// Whether `hinge` lies along a face on `face_side`: west or east on a north or
+/// south face, north or south on an east or west face (§9.3).
+fn hinge_along_face(face_side: Side, hinge: Side) -> bool {
+    match face_side {
+        Side::North | Side::South => matches!(hinge, Side::West | Side::East),
+        Side::East | Side::West => matches!(hinge, Side::North | Side::South),
+    }
+}
+
+/// The two lower-case compass words a hinge may use on a face on `face_side`.
+fn hinge_choices(face_side: Side) -> (&'static str, &'static str) {
+    match face_side {
+        Side::North | Side::South => ("west", "east"),
+        Side::East | Side::West => ("north", "south"),
     }
 }
 
@@ -372,6 +405,24 @@ mod tests {
             r#"A.east has no wall ("open"); a window needs a wall."#
         );
         assert_eq!(d.refs, ["O:A.east:1"]);
+    }
+
+    #[test]
+    fn door_hinge_on_wrong_axis_is_e013() {
+        let (placed, diagnostics) = place(
+            "room A 3000 x 2000\n\
+             door A.north at 200 width 800 hinge north\n",
+        );
+        assert!(placed.is_empty());
+        assert_eq!(diagnostics.len(), 1);
+        let d = &diagnostics[0];
+        assert_eq!(d.code, Code::E013);
+        assert_eq!(d.severity, Severity::Error);
+        assert_eq!(
+            d.message,
+            r#"Hinge "north" on A.north must be west or east."#
+        );
+        assert_eq!(d.refs, ["O:A.north:1"]);
     }
 
     #[test]
