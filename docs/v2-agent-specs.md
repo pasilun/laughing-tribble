@@ -426,6 +426,7 @@ Files live in `v2/fixtures/`, next to the `.plan` files. Tests compare the solve
 Rules for tests:
 - `diagnostics` is compared as a multiset on `code`, `severity`, and any other fields present in the expected object (`axis`, `residual_mm`, `tolerance_mm`, `refs`). Extra fields in the actual output are ignored. Message text is tested separately (W1-04, W1-13).
 - `residual_mm` is **stated minus implied**: B is 4490 − 4540 = −50, C is 0 − 53 = −53.
+- `adjusted` (only when a W004 exists, §15 D6) is a list of `{ "origin", "value", "adjusted" }` for every edge moved more than 0.5 mm by the least-squares step, x axis first, then y, each in edge order.
 - `interior_walls` is a list of `{ "id", "thickness", "x": [min,max], "y": [min,max] }` giving each interior wall's body extents. Compared as a set by id; outer walls are not asserted in week one.
 
 ### 7.6 Expected results (put in `*.expected.json`; tests compare exactly unless a tolerance is given)
@@ -510,6 +511,15 @@ pub struct Diagnostic {
 | W005 | Warning | Wall thinner than 70 mm or thicker than 600 mm | `Wall {id} is {t} mm thick; check the measurements around it.` |
 | W020 | Warning | Reference measure differs | `Reference measure {from}→{to}: drawn {drawn}, measured {value} ({diff} mm).` |
 | I010 | Info | Wall thickness derived, not stated | `Wall {id} is {t} mm, derived from the room positions.` |
+| E011 | Error | Unknown element id (render region) | `Unknown element "{id}".{ Did you mean "{suggestion}"?} Use a room name, or a wall or opening id from get.` |
+| E012 | Error | Render failed | `Render failed: {reason}.` |
+| E020 | Error | Unknown plan (MCP) | `Unknown plan "{id}". Create it with apply.` |
+| E021 | Error | Invalid plan id (MCP) | `Invalid plan_id "{id}": use 1 to 64 letters, digits, "-" or "_".` |
+| E022 | Error | Render view not available yet | `View "{view}" is not available yet; use "plan" or "labels".` |
+| E023 | Error | Plan file read or write failed (MCP) | `Could not {action} plan "{id}": {reason}.` |
+| I020 | Info | Measurement suggested (not in `check` output; `plan suggest` and MCP next steps only) | `{what} {value} mm has source {source} (±{tol} mm); measure {from} to {to} with the laser.` |
+
+Codes E011–E023 and I020 were added by the spec run of 2026-11-09 (§15 D10, D13, D17, D8).
 
 ---
 
@@ -768,3 +778,31 @@ Keep these on Tier A, even when the rest moves:
 They are about 10–15% of the sessions, but most of the risk.
 
 The eval gate in the main plan is separate. It tests which models can **use** the finished MCP tools well (Opus, Sonnet, Haiku), not which model **builds** the system.
+
+---
+
+## 15. Decisions made
+
+Decisions taken by the spec runs where the sections above left a choice open. Each takes the option that keeps the code simplest and easiest to change later. Cards cite them as "§15 Dn".
+
+**Spec run 2026-11-09 (week-two cards):**
+
+- **D1. Which edge of a cycle is "stated".** The spanning tree stays as §6.2 step 3 builds it. For each non-tree edge the cycle is found as before, but the edge reported as stated (chain B) is the cycle's edge with the **highest index** in the edge list, i.e. the latest-declared statement (sizes, then relations, then measures). `residual = sign × L`, where `L` is the signed sum around the loop and `sign` the direction the stated edge is walked. This gives −50 for fixture B (the measure) and −53 for fixture C (the `align south`), matching §7.6 without a special tree rule. Chosen over "make exact cross-room edges non-tree", which would change the tree and every coordinate path. Card W1-12.
+- **D2. Edges carry their source.** `Edge.source: Option<Source>` (`None` for exact edges), so E003 chains and I020 can print "(laser)". Card W1-11b.
+- **D3. Core entry points.** `resolve(plan) -> (Option<Resolved>, Vec<Diagnostic>)` in `resolved.rs`, `apply(plan, patch, dry_run) -> ApplyResult` in `commands.rs`, `solve_json(stem, resolved, diagnostics)` in `report.rs` (the §7.7 value, built in core, printed by the CLI), and for clients `api::{Resolve, load, resolve_plan, RectMm, element_rect, element_ids}`. Cards W1-21, W1-22, W2-01, W2-02.
+- **D4. Render crate.** SVG drawing lives in `crates/render` (`plan-render`, lib `plan_render`) from W1-23 on; the CLI and the MCP server call it.
+- **D5. Which faces W001 suggests.** A loose component has no position on its own axis, so candidates (anchored room `a`, loose room `l`, direction) are ranked by the overlap of their spans on the *other* axis, then declaration order of `a`, then of `l`, then "after" (east_of/south_of) before "before". The best is the message; the next two go in `data.alternatives` (W2-09). Card W1-24.
+- **D6. Weighted least squares (P1-08).** KKT system with nalgebra (`DMatrix`, LU solve): soft edges have weight `1/max(tol,1)²`, exact edges are hard constraints, the component's root is fixed at its first-pass coordinate. Only components with a within-tolerance cycle whose residual is non-zero are distributed, and only when the axis has no E003. Coordinates are rounded half-even once, after the solve. W004 lists each edge whose value moved more than 0.5 mm as `{origin} {old}→{new}`, joined by ", ", and `solve_json` gets an `adjusted` key. This replaces week one's "kept first-pass values" W004. Worked example (fixture `dist-1`, the §7.6 unit test as a plan): with r = A.east − B.east − 520, minimising (A.east−2000)²/9 + (B.east−1500)²/9 + r²/2500 gives r(1 + 18/2500) = −20, r = −19.857, A.east = 2000.071, B.east = 1499.929; rounded 2000 and 1500, measure 520→500. §14 keeps P1-08 on Tier A; here it is split into three H cards with code the spec owner compiled and tested, and the W2-R1 checkpoint reviews it. Cards W2-03…05.
+- **D7. Round-trip property.** `parse(print(p)) == p` is tested for canonical plans: `printer::canonicalize` puts every list in printed order, and the generator only makes values the DSL can carry (one source clause per room for width and depth, an opening's width shares the source of `at`, names that aren't keywords). Any other mismatch is a printer or parser bug and gets fixed, not filtered. Cards W2-06…08.
+- **D8. Measurement suggestions beyond W001.** `unmeasured(plan)` gives I020 for sizes whose source is printed, drawing, estimated or assumed, and for explicit gaps from printed, drawing or estimated sources, suggesting a laser reading across the far faces; worst tolerance first; skipped when a measure between the same faces exists. Kept out of `resolve`/`plan check` so week-one outputs don't change. Used by `plan suggest` and MCP `check` next steps. Cards W2-10, W2-11.
+- **D9. Renders sized for Claude.** Token cost ⌈w/28⌉·⌈h/28⌉, limits 2576 px long edge and 4784 tokens (main plan), default budget 1600. The scale is the smallest of {1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8}·10ᵏ mm/px that fits, so grid and scale bar read cleanly, and the SVG viewBox is exactly `size_px × mm_per_px`. Whole plan padded 500 mm; crops padded 600 mm. Labels are 12 px, placed greedily in px with fixed candidate offsets and leader lines, ordered rooms, walls, openings, then id. Cards W2-12…18.
+- **D10. Unknown crop id** is E011 with a Jaro–Winkler suggestion (same 0.85 rule as E001). Card W2-16.
+- **D11. Font.** DejaVu Sans (Bitstream Vera licence, redistributable) is copied from the system package into `crates/render/assets/` and embedded, so PNG text is identical on every machine. Card W2-17.
+- **D12. MCP SDK and transport.** The official Rust SDK `rmcp`, pinned `=3.9.0`, features `server`, `transport-io`, `macros`; stdio transport; crate `plan-server`, binary `plan-mcp --root DIR`, server name `planstudio`. Tool-level failures are `CallToolResult::structured_error({"diagnostics": [...]})`, never protocol errors. The skeleton in W2-19 was compiled and run over stdio by the spec owner. Cards W2-19…24.
+- **D13. Storage for week two.** A plan is the file `<root>/<plan_id>.plan` (canonical DSL text), `plan_id` matches `^[A-Za-z0-9_-]{1,64}$`, saves are write-to-temp then rename. P4-02 (command log + SQLite) replaces `Store` later behind the same three methods.
+- **D14. `check` next steps** are built from errors (E003: ask which value to trust), W001 (the laser shot from `data`), W003 (ask the user), other warnings, then up to three I020 when there is no error; at most 10; a fixed "Nothing to do" line when empty. Card W2-20.
+- **D15. `get` views:** `summary` (fixed text format), `dsl` (canonical text, or the raw text plus diagnostics if it doesn't parse), `json` (`solve_json`, filtered by `fields`). Card W2-21.
+- **D16. `apply`** on an unknown `plan_id` creates the plan from `plan "<id>"`; `ok: false` is a normal result, not a tool error; the file is written only when ok and not a dry run. Card W2-22.
+- **D17. `render` in week two** implements views `plan` and `labels`; the other four are accepted by the schema and answer E022. A plan that does not resolve is not rendered (tool error with its diagnostics). The result is an image block plus the metadata as text and structured content. Card W2-23.
+- **D18. Order of work.** Week-two cards depend on the week-one cards whose outputs they use, and `v2/RUNNER.md` still applies: no week-two card starts before the week-one checkpoints (W1-R1…R4) are done. The week-one cards W1-21…24 got an interface paragraph so week two can name their functions.
+
