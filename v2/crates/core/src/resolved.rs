@@ -4,14 +4,15 @@
 //! [`resolve`] runs the solver on both axes (§6), then builds the walls, the
 //! openings, the areas and the spaces (§9). It returns `None` as soon as an
 //! Error diagnostic exists, so a [`Resolved`] always comes from a plan that
-//! solves cleanly. The `nodes` field of §5.3 is not filled yet.
+//! solves cleanly. The nodes are the wall end points (§5.3, `N:<x>,<y>`).
 
 use std::collections::BTreeMap;
 
 use serde::Serialize;
 
 use crate::build::{
-    Coords, PlacedOpening, SegmentKind, built_walls, diagnose, place_openings, room_areas, spaces,
+    BuiltWall, Coords, PlacedOpening, SegmentKind, built_walls, diagnose, place_openings,
+    room_areas, spaces,
 };
 use crate::diagnostics::{Diagnostic, Severity};
 use crate::intent::{FaceRef, OpeningKind, Plan, RoomName, Side};
@@ -25,6 +26,8 @@ use crate::units::{Mm, Source};
 pub type WallId = String;
 /// Id of an opening, `O:<Room>.<side>:<n>`.
 pub type OpeningId = String;
+/// Id of a node, `N:<x>,<y>` with the coordinates in mm (§5.3).
+pub type NodeId = String;
 
 /// Side indices used by the solver's map keys: north 0, east 1, south 2, west 3.
 const NORTH: u8 = 0;
@@ -37,6 +40,8 @@ const WEST: u8 = 3;
 pub struct Resolved {
     /// Solved inner faces of every room that has all four faces solved.
     pub rooms: BTreeMap<RoomName, RoomRect>,
+    /// Wall end points by id. A point shared by several walls is one node.
+    pub nodes: BTreeMap<NodeId, Pt>,
     /// Walls by id.
     pub walls: BTreeMap<WallId, Wall>,
     /// Openings by id.
@@ -60,6 +65,27 @@ pub struct RoomRect {
     pub south: Mm,
 }
 
+/// A point in mm, x east, y south (§5.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct Pt {
+    /// x in mm.
+    pub x: Mm,
+    /// y in mm.
+    pub y: Mm,
+}
+
+/// Which side of the line from `from` to `to` a wall's body lies on (§5.3).
+/// Internal only: not serialised.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RefSide {
+    /// On the left of from→to.
+    Left,
+    /// On the line.
+    Center,
+    /// On the right of from→to.
+    Right,
+}
+
 /// Whether a wall is between two rooms or on the outside.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -70,11 +96,18 @@ pub enum WallKind {
     Outer,
 }
 
-/// A wall segment of the resolved model (§5.3, without the node ids).
+/// A wall segment of the resolved model (§5.3).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Wall {
     /// The semantic id.
     pub id: WallId,
+    /// The west or north end node.
+    pub from: NodeId,
+    /// The east or south end node.
+    pub to: NodeId,
+    /// Which side of from→to the body lies on. Internal only.
+    #[serde(skip)]
+    pub reference: RefSide,
     /// Interior or outer.
     pub kind: WallKind,
     /// Thickness in mm.
@@ -157,29 +190,37 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
     }
 
     let areas = room_areas(plan, &coords);
+    let mut nodes: BTreeMap<NodeId, Pt> = BTreeMap::new();
+    let mut wall_models: BTreeMap<WallId, Wall> = BTreeMap::new();
+    for wall in &walls {
+        let kind = match wall.kind {
+            SegmentKind::Interior => WallKind::Interior,
+            SegmentKind::Outer => WallKind::Outer,
+            SegmentKind::Open => continue,
+        };
+        let (from, to) = wall_ends(wall);
+        let (from_id, to_id) = (node_id(from), node_id(to));
+        nodes.insert(from_id.clone(), from);
+        nodes.insert(to_id.clone(), to);
+        let model = Wall {
+            id: wall.id.clone(),
+            from: from_id,
+            to: to_id,
+            reference: RefSide::Center,
+            kind,
+            thickness: wall.thickness,
+            thickness_source: wall.source,
+            derived: wall.derived,
+            between: (Some(wall.face.clone()), wall.other.clone()),
+            x: wall.x,
+            y: wall.y,
+        };
+        wall_models.insert(wall.id.clone(), model);
+    }
     let resolved = Resolved {
         rooms: rooms(plan, &coords),
-        walls: walls
-            .iter()
-            .filter_map(|wall| {
-                let kind = match wall.kind {
-                    SegmentKind::Interior => WallKind::Interior,
-                    SegmentKind::Outer => WallKind::Outer,
-                    SegmentKind::Open => return None,
-                };
-                let model = Wall {
-                    id: wall.id.clone(),
-                    kind,
-                    thickness: wall.thickness,
-                    thickness_source: wall.source,
-                    derived: wall.derived,
-                    between: (Some(wall.face.clone()), wall.other.clone()),
-                    x: wall.x,
-                    y: wall.y,
-                };
-                Some((wall.id.clone(), model))
-            })
-            .collect(),
+        nodes,
+        walls: wall_models,
         openings: openings
             .iter()
             .map(|opening| (opening.id.clone(), opening_model(opening)))
@@ -194,6 +235,47 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
         diagnostics: diagnostics.clone(),
     };
     (Some(resolved), diagnostics)
+}
+
+/// The two end points of a wall on its node line, the room face it was made
+/// from (§9.2). `from` is the west or north end, `to` the east or south end.
+fn wall_ends(wall: &BuiltWall) -> (Pt, Pt) {
+    // The face line is an end of the body extent: the near end on an east or
+    // south face, the far end on a west or north face (see merge.rs `body`).
+    let (vertical, line) = match wall.face.side {
+        Side::East => (true, wall.x.0),
+        Side::West => (true, wall.x.1),
+        Side::North => (false, wall.y.1),
+        Side::South => (false, wall.y.0),
+    };
+    if vertical {
+        (
+            Pt {
+                x: line,
+                y: wall.y.0,
+            },
+            Pt {
+                x: line,
+                y: wall.y.1,
+            },
+        )
+    } else {
+        (
+            Pt {
+                x: wall.x.0,
+                y: line,
+            },
+            Pt {
+                x: wall.x.1,
+                y: line,
+            },
+        )
+    }
+}
+
+/// The §5.3 id of a node: `N:<x>,<y>`.
+fn node_id(pt: Pt) -> NodeId {
+    format!("N:{},{}", pt.x, pt.y)
 }
 
 /// True when any diagnostic has the Error severity.
@@ -263,6 +345,28 @@ mod tests {
             .ok_or("Garderob has no rectangle")?;
         assert_eq!(rect.east - rect.west, 1860);
         assert_eq!(rect.south - rect.north, 2360);
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_a_nodes_and_wall_ends() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(FIXTURE_A);
+        let (resolved, _) = resolve(&plan);
+        let resolved = resolved.ok_or("fixture A should resolve")?;
+        // Hand count: 15 walls give 30 end points. Ten points are each an end of
+        // two walls: (0,0), (1981,0), (3171,0), (5541,0), (1860,1113),
+        // (5541,1113), (0,2450), (1860,2450), (0,4540) and (5541,4593). So
+        // 30 - 10 = 20 distinct nodes.
+        assert_eq!(resolved.walls.len(), 15);
+        assert_eq!(resolved.nodes.len(), 20);
+        for wall in resolved.walls.values() {
+            assert!(
+                resolved.nodes.contains_key(&wall.from),
+                "from of {}",
+                wall.id
+            );
+            assert!(resolved.nodes.contains_key(&wall.to), "to of {}", wall.id);
+        }
         Ok(())
     }
 
