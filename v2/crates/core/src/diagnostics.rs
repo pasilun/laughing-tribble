@@ -133,10 +133,19 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             r#"Room "{name}" is declared twice (lines {a} and {b})."#,
             args,
         ),
-        Code::E003 => fill(
-            "E003 Conflict on the {axis} axis: {residual} mm.\n  {chain_a} = {implied}\n  measure {from} → {to} = {measured} ({measured_source})\n  Allowed difference: {tolerance} mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall ({wall_from} → {wall_to} would fit).",
-            args,
-        ),
+        Code::E003 => {
+            let base = fill(
+                "E003 Conflict on the {axis} axis: {residual} mm.\n  {chain_a} = {implied}\n  measure {from} → {to} = {measured} ({measured_source})\n  Allowed difference: {tolerance} mm.\n  Fix one of: mark a measurement as reference, correct a value",
+                args,
+            );
+            // The wall suggestion is only offered when the caller gives a wall (week-one §5.2).
+            match (lookup(args, "wall_from"), lookup(args, "wall_to")) {
+                (Some(from), Some(to)) => {
+                    format!("{base}, or change the wall ({from} → {to} would fit).")
+                }
+                _ => format!("{base}."),
+            }
+        }
         Code::E004 => fill(
             "{kind} on {face} at {at} width {width} runs past the face ({length} mm long).",
             args,
