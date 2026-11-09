@@ -2,11 +2,13 @@
 //!
 //! So far [`graph`] builds the edges of §6.1 and [`components`] groups the
 //! faces of one axis, anchors one component and reports the loose ones (§6.2
-//! steps 1–2). The spanning tree, the cycle check and the least-squares step
-//! come in later cards.
+//! steps 1–2) and [`tree`] builds the spanning tree and the coordinates (step
+//! 3). The cycle check and the least-squares step come in later cards.
 
 pub mod components;
 pub mod graph;
+pub mod tree;
 
 pub use components::{Component, components};
 pub use graph::{Axis, Edge, FaceId, Origin, edges};
+pub use tree::{FaceKey, TreeEdge, assign_coords};
