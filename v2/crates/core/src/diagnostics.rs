@@ -134,7 +134,7 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             args,
         ),
         Code::E003 => fill(
-            "E003 Conflict on the north–south axis: {residual} mm.\n  {chain_a} = {implied}\n  {measure_from} → {measure_to} = {measured} (laser)\n  Allowed difference: {tolerance} mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall ({wall_from} → {wall_to} would fit).",
+            "E003 Conflict on the {axis} axis: {residual} mm.\n  {chain_a} = {implied}\n  measure {from} → {to} = {measured} ({measured_source})\n  Allowed difference: {tolerance} mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall ({wall_from} → {wall_to} would fit).",
             args,
         ),
         Code::E004 => fill(
@@ -254,15 +254,17 @@ mod tests {
 
     fn e003_args() -> Vec<(&'static str, String)> {
         vec![
+            arg("axis", "north–south"),
             arg("residual", "120"),
             arg(
                 "chain_a",
                 "Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser)",
             ),
             arg("implied", "4540"),
-            arg("measure_from", "Garderob north"),
-            arg("measure_to", "Sovrum south"),
+            arg("from", "Garderob.north"),
+            arg("to", "Sovrum.south"),
             arg("measured", "4660"),
+            arg("measured_source", "laser"),
             arg("tolerance", "10"),
             arg("wall_from", "90"),
             arg("wall_to", "40"),
@@ -274,16 +276,45 @@ mod tests {
         let text = message(Code::E003, &e003_args());
         assert_eq!(
             text,
-            "E003 Conflict on the north–south axis: 120 mm.\n  Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser) = 4540\n  Garderob north → Sovrum south = 4660 (laser)\n  Allowed difference: 10 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
+            "E003 Conflict on the north–south axis: 120 mm.\n  Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser) = 4540\n  measure Garderob.north → Sovrum.south = 4660 (laser)\n  Allowed difference: 10 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
+        );
+    }
+
+    #[test]
+    fn e003_east_west_tape_wording() {
+        let text = message(
+            Code::E003,
+            &[
+                arg("axis", "east–west"),
+                arg("residual", "20"),
+                arg(
+                    "chain_a",
+                    "Kitchen width 3000 (laser) + wall 90 (assumed) + Hall width 2000 (tape)",
+                ),
+                arg("implied", "5090"),
+                arg("from", "Kitchen.west"),
+                arg("to", "Hall.east"),
+                arg("measured", "5110"),
+                arg("measured_source", "tape"),
+                arg("tolerance", "10"),
+                arg("wall_from", "90"),
+                arg("wall_to", "40"),
+            ],
+        );
+        assert_eq!(
+            text,
+            "E003 Conflict on the east–west axis: 20 mm.\n  Kitchen width 3000 (laser) + wall 90 (assumed) + Hall width 2000 (tape) = 5090\n  measure Kitchen.west → Hall.east = 5110 (tape)\n  Allowed difference: 10 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
         );
     }
 
     #[test]
     fn e003_missing_args_stay_visible() {
         let text = message(Code::E003, &[arg("residual", "120")]);
-        assert!(text.starts_with(
-            "E003 Conflict on the north–south axis: 120 mm.\n  {chain_a} = {implied}\n"
-        ));
+        assert!(
+            text.starts_with(
+                "E003 Conflict on the {axis} axis: 120 mm.\n  {chain_a} = {implied}\n"
+            )
+        );
     }
 
     #[test]
