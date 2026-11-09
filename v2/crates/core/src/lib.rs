@@ -8,6 +8,7 @@
 pub mod diagnostics;
 pub mod dsl;
 pub mod intent;
+pub mod solve;
 pub mod units;
 
 pub use diagnostics::{Code, Diagnostic, Severity, Span, message};
