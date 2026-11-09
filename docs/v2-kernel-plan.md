@@ -31,7 +31,7 @@ Decisions made with the user:
    - **Walls.** A wall has `from`, `to`, `thickness` and `ref: left|center|right`. `ref` says which face the node line is, so a wall measured from the inside keeps that face and a wrong thickness only grows outward.
    - **Openings.** Anchored to a wall end or centre with a distance and a width.
    - **Rooms.** Derived closed regions from the planar graph of wall faces, with exact polygon area and clear sizes.
-   - **Dimensions.** Driving or reference. A driving dimension is a constraint, solved by SolidCraft's sketch solver (see "Research"), which reports over-constraint. Messages are in domain terms, for example "4.49 measured, 4.54 implied, 50 mm apart".
+   - **Dimensions.** Driving or reference. A driving dimension is a constraint. Phase 1 solves straight walls with a deterministic axis-by-axis graph solver that explains each conflict as two chains of numbers (see [the agent specs addendum](v2-agent-specs.md) §6). SolidCraft's sketch solver (see "Research") sits behind the same interface for angled geometry, if the Phase 0 spike confirms it fits. Messages are in domain terms, for example "4.49 measured, 4.54 implied, 50 mm apart".
    - **Missing measurements.** The solver's degree-of-freedom analysis also finds what nothing pins down. The kernel turns that into a list of measurements to take next, for example "Garderob depth not measured; laser from the north wall to the partition". This follows Q12 (see "Research").
    - **Phases.** The per-element `phase` tag (`existing|demolish|new`) is carried over unchanged.
 2. **Command API (the only way to change a plan).** A tagged `Command` enum, applied all-or-nothing, with a `dry_run` that returns a diff and diagnostics.
@@ -304,6 +304,16 @@ The user knows SketchUp and wants the same experience, tools and shortcuts on de
 
 **Later: scan pipeline**
 - Port or replace the scan and trace tools. A Python/OpenCV service that calls the kernel's API is an option because it is batch work.
+
+## Implementation specs for lower-cost models
+
+[`v2-agent-specs.md`](v2-agent-specs.md) turns Phases 0–1 into exact specs and task cards that a cheaper model can execute:
+- data types, the DSL grammar and the solver algorithm, step by step;
+- the diagnostic codes and their exact messages;
+- worked lgh 154 fixtures with the numbers each test must reach;
+- review rules, and which cards stay with a stronger model.
+
+Phases 2–4 are outlined there, with the MCP tool schemas fixed now.
 
 ## Effort and cost by phase (estimate, 2026-11-09)
 
