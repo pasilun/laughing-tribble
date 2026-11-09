@@ -1,0 +1,871 @@
+{
+  "id": "flerbostadshus-1900tal",
+  "name": "Flerbostadshus — 3 lägenheter (ur skanning)",
+  "walls": [
+    {
+      "vertices": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 13.3,
+          "y": 0
+        },
+        {
+          "x": 13.3,
+          "y": 17.93
+        },
+        {
+          "x": 0,
+          "y": 17.93
+        }
+      ],
+      "edges": [
+        {
+          "id": "wall-south",
+          "thickness": 0.25,
+          "height": 2.6
+        },
+        {
+          "id": "wall-east",
+          "thickness": 0.25,
+          "height": 2.6
+        },
+        {
+          "id": "wall-north",
+          "thickness": 0.25,
+          "height": 2.6
+        },
+        {
+          "id": "wall-west",
+          "thickness": 0.25,
+          "height": 2.6
+        }
+      ]
+    }
+  ],
+  "openings": [
+    {
+      "id": "win-n-3.92",
+      "wallId": "wall-north",
+      "type": "window",
+      "width": 1.2,
+      "height": 1.4,
+      "sillHeight": 0.9,
+      "offsetFromStart": 8.78
+    },
+    {
+      "id": "win-n-8.16",
+      "wallId": "wall-north",
+      "type": "window",
+      "width": 1.2,
+      "height": 1.4,
+      "sillHeight": 0.9,
+      "offsetFromStart": 4.54
+    },
+    {
+      "id": "win-n-11.74",
+      "wallId": "wall-north",
+      "type": "window",
+      "width": 1.2,
+      "height": 1.4,
+      "sillHeight": 0.9,
+      "offsetFromStart": 0.96
+    },
+    {
+      "id": "win-s-2.46",
+      "wallId": "wall-south",
+      "type": "window",
+      "width": 1.2,
+      "height": 1.4,
+      "sillHeight": 0.9,
+      "offsetFromStart": 1.86
+    },
+    {
+      "id": "win-s-5.8",
+      "wallId": "wall-south",
+      "type": "window",
+      "width": 1.2,
+      "height": 1.4,
+      "sillHeight": 0.9,
+      "offsetFromStart": 5.2
+    },
+    {
+      "id": "win-s-11.16",
+      "wallId": "wall-south",
+      "type": "window",
+      "width": 1.2,
+      "height": 1.4,
+      "sillHeight": 0.9,
+      "offsetFromStart": 10.56
+    },
+    {
+      "id": "win-w-16.7",
+      "wallId": "wall-west",
+      "type": "window",
+      "width": 1,
+      "height": 1.3,
+      "sillHeight": 0.95,
+      "offsetFromStart": 0.73
+    },
+    {
+      "id": "win-w-12",
+      "wallId": "wall-west",
+      "type": "window",
+      "width": 1,
+      "height": 1.3,
+      "sillHeight": 0.95,
+      "offsetFromStart": 5.43
+    },
+    {
+      "id": "p-wet-a-d0",
+      "partitionId": "p-wet-a",
+      "type": "door",
+      "width": 0.9,
+      "height": 2.1,
+      "sillHeight": 0,
+      "offsetFromStart": 1.83
+    },
+    {
+      "id": "p-rum-kok-b-d0",
+      "partitionId": "p-rum-kok-b",
+      "type": "door",
+      "width": 0.9,
+      "height": 2.1,
+      "sillHeight": 0,
+      "offsetFromStart": 4.83
+    },
+    {
+      "id": "p-kok-rum-c-d0",
+      "partitionId": "p-kok-rum-c",
+      "type": "door",
+      "width": 0.9,
+      "height": 2.1,
+      "sillHeight": 0,
+      "offsetFromStart": 1.39
+    },
+    {
+      "id": "p-bad-w-d0",
+      "partitionId": "p-bad-w",
+      "type": "door",
+      "width": 0.9,
+      "height": 2.1,
+      "sillHeight": 0,
+      "offsetFromStart": 1.96
+    },
+    {
+      "id": "p-mid-east-d0",
+      "partitionId": "p-mid-east",
+      "type": "door",
+      "width": 1,
+      "height": 2.1,
+      "sillHeight": 0,
+      "offsetFromStart": 5.48
+    },
+    {
+      "id": "p-hallb-s-d0",
+      "partitionId": "p-hallb-s",
+      "type": "door",
+      "width": 0.9,
+      "height": 2.1,
+      "sillHeight": 0,
+      "offsetFromStart": 1.74
+    }
+  ],
+  "rooms": [
+    {
+      "id": "r-kok-a",
+      "name": "Kök",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 15.52
+        },
+        {
+          "x": 1.95,
+          "y": 15.52
+        },
+        {
+          "x": 1.95,
+          "y": 17.93
+        },
+        {
+          "x": 0,
+          "y": 17.93
+        },
+        {
+          "x": 0,
+          "y": 15.52
+        }
+      ]
+    },
+    {
+      "id": "r-g-a",
+      "name": "Garderob",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 14.19
+        },
+        {
+          "x": 1.95,
+          "y": 14.19
+        },
+        {
+          "x": 1.95,
+          "y": 15.52
+        },
+        {
+          "x": 0,
+          "y": 15.52
+        },
+        {
+          "x": 0,
+          "y": 14.19
+        }
+      ]
+    },
+    {
+      "id": "r-wc-a",
+      "name": "WC",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 12.79
+        },
+        {
+          "x": 1.95,
+          "y": 12.79
+        },
+        {
+          "x": 1.95,
+          "y": 14.19
+        },
+        {
+          "x": 0,
+          "y": 14.19
+        },
+        {
+          "x": 0,
+          "y": 12.79
+        }
+      ]
+    },
+    {
+      "id": "r-tvatt-a",
+      "name": "Tvätt",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 11.22
+        },
+        {
+          "x": 1.95,
+          "y": 11.22
+        },
+        {
+          "x": 1.95,
+          "y": 12.79
+        },
+        {
+          "x": 0,
+          "y": 12.79
+        },
+        {
+          "x": 0,
+          "y": 11.22
+        }
+      ]
+    },
+    {
+      "id": "r-rum-a",
+      "name": "Rum",
+      "polygon": [
+        {
+          "x": 1.95,
+          "y": 11.22
+        },
+        {
+          "x": 5.9,
+          "y": 11.22
+        },
+        {
+          "x": 5.9,
+          "y": 17.93
+        },
+        {
+          "x": 1.95,
+          "y": 17.93
+        },
+        {
+          "x": 1.95,
+          "y": 11.22
+        }
+      ]
+    },
+    {
+      "id": "r-rum-b",
+      "name": "Rum",
+      "polygon": [
+        {
+          "x": 6.2,
+          "y": 11.22
+        },
+        {
+          "x": 10.2,
+          "y": 11.22
+        },
+        {
+          "x": 10.2,
+          "y": 17.93
+        },
+        {
+          "x": 6.2,
+          "y": 17.93
+        },
+        {
+          "x": 6.2,
+          "y": 11.22
+        }
+      ]
+    },
+    {
+      "id": "r-matpl-b",
+      "name": "Matplats",
+      "polygon": [
+        {
+          "x": 10.2,
+          "y": 14.68
+        },
+        {
+          "x": 13.3,
+          "y": 14.68
+        },
+        {
+          "x": 13.3,
+          "y": 17.93
+        },
+        {
+          "x": 10.2,
+          "y": 17.93
+        },
+        {
+          "x": 10.2,
+          "y": 14.68
+        }
+      ]
+    },
+    {
+      "id": "r-kok-b",
+      "name": "Kök",
+      "polygon": [
+        {
+          "x": 10.2,
+          "y": 11.22
+        },
+        {
+          "x": 13.3,
+          "y": 11.22
+        },
+        {
+          "x": 13.3,
+          "y": 14.68
+        },
+        {
+          "x": 10.2,
+          "y": 14.68
+        },
+        {
+          "x": 10.2,
+          "y": 11.22
+        }
+      ]
+    },
+    {
+      "id": "r-trappa",
+      "name": "Trappa",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 7.23
+        },
+        {
+          "x": 1.98,
+          "y": 7.23
+        },
+        {
+          "x": 1.98,
+          "y": 10.6
+        },
+        {
+          "x": 0,
+          "y": 10.6
+        },
+        {
+          "x": 0,
+          "y": 7.23
+        }
+      ]
+    },
+    {
+      "id": "r-hall-c",
+      "name": "Hall",
+      "polygon": [
+        {
+          "x": 1.98,
+          "y": 7.23
+        },
+        {
+          "x": 5.64,
+          "y": 7.23
+        },
+        {
+          "x": 5.64,
+          "y": 10.6
+        },
+        {
+          "x": 1.98,
+          "y": 10.6
+        },
+        {
+          "x": 1.98,
+          "y": 7.23
+        }
+      ]
+    },
+    {
+      "id": "r-bad",
+      "name": "Bad",
+      "polygon": [
+        {
+          "x": 5.76,
+          "y": 5.49
+        },
+        {
+          "x": 8.79,
+          "y": 5.49
+        },
+        {
+          "x": 8.79,
+          "y": 10.6
+        },
+        {
+          "x": 5.76,
+          "y": 10.6
+        },
+        {
+          "x": 5.76,
+          "y": 5.49
+        }
+      ]
+    },
+    {
+      "id": "r-hall-b",
+      "name": "Hall",
+      "polygon": [
+        {
+          "x": 8.91,
+          "y": 7.23
+        },
+        {
+          "x": 13.3,
+          "y": 7.23
+        },
+        {
+          "x": 13.3,
+          "y": 10.6
+        },
+        {
+          "x": 8.91,
+          "y": 10.6
+        },
+        {
+          "x": 8.91,
+          "y": 7.23
+        }
+      ]
+    },
+    {
+      "id": "r-kok-c",
+      "name": "Kök",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 3.55
+        },
+        {
+          "x": 3.66,
+          "y": 3.55
+        },
+        {
+          "x": 3.66,
+          "y": 6.8
+        },
+        {
+          "x": 0,
+          "y": 6.8
+        },
+        {
+          "x": 0,
+          "y": 3.55
+        }
+      ]
+    },
+    {
+      "id": "r-matpl-c",
+      "name": "Matplats",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 3.66,
+          "y": 0
+        },
+        {
+          "x": 3.66,
+          "y": 3.55
+        },
+        {
+          "x": 0,
+          "y": 3.55
+        },
+        {
+          "x": 0,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "id": "r-tvatt-c",
+      "name": "Tvätt",
+      "polygon": [
+        {
+          "x": 3.78,
+          "y": 5.49
+        },
+        {
+          "x": 5.64,
+          "y": 5.49
+        },
+        {
+          "x": 5.64,
+          "y": 7.23
+        },
+        {
+          "x": 3.78,
+          "y": 7.23
+        },
+        {
+          "x": 3.78,
+          "y": 5.49
+        }
+      ]
+    },
+    {
+      "id": "r-rum-c",
+      "name": "Rum",
+      "polygon": [
+        {
+          "x": 3.78,
+          "y": 0
+        },
+        {
+          "x": 8.79,
+          "y": 0
+        },
+        {
+          "x": 8.79,
+          "y": 5.49
+        },
+        {
+          "x": 3.78,
+          "y": 5.49
+        },
+        {
+          "x": 3.78,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "id": "r-rum-d",
+      "name": "Rum",
+      "polygon": [
+        {
+          "x": 8.91,
+          "y": 0
+        },
+        {
+          "x": 13.3,
+          "y": 0
+        },
+        {
+          "x": 13.3,
+          "y": 7.23
+        },
+        {
+          "x": 8.91,
+          "y": 7.23
+        },
+        {
+          "x": 8.91,
+          "y": 0
+        }
+      ]
+    }
+  ],
+  "roof": {
+    "type": "flat",
+    "pitch": 0,
+    "overhang": 0
+  },
+  "slabThickness": 0.25,
+  "partitions": [
+    {
+      "id": "p-wet-a",
+      "start": {
+        "x": 1.95,
+        "y": 11.22
+      },
+      "end": {
+        "x": 1.95,
+        "y": 17.93
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-party-ab",
+      "start": {
+        "x": 6.05,
+        "y": 10.8
+      },
+      "end": {
+        "x": 6.05,
+        "y": 17.93
+      },
+      "thickness": 0.3
+    },
+    {
+      "id": "p-rum-kok-b",
+      "start": {
+        "x": 10.2,
+        "y": 11.22
+      },
+      "end": {
+        "x": 10.2,
+        "y": 17.93
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-kok-rum-c",
+      "start": {
+        "x": 3.72,
+        "y": 0
+      },
+      "end": {
+        "x": 3.72,
+        "y": 7.23
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-cd",
+      "start": {
+        "x": 8.85,
+        "y": 0
+      },
+      "end": {
+        "x": 8.85,
+        "y": 9.06
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-bad-w",
+      "start": {
+        "x": 5.7,
+        "y": 5.49
+      },
+      "end": {
+        "x": 5.7,
+        "y": 10.6
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-mid-west",
+      "start": {
+        "x": 0,
+        "y": 10.7
+      },
+      "end": {
+        "x": 3.62,
+        "y": 10.7
+      },
+      "thickness": 0.2
+    },
+    {
+      "id": "p-mid-east",
+      "start": {
+        "x": 5.76,
+        "y": 10.7
+      },
+      "end": {
+        "x": 13.3,
+        "y": 10.7
+      },
+      "thickness": 0.2
+    },
+    {
+      "id": "p-g-a",
+      "start": {
+        "x": 0,
+        "y": 15.52
+      },
+      "end": {
+        "x": 1.95,
+        "y": 15.52
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-wc-a",
+      "start": {
+        "x": 0,
+        "y": 14.19
+      },
+      "end": {
+        "x": 1.95,
+        "y": 14.19
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-tvatt-a",
+      "start": {
+        "x": 0,
+        "y": 12.79
+      },
+      "end": {
+        "x": 1.95,
+        "y": 12.79
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-kok-matpl-c",
+      "start": {
+        "x": 0,
+        "y": 3.55
+      },
+      "end": {
+        "x": 3.66,
+        "y": 3.55
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-tvatt-rum-c",
+      "start": {
+        "x": 3.66,
+        "y": 5.49
+      },
+      "end": {
+        "x": 8.79,
+        "y": 5.49
+      },
+      "thickness": 0.12
+    },
+    {
+      "id": "p-hallb-s",
+      "start": {
+        "x": 8.91,
+        "y": 7.23
+      },
+      "end": {
+        "x": 13.3,
+        "y": 7.23
+      },
+      "thickness": 0.12
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "f-spis-a",
+      "type": "stove",
+      "x": 0.35,
+      "y": 16.9,
+      "width": 0.7,
+      "depth": 0.7
+    },
+    {
+      "id": "f-disk-a",
+      "type": "sink",
+      "x": 0.35,
+      "y": 13,
+      "width": 0.55,
+      "depth": 0.45
+    },
+    {
+      "id": "f-wc-a",
+      "type": "toilet",
+      "x": 0.95,
+      "y": 13.05,
+      "width": 0.5,
+      "depth": 0.6
+    },
+    {
+      "id": "f-spis-b",
+      "type": "stove",
+      "x": 12.35,
+      "y": 11.6,
+      "width": 0.7,
+      "depth": 0.7
+    },
+    {
+      "id": "f-spis-c",
+      "type": "stove",
+      "x": 1.5,
+      "y": 6,
+      "width": 0.7,
+      "depth": 0.7
+    },
+    {
+      "id": "f-wc-bad",
+      "type": "toilet",
+      "x": 6,
+      "y": 5.8,
+      "width": 0.5,
+      "depth": 0.6
+    },
+    {
+      "id": "f-disk-bad",
+      "type": "sink",
+      "x": 8.2,
+      "y": 9.6,
+      "width": 0.55,
+      "depth": 0.45
+    }
+  ],
+  "annotations": [
+    {
+      "text": "LGH 1 · 1 kv",
+      "x": 3.2,
+      "y": 16.9
+    },
+    {
+      "text": "LGH 2 · 2 kv",
+      "x": 7,
+      "y": 12.2
+    },
+    {
+      "text": "LGH 3 · 1 k",
+      "x": 4.6,
+      "y": 1.2
+    }
+  ]
+}

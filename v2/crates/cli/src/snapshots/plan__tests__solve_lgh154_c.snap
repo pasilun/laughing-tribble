@@ -7,6 +7,13 @@ expression: "solve_text(FIXTURE_C, \"lgh154-c\")"
     {
       "axis": "y",
       "code": "E003",
+      "refs": [
+        "Sovrum",
+        "Garderob",
+        "Hall",
+        "WC",
+        "Vardagsrum"
+      ],
       "residual_mm": -53,
       "severity": "error",
       "tolerance_mm": 52

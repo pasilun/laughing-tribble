@@ -13,14 +13,24 @@ expression: "solve_text(FIXTURE_A, \"lgh154-a\")"
   "diagnostics": [
     {
       "code": "W003",
+      "refs": [
+        "Sovrum.south",
+        "Vardagsrum.south"
+      ],
       "severity": "warning"
     },
     {
       "code": "I010",
+      "refs": [
+        "W:Garderob.east|Vardagsrum.west"
+      ],
       "severity": "info"
     },
     {
       "code": "I010",
+      "refs": [
+        "W:Sovrum.east|Vardagsrum.west"
+      ],
       "severity": "info"
     }
   ],

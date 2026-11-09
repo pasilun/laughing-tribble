@@ -163,6 +163,9 @@ fn diagnostic(diagnostic: &Diagnostic) -> Value {
             out.insert(to.to_string(), value.clone());
         }
     }
+    if !diagnostic.refs.is_empty() {
+        out.insert("refs".to_string(), json!(diagnostic.refs));
+    }
     if diagnostic.code == Code::W001 {
         let letter = out
             .get("axis")
@@ -240,5 +243,44 @@ mod tests {
         // Only C is loose on x, so exactly one W001 is on x.
         let on_x = w001.iter().filter(|d| d["axis"] == "x").count();
         assert_eq!(on_x, 1, "{value:#}");
+    }
+
+    /// Fixture A's I010 objects carry the expected file's wall-id refs (D22),
+    /// and the W003 object carries its two faces.
+    #[test]
+    fn fixture_a_i010_refs_are_wall_ids_and_w003_has_its_faces() {
+        let text = include_str!("../../../fixtures/lgh154-a.plan");
+        let expected: Value =
+            serde_json::from_str(include_str!("../../../fixtures/lgh154-a.expected.json"))
+                .expect("expected JSON parses");
+        let plan = parse(text).expect("parse");
+        let (resolved, diagnostics) = resolve(&plan);
+        let value = solve_json("lgh154-a", resolved.as_ref(), &diagnostics);
+
+        let diags = value["diagnostics"].as_array().expect("diagnostics array");
+        let i010: Vec<&Value> = diags.iter().filter(|d| d["code"] == "I010").collect();
+        let expected_i010: Vec<&Value> = expected["diagnostics"]
+            .as_array()
+            .expect("expected diagnostics array")
+            .iter()
+            .filter(|d| d["code"] == "I010")
+            .collect();
+        assert_eq!(i010.len(), expected_i010.len(), "{value:#}");
+        for (got, want) in i010.iter().zip(&expected_i010) {
+            assert_eq!(
+                got["refs"].as_array().expect("refs array"),
+                want["refs"].as_array().expect("expected refs array"),
+                "{value:#}"
+            );
+        }
+        let w003 = diags
+            .iter()
+            .find(|d| d["code"] == "W003")
+            .expect("fixture A has a W003");
+        assert_eq!(
+            w003["refs"],
+            serde_json::json!(["Sovrum.south", "Vardagsrum.south"]),
+            "{value:#}"
+        );
     }
 }

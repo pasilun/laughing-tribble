@@ -101,7 +101,7 @@ fn step(walls: &[BuiltWall], a: &BuiltWall, b: &BuiltWall) -> Option<Diagnostic>
             ],
         ),
         span: None,
-        refs: vec![ra, rb],
+        refs: vec![a_label.clone(), b_label.clone()],
         data: json!({
             "side": side_name,
             "a": a_label,
@@ -119,10 +119,7 @@ fn derived_walls(walls: &[BuiltWall]) -> Vec<Diagnostic> {
         .iter()
         .filter(|w| w.kind == SegmentKind::Interior && w.derived)
         .map(|w| {
-            let mut refs = vec![w.face.room.as_str().to_string()];
-            if let Some(other) = &w.other {
-                refs.push(other.room.as_str().to_string());
-            }
+            let refs = vec![w.id.clone()];
             Diagnostic {
                 code: Code::I010,
                 severity: Severity::Info,
@@ -242,7 +239,7 @@ mod tests {
             ]
         );
         assert!(diags.iter().all(|d| d.span.is_none()));
-        assert_eq!(diags[0].refs, ["Sovrum", "Vardagsrum"]);
+        assert_eq!(diags[0].refs, ["Sovrum.south", "Vardagsrum.south"]);
         assert_eq!(diags[0].data["d"], 53);
     }
 
