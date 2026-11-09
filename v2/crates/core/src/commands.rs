@@ -6,7 +6,9 @@
 //! are skipped, and so are comments the DSL allows.
 //!
 //! Each line is parsed on its own, against the rooms the plan has at that point
-//! (so a patch can add a room and then use it). The plan given to [`apply`] is
+//! (so a patch can add a room and then use it). An indented relation or align
+//! belongs to the last `room` line of the patch, as in the file parser (§7.1).
+//! The plan given to [`apply`] is
 //! never changed. The result is all-or-nothing: if any line fails to parse or
 //! resolving the new plan gives an Error, `ok` is false and `plan` and
 //! `resolved` are `None`.
@@ -100,6 +102,8 @@ pub fn apply(plan: &Plan, patch: &str, dry_run: bool) -> ApplyResult {
     let mut working = plan.clone();
     let mut diagnostics = Vec::new();
     let mut diff = Vec::new();
+    // The last `room` line set by the patch so far. An indented line belongs to it (§7.1).
+    let mut last_room: Option<RoomName> = None;
 
     for (index, raw) in patch.lines().enumerate() {
         let line = u32::try_from(index + 1).unwrap_or(u32::MAX);
@@ -107,12 +111,23 @@ pub fn apply(plan: &Plan, patch: &str, dry_run: bool) -> ApplyResult {
         if text.is_empty() {
             continue;
         }
+        let indent = &raw[..raw.len() - raw.trim_start().len()];
         let (remove, body) = match text.strip_prefix('-') {
             Some(rest) if rest.starts_with(char::is_whitespace) => (true, rest.trim_start()),
             _ => (false, text),
         };
-        match parse_statement(&working, body, line) {
+        let source = match anchored(body, indent, last_room.as_ref(), line) {
+            Ok(source) => source,
+            Err(diagnostic) => {
+                diagnostics.push(diagnostic);
+                continue;
+            }
+        };
+        match parse_statement(&working, &source, line) {
             Ok(statement) => {
+                if let (false, Statement::Room(room)) = (remove, &statement) {
+                    last_room = Some(room.name.clone());
+                }
                 let command = if remove {
                     Command::Remove(statement)
                 } else {
@@ -329,9 +344,8 @@ fn parse_statement(working: &Plan, body: &str, line: u32) -> Result<Statement, D
 
     // The statement goes on its own patch line, with blank lines before it, so
     // parser messages name the right line. The room context follows it.
-    let padding = "\n".repeat(usize::try_from(line.saturating_sub(1)).unwrap_or(0));
     let context_text = print(&context);
-    let source = format!("{padding}{body}\n{context_text}");
+    let source = format!("{}{body}\n{context_text}", padding(line));
     let parsed = parse(&source)?;
 
     let mut found = Vec::new();
@@ -349,6 +363,50 @@ fn parse_statement(working: &Plan, body: &str, line: u32) -> Result<Statement, D
         return Err(not_a_statement(body, line));
     }
     found.pop().ok_or_else(|| not_a_statement(body, line))
+}
+
+/// Blank lines that put the next text on patch line `line`, so parser messages
+/// name the right line.
+fn padding(line: u32) -> String {
+    "\n".repeat(usize::try_from(line.saturating_sub(1)).unwrap_or(0))
+}
+
+/// The text the parser reads for a patch line body (§7.1).
+///
+/// An indented relation without a subject, or an indented align, belongs to the
+/// last `room` line of the patch. The room is written in as the subject, or as
+/// the first room of the align, which gives the statement the file parser gives
+/// for the same text. With no room before it, the file parser's E006 is returned.
+/// Other lines are returned as they are.
+fn anchored(
+    body: &str,
+    indent: &str,
+    room: Option<&RoomName>,
+    line: u32,
+) -> Result<String, Diagnostic> {
+    let words: Vec<&str> = body.split_whitespace().collect();
+    let first = words.first().copied().unwrap_or_default();
+    let belongs_to_room = !indent.is_empty()
+        && (first == "align" || matches!(first, "east_of" | "west_of" | "south_of" | "north_of"));
+    if !belongs_to_room {
+        return Ok(body.to_string());
+    }
+    let Some(room) = room else {
+        // The parser has no room to give this line, so it gives its E006.
+        let source = format!("{}{indent}{body}\n", padding(line));
+        return match parse(&source) {
+            Err(diagnostic) => Err(diagnostic),
+            Ok(_) => Err(not_a_statement(body, line)),
+        };
+    };
+    match words.get(1) {
+        Some(side) if first == "align" => {
+            let rest: Vec<&str> = words.iter().skip(2).copied().collect();
+            Ok(format!("align {side} {room} {}", rest.join(" ")))
+        }
+        _ if first == "align" => Ok(body.to_string()),
+        _ => Ok(format!("{room} {body}")),
+    }
 }
 
 /// E006 for a patch line that is not a room, relation, align, measure, opening or wall.
@@ -591,6 +649,65 @@ mod tests {
         );
         let span = result.diagnostics.first().and_then(|d| d.span);
         assert_eq!(span.map(|s| s.line), Some(2));
+        Ok(())
+    }
+
+    #[test]
+    fn indented_align_after_a_room_line_belongs_to_that_room()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(FIXTURE_A);
+        let patch = "room WC 2370 x 990 source laser\n  align north Hall";
+        let result = apply(&plan, patch, false);
+        assert!(result.ok, "{:?}", result.diagnostics);
+
+        // The file parser reads the same text as an align of WC and Hall.
+        let file = parse("room Hall 1100 x ?\nroom WC 2370 x 990 source laser\n  align north Hall")
+            .expect("file parses");
+        let wc = RoomName::new("WC")?;
+        let hall = RoomName::new("Hall")?;
+        let align = Relation::Align {
+            side: Side::North,
+            rooms: vec![wc, hall],
+        };
+        assert_eq!(file.relations, vec![align.clone()]);
+
+        let new_plan = result.plan.ok_or("ok result has no plan")?;
+        assert!(new_plan.relations.contains(&align));
+        assert_eq!(
+            new_plan, plan,
+            "the patch restates fixture A's WC lines, so the plan is unchanged"
+        );
+        let ops: Vec<ChangeOp> = result.diff.iter().map(|c| c.op).collect();
+        assert_eq!(ops, vec![ChangeOp::Replaced, ChangeOp::Replaced]);
+        Ok(())
+    }
+
+    #[test]
+    fn indented_line_with_no_room_before_it_is_e006() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(FIXTURE_A);
+        let patch = "  align north Hall";
+        let result = apply(&plan, patch, false);
+        assert!(!result.ok);
+        assert!(result.plan.is_none());
+        assert!(result.resolved.is_none());
+        assert_eq!(
+            count(&result.diagnostics, Code::E006),
+            1,
+            "{:?}",
+            result.diagnostics
+        );
+
+        // The text is the file parser's E006 for the same input.
+        let file_message = match parse(&format!("{patch}\n")) {
+            Err(diagnostic) => diagnostic.message,
+            Ok(_) => return Err("the file parser accepts an align with no room".into()),
+        };
+        assert_eq!(
+            file_message,
+            "Line 1, column 3: expected a room name, found \"align\"."
+        );
+        let message = result.diagnostics.first().map(|d| d.message.as_str());
+        assert_eq!(message, Some(file_message.as_str()));
         Ok(())
     }
 }
