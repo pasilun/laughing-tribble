@@ -513,13 +513,14 @@ pub struct Diagnostic {
 | I010 | Info | Wall thickness derived, not stated | `Wall {id} is {t} mm, derived from the room positions.` |
 | E011 | Error | Unknown element id (render region) | `Unknown element "{id}".{ Did you mean "{suggestion}"?} Use a room name, or a wall or opening id from get.` |
 | E012 | Error | Render failed | `Render failed: {reason}.` |
+| E013 | Error | Door hinge not along its face | `Hinge "{found}" on {face} must be {a} or {b}.` (a and b are west and east on a north or south face, north and south on an east or west face) |
 | E020 | Error | Unknown plan (MCP) | `Unknown plan "{id}". Create it with apply.` |
 | E021 | Error | Invalid plan id (MCP) | `Invalid plan_id "{id}": use 1 to 64 letters, digits, "-" or "_".` |
 | E022 | Error | Render view not available yet | `View "{view}" is not available yet; use "plan" or "labels".` |
 | E023 | Error | Plan file read or write failed (MCP) | `Could not {action} plan "{id}": {reason}.` |
 | I020 | Info | Measurement suggested (not in `check` output; `plan suggest` and MCP next steps only) | `{what} {value} mm has source {source} (±{tol} mm); measure {from} to {to} with the laser.` |
 
-Codes E011–E023 and I020 were added by the spec run of 2026-11-09 (§15 D10, D13, D17, D8).
+Codes E011–E023 (E013 added in D19) and I020 were added by the spec run of 2026-11-09 (§15 D10, D13, D17, D8).
 
 ---
 
@@ -806,3 +807,8 @@ Decisions taken by the spec runs where the sections above left a choice open. Ea
 - **D17. `render` in week two** implements views `plan` and `labels`; the other four are accepted by the schema and answer E022. A plan that does not resolve is not rendered (tool error with its diagnostics). The result is an image block plus the metadata as text and structured content. Card W2-23.
 - **D18. Order of work.** Week-two cards depend on the week-one cards whose outputs they use, and `v2/RUNNER.md` still applies: no week-two card starts before the week-one checkpoints (W1-R1…R4) are done. The week-one cards W1-21…24 got an interface paragraph so week two can name their functions.
 
+**Maintainer session 2026-11-09 (unblocking W1-19 and answering open items of build run 1356):**
+
+- **D19. Hinge check message.** The hinge check of §9.3 has its own code, `E013`, with the template in §8. The E004 template stays as it is. Card W1-19 adds the `Code::E013` variant, its template and its test (the card authorises the edit to `diagnostics.rs`).
+- **D20. E004 length argument.** `{length}` in E004 is the length of the room face the opening is on, never the length of a wall segment, even when the opening crosses two segments.
+- **D21. Wall suggestion in E003.** The "change the wall" suggestion uses `wall + residual` (signed), so a positive residual makes the wall thicker and a negative one thinner. This is what the code does; §5.2's `wall − |residual|` described only the negative case and is superseded. The suggestion is made only when the new thickness is at least 40 mm.
