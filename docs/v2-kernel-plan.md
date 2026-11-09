@@ -315,6 +315,12 @@ The user knows SketchUp and wants the same experience, tools and shortcuts on de
 
 Phases 2–4 are outlined there, with the MCP tool schemas fixed now.
 
+[`v2-week1-pro.md`](v2-week1-pro.md) is a one-week plan for a Claude Pro subscription:
+- Haiku implements and Opus (or Sonnet) reviews at four checkpoints.
+- It includes the Claude Code setup files.
+- Week one delivers a command-line measurement checker (solve, conflicts, missing measurements, SVG).
+- At that pace, the rest takes about 10 weeks.
+
 ## Effort and cost by phase (estimate, 2026-11-09)
 
 **Assumptions:**
