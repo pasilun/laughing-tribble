@@ -2,7 +2,9 @@
 
 pub mod lexer;
 pub mod parser;
+pub mod printer;
 pub mod resolve;
 
 pub use lexer::{Token, TokenKind, lex};
 pub use parser::parse;
+pub use printer::print;
