@@ -4,3 +4,12 @@
 //! y grows south.
 
 #![forbid(unsafe_code)]
+
+pub mod intent;
+pub mod units;
+
+pub use intent::{
+    FaceRef, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room, RoomName,
+    RoomNameError, Side, WallOverride,
+};
+pub use units::{Mm, Quantity, Source};
