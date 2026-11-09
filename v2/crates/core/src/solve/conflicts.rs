@@ -34,18 +34,14 @@ pub fn conflict_diagnostic(check: &CycleCheck, edges: &[Edge]) -> Option<Diagnos
         .map(|(c, e)| i64::from(c.sign) * e.value)
         .sum();
 
+    let (chain_b_label, measured) = stated_terms(stated);
     let mut args: Vec<(&str, String)> = vec![
         ("axis", axis_text(check.axis).to_string()),
         ("residual", check.residual.abs().to_string()),
         ("chain_a", chain_text(&chain_a)),
         ("implied", implied.to_string()),
-        ("from", face_text(&stated.from)),
-        ("to", face_text(&stated.to)),
-        ("measured", stated.value.to_string()),
-        (
-            "measured_source",
-            stated.source.map_or("unknown", source_word).to_string(),
-        ),
+        ("chain_b", chain_b_label),
+        ("measured", measured),
         ("tolerance", check.tolerance.to_string()),
     ];
     if let Some((from, to)) = wall_suggestion(&chain_a, check.residual) {
@@ -167,6 +163,34 @@ fn chain_text(chain: &[(&ChainEdge, &Edge)]) -> String {
     text
 }
 
+/// The stated edge for the third line of E003, as `(label, measured)`.
+///
+/// A `measure` edge reads `measure {from} → {to}` and `{value} ({source})`, with
+/// `unknown` when the source is missing, so the line is §6.3's measure line.
+/// Any other edge reads as its label without the value, and `measured` is its
+/// value with its source in brackets when it has one.
+fn stated_terms(edge: &Edge) -> (String, String) {
+    if edge.origin.starts_with("measure ") {
+        let label = format!(
+            "measure {} → {}",
+            face_text(&edge.from),
+            face_text(&edge.to)
+        );
+        let source = edge.source.map_or("unknown", source_word);
+        return (label, format!("{} ({source})", edge.value));
+    }
+    let label = edge
+        .origin
+        .strip_prefix("room ")
+        .unwrap_or(&edge.origin)
+        .to_string();
+    let measured = edge.source.map_or_else(
+        || edge.value.to_string(),
+        |s| format!("{} ({})", edge.value, source_word(s)),
+    );
+    (label, measured)
+}
+
 /// One term of a chain: the label, the value and the source in brackets.
 fn term(edge: &Edge) -> String {
     let label = if is_wall(edge) {
@@ -263,6 +287,7 @@ mod tests {
     use crate::solve::tree::assign_coords;
 
     const FIXTURE_B: &str = include_str!("../../../../fixtures/lgh154-b.plan");
+    const FIXTURE_C: &str = include_str!("../../../../fixtures/lgh154-c.plan");
 
     /// The cycle checks of fixture B on the north–south axis, with their edges.
     fn fixture_b_checks() -> (Vec<Edge>, Vec<CycleCheck>) {
@@ -295,6 +320,24 @@ mod tests {
         assert_eq!(diagnostic.data["tolerance"], 19);
         assert_eq!(diagnostic.data["chain_a"].as_array().map(Vec::len), Some(3));
         assert_eq!(diagnostic.data["chain_b"].as_array().map(Vec::len), Some(1));
+    }
+
+    #[test]
+    fn fixture_c_e003_third_line_names_the_align_edge() {
+        let plan = parse(FIXTURE_C).expect("fixture C parses");
+        let (edge_list, _) = edges(&plan);
+        let (comps, _) = components(&edge_list, &plan, Axis::Y);
+        let (coords, tree) = assign_coords(&edge_list, &comps, Axis::Y);
+        let found = check_cycles(&edge_list, &coords, &tree, Axis::Y);
+        let check = found
+            .iter()
+            .find(|c| c.conflict)
+            .expect("fixture C conflicts");
+        let diagnostic = conflict_diagnostic(check, &edge_list).expect("E003");
+        assert_eq!(
+            diagnostic.message.lines().nth(2),
+            Some("  align south Sovrum Vardagsrum = 0")
+        );
     }
 
     #[test]

@@ -135,7 +135,7 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
         ),
         Code::E003 => {
             let base = fill(
-                "Conflict on the {axis} axis: {residual} mm.\n  {chain_a} = {implied}\n  measure {from} → {to} = {measured} ({measured_source})\n  Allowed difference: {tolerance} mm.\n  Fix one of: mark a measurement as reference, correct a value",
+                "Conflict on the {axis} axis: {residual} mm.\n  {chain_a} = {implied}\n  {chain_b} = {measured}\n  Allowed difference: {tolerance} mm.\n  Fix one of: mark a measurement as reference, correct a value",
                 args,
             );
             // The wall suggestion is only offered when the caller gives a wall (week-one §5.2).
@@ -275,10 +275,8 @@ mod tests {
                 "Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser)",
             ),
             arg("implied", "4540"),
-            arg("from", "Garderob.north"),
-            arg("to", "Sovrum.south"),
-            arg("measured", "4660"),
-            arg("measured_source", "laser"),
+            arg("chain_b", "measure Garderob.north → Sovrum.south"),
+            arg("measured", "4660 (laser)"),
             arg("tolerance", "10"),
             arg("wall_from", "90"),
             arg("wall_to", "40"),
@@ -306,10 +304,8 @@ mod tests {
                     "Kitchen width 3000 (laser) + wall 90 (assumed) + Hall width 2000 (tape)",
                 ),
                 arg("implied", "5090"),
-                arg("from", "Kitchen.west"),
-                arg("to", "Hall.east"),
-                arg("measured", "5110"),
-                arg("measured_source", "tape"),
+                arg("chain_b", "measure Kitchen.west → Hall.east"),
+                arg("measured", "5110 (tape)"),
                 arg("tolerance", "10"),
                 arg("wall_from", "90"),
                 arg("wall_to", "40"),
