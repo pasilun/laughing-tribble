@@ -44,9 +44,18 @@ pub fn conflict_diagnostic(check: &CycleCheck, edges: &[Edge]) -> Option<Diagnos
         ("measured", measured),
         ("tolerance", check.tolerance.to_string()),
     ];
-    if let Some((from, to)) = wall_suggestion(&chain_a, check.residual) {
+    let wall = wall_suggestion(&chain_a, check.residual);
+    if let Some((from, to)) = wall {
         args.push(("wall_from", from.to_string()));
         args.push(("wall_to", to.to_string()));
+    }
+
+    let mut suggestions = vec![
+        json!("mark a measurement as reference"),
+        json!("correct a value"),
+    ];
+    if let Some((from, to)) = wall {
+        suggestions.push(json!({"change_wall": {"from": from, "to": to}}));
     }
 
     let mut refs: Vec<String> = Vec::new();
@@ -71,6 +80,7 @@ pub fn conflict_diagnostic(check: &CycleCheck, edges: &[Edge]) -> Option<Diagnos
             "tolerance": check.tolerance,
             "chain_a": chain_data(&chain_a),
             "chain_b": chain_data(&chain_b),
+            "suggestions": suggestions,
         }),
     })
 }
@@ -320,6 +330,24 @@ mod tests {
         assert_eq!(diagnostic.data["tolerance"], 19);
         assert_eq!(diagnostic.data["chain_a"].as_array().map(Vec::len), Some(3));
         assert_eq!(diagnostic.data["chain_b"].as_array().map(Vec::len), Some(1));
+    }
+
+    #[test]
+    fn fixture_b_e003_suggestions_array() {
+        let (edge_list, found) = fixture_b_checks();
+        let check = found
+            .iter()
+            .find(|c| c.conflict)
+            .expect("fixture B conflicts");
+        let diagnostic = conflict_diagnostic(check, &edge_list).expect("E003");
+        assert_eq!(
+            diagnostic.data["suggestions"],
+            serde_json::json!([
+                "mark a measurement as reference",
+                "correct a value",
+                {"change_wall": {"from": 90, "to": 40}}
+            ])
+        );
     }
 
     #[test]
