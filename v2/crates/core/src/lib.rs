@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod build;
 pub mod diagnostics;
 pub mod dsl;
 pub mod intent;
