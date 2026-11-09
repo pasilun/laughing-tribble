@@ -106,6 +106,7 @@ version = "0.1.0"
 dependencies = [
  "insta",
  "plan-core",
+ "plan-render",
 ]
 
 [[package]]
@@ -115,6 +116,13 @@ dependencies = [
  "serde",
  "serde_json",
  "strsim",
+]
+
+[[package]]
+name = "plan-render"
+version = "0.1.0"
+dependencies = [
+ "plan-core",
 ]
 
 [[package]]

@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 plan-core = { path = "../core" }
+plan-render = { path = "../render" }
 
 [dev-dependencies]
 insta = "1.49.0"

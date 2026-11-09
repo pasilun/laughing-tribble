@@ -4,6 +4,8 @@
 //! - `plan check <file>`: print the diagnostics, one per line; exit 1 if any is an Error.
 //! - `plan solve --json <file>`: print the §7.7 solve value as pretty JSON.
 //! - `plan fmt <file> [--write]`: print the canonical DSL, or rewrite the file.
+//! - `plan svg <file> [--out path]`: print the SVG drawing (or write it to `path`);
+//!   if the plan does not resolve, print the diagnostics and exit 1.
 //! - `plan --version`.
 //!
 //! Exit status: 0 on success, 1 when the plan has an Error (or does not parse),
@@ -21,6 +23,7 @@ const USAGE: &str = "usage:
   plan check <file>
   plan solve --json <file>
   plan fmt <file> [--write]
+  plan svg <file> [--out path]
   plan --version";
 
 fn main() -> ExitCode {
@@ -42,6 +45,8 @@ fn run(words: &[&str]) -> Result<ExitCode, String> {
         ["solve", "--json", file] => solve(file),
         ["fmt", file] => fmt(file, false),
         ["fmt", file, "--write"] => fmt(file, true),
+        ["svg", file] => svg(file, None),
+        ["svg", file, "--out", out] => svg(file, Some(out)),
         ["--version"] => {
             println!("plan {}", env!("CARGO_PKG_VERSION"));
             Ok(ExitCode::SUCCESS)
@@ -86,6 +91,27 @@ fn fmt(file: &str, write: bool) -> Result<ExitCode, String> {
         fs::write(file, text).map_err(|error| format!("cannot write {file}: {error}"))?;
     } else {
         print!("{text}");
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `plan svg`: draw the resolved plan, to stdout or to `out`. An unresolved plan
+/// prints its diagnostics and no image, and exits 1.
+fn svg(file: &str, out: Option<&str>) -> Result<ExitCode, String> {
+    let (_, src) = read_source(file)?;
+    let (resolved, diagnostics) = solve_source(&src);
+    let Some(resolved) = resolved else {
+        for diagnostic in &diagnostics {
+            println!("{}", describe(diagnostic));
+        }
+        return Ok(ExitCode::from(1));
+    };
+    let text = plan_render::plan_svg(&resolved);
+    match out {
+        Some(path) => {
+            fs::write(path, text).map_err(|error| format!("cannot write {path}: {error}"))?;
+        }
+        None => print!("{text}"),
     }
     Ok(ExitCode::SUCCESS)
 }
