@@ -135,7 +135,7 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
         ),
         Code::E003 => {
             let base = fill(
-                "E003 Conflict on the {axis} axis: {residual} mm.\n  {chain_a} = {implied}\n  measure {from} → {to} = {measured} ({measured_source})\n  Allowed difference: {tolerance} mm.\n  Fix one of: mark a measurement as reference, correct a value",
+                "Conflict on the {axis} axis: {residual} mm.\n  {chain_a} = {implied}\n  measure {from} → {to} = {measured} ({measured_source})\n  Allowed difference: {tolerance} mm.\n  Fix one of: mark a measurement as reference, correct a value",
                 args,
             );
             // The wall suggestion is only offered when the caller gives a wall (week-one §5.2).
@@ -166,12 +166,17 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
         Code::W001 => {
             if lookup(args, "unknown_depth").is_some() {
                 fill(
-                    "W001 {room} depth unknown; measure {room}.north to {room}.south",
+                    "{room} depth unknown; measure {room}.north to {room}.south",
+                    args,
+                )
+            } else if lookup(args, "unknown_width").is_some() {
+                fill(
+                    "{room} width unknown; measure {room}.west to {room}.east",
                     args,
                 )
             } else {
                 fill(
-                    r#"W001 Not tied {axis}: {room}. Measure from {from} to {to}, or add "{room} {relation} {of} gap {gap}"."#,
+                    r#"Not tied {axis}: {room}. Measure from {from} to {to}, or add "{room} {relation} {of} gap {gap}"."#,
                     args,
                 )
             }
@@ -285,7 +290,7 @@ mod tests {
         let text = message(Code::E003, &e003_args());
         assert_eq!(
             text,
-            "E003 Conflict on the north–south axis: 120 mm.\n  Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser) = 4540\n  measure Garderob.north → Sovrum.south = 4660 (laser)\n  Allowed difference: 10 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
+            "Conflict on the north–south axis: 120 mm.\n  Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser) = 4540\n  measure Garderob.north → Sovrum.south = 4660 (laser)\n  Allowed difference: 10 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
         );
     }
 
@@ -312,7 +317,7 @@ mod tests {
         );
         assert_eq!(
             text,
-            "E003 Conflict on the east–west axis: 20 mm.\n  Kitchen width 3000 (laser) + wall 90 (assumed) + Hall width 2000 (tape) = 5090\n  measure Kitchen.west → Hall.east = 5110 (tape)\n  Allowed difference: 10 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
+            "Conflict on the east–west axis: 20 mm.\n  Kitchen width 3000 (laser) + wall 90 (assumed) + Hall width 2000 (tape) = 5090\n  measure Kitchen.west → Hall.east = 5110 (tape)\n  Allowed difference: 10 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
         );
     }
 
@@ -320,9 +325,7 @@ mod tests {
     fn e003_missing_args_stay_visible() {
         let text = message(Code::E003, &[arg("residual", "120")]);
         assert!(
-            text.starts_with(
-                "E003 Conflict on the {axis} axis: 120 mm.\n  {chain_a} = {implied}\n"
-            )
+            text.starts_with("Conflict on the {axis} axis: 120 mm.\n  {chain_a} = {implied}\n")
         );
     }
 
@@ -409,7 +412,7 @@ mod tests {
         );
         assert_eq!(
             text,
-            r#"W001 Not tied north–south: Kitchen. Measure from Kitchen north to Kitchen south, or add "Kitchen east of Hall gap 90"."#
+            r#"Not tied north–south: Kitchen. Measure from Kitchen north to Kitchen south, or add "Kitchen east of Hall gap 90"."#
         );
     }
 
@@ -421,8 +424,14 @@ mod tests {
         );
         assert_eq!(
             text,
-            "W001 Kitchen depth unknown; measure Kitchen.north to Kitchen.south"
+            "Kitchen depth unknown; measure Kitchen.north to Kitchen.south"
         );
+    }
+
+    #[test]
+    fn w001_width_unknown_wording() {
+        let text = message(Code::W001, &[arg("room", "Hall"), arg("unknown_width", "")]);
+        assert_eq!(text, "Hall width unknown; measure Hall.west to Hall.east");
     }
 
     #[test]

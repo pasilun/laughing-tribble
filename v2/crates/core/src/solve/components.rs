@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(w001.refs, vec!["C".to_string()]);
         assert_eq!(
             w001.message,
-            r#"W001 Not tied east–west: C. Measure from {from} to {to}, or add "C {relation} {of} gap {gap}"."#
+            r#"Not tied east–west: C. Measure from {from} to {to}, or add "C {relation} {of} gap {gap}"."#
         );
     }
 
@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(diagnostics[0].refs, vec!["B".to_string()]);
         assert_eq!(
             diagnostics[0].message,
-            "W001 B depth unknown; measure B.north to B.south"
+            "B depth unknown; measure B.north to B.south"
         );
     }
 }

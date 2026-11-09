@@ -287,7 +287,7 @@ mod tests {
         assert_eq!(diagnostic.span, None);
         assert_eq!(
             diagnostic.message,
-            "E003 Conflict on the north–south axis: 50 mm.\n  Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser) = 4540\n  measure Garderob.north → Sovrum.south = 4490 (laser)\n  Allowed difference: 19 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
+            "Conflict on the north–south axis: 50 mm.\n  Garderob depth 2360 (laser) + wall 90 (assumed) + Sovrum depth 2090 (laser) = 4540\n  measure Garderob.north → Sovrum.south = 4490 (laser)\n  Allowed difference: 19 mm.\n  Fix one of: mark a measurement as reference, correct a value, or change the wall (90 → 40 would fit)."
         );
         assert_eq!(diagnostic.refs, vec!["Garderob", "Sovrum"]);
         assert_eq!(diagnostic.data["axis"], "y");
