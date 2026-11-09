@@ -8,9 +8,11 @@
 pub mod diagnose;
 pub mod faces;
 pub mod merge;
+pub mod openings;
 pub mod walls;
 
 pub use diagnose::diagnose;
 pub use faces::{Coords, FacingPair, facing_faces};
 pub use merge::{BuiltWall, built_walls};
+pub use openings::{PlacedOpening, place_openings};
 pub use walls::{SegmentKind, WallSegment, wall_segments};
