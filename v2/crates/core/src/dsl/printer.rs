@@ -9,7 +9,9 @@
 //!   the order east_of, west_of, south_of, north_of, then `align`. An `align`
 //!   is printed under the first room it lists, as `align SIDE` followed by the
 //!   other rooms. The parser puts that room first again, so the list comes back
-//!   the same.
+//!   the same. An align that lists only one room is printed at top level as
+//!   `align SIDE ROOM`, after the rooms, since an indented align needs a room
+//!   after the side.
 //! - A wall gap is always a number (`gap 90`), never a plain `gap`, so the
 //!   text does not depend on `default_wall`.
 //! - A `source` clause is left out when the source is `assumed`, and `tol` when
@@ -50,6 +52,7 @@ pub fn print(plan: &Plan) -> String {
             rooms.extend(relation_lines(plan, name));
         }
     }
+    rooms.extend(lone_align_lines(plan));
 
     let statements = statement_lines(plan);
 
@@ -130,6 +133,7 @@ fn relation_lines(plan: &Plan, room: &RoomName) -> Vec<String> {
         if let Relation::Align { side, rooms } = relation
             && let Some((first, rest)) = rooms.split_first()
             && first == room
+            && !rest.is_empty()
         {
             let mut line = format!("  align {}", side_name(*side));
             for other in rest {
@@ -140,6 +144,22 @@ fn relation_lines(plan: &Plan, room: &RoomName) -> Vec<String> {
         }
     }
     lines
+}
+
+/// The `align SIDE ROOM` lines for aligns that name one room. An indented
+/// align needs at least one more room after the side, so these are printed at
+/// top level, after the rooms.
+fn lone_align_lines(plan: &Plan) -> Vec<String> {
+    plan.relations
+        .iter()
+        .filter_map(|relation| match relation {
+            Relation::Align { side, rooms } => match rooms.as_slice() {
+                [room] => Some(format!("align {} {}", side_name(*side), room.as_str())),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
 }
 
 /// A directional relation as (subject, keyword, reference room, gap).
@@ -454,6 +474,15 @@ passage Garderob.east at 0 width 680 source estimated
             assumed + 3,
         );
         assert_eq!(print_of(&src), expected);
+    }
+
+    #[test]
+    fn top_level_align_with_one_room_round_trips() {
+        let src = "room A 1000 x 2000\nalign north A\n";
+        let plan = parse(src).expect("source parses");
+        assert!(print_of(src).lines().any(|line| line == "align north A"));
+        assert_round_trip(&plan);
+        assert_eq!(parse(&print(&plan)).expect("canonical text parses"), plan);
     }
 
     #[test]
