@@ -2,7 +2,9 @@
 
 Addendum to [`v2-week1-pro.md`](v2-week1-pro.md), written 2026-11-09.
 
-**Goal:** use each 5-hour Pro window while you are away. A scheduled Claude Code session starts at the beginning of a window, works through task cards on its own (Haiku builds, Opus reviews), opens a pull request, and stops. You spend your time reviewing and merging, not steering.
+**Goal:** use each 5-hour Pro window while you are away. A scheduled Claude Code session starts at the beginning of a window, works through task cards on its own (Haiku builds, Opus reviews), pushes to the `auto/v2-build` branch, and stops.
+
+**Decided 2026-11-09: no pull requests and no human review.** The Opus reviewer checkpoints, the tests, and a weekly acceptance check by the spec run are the quality gate. See `v2/RUNNER.md`, "Without human review".
 
 ## 1. Two kinds of run
 
@@ -103,7 +105,7 @@ does not name.
 | Sun | Spec run at 18:43 (Opus writes next week's cards) |
 | Sat | Free: your own use, reviewing and merging |
 
-Your part, about 30–45 minutes a day: read the PR and run log, try `plan check` on a fixture, merge or comment, and unblock any `blocked` card by editing its spec.
+Your part: none required. Optionally glance at `v2/runs/` on the `auto/v2-build` branch to see progress.
 
 ## 5. Budget per run (estimate)
 
