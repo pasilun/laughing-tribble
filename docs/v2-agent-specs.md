@@ -563,7 +563,7 @@ For every room face:
 - `at` is measured along the inner face from its **west end** on north and south faces, and from its **north end** on east and west faces.
 - The opening occupies `[at, at + width]` along the face.
 - It must fit inside one wall segment on that face, otherwise E004. An open side gives E007.
-- `hinge` must be one of the two compass directions along the face (west or east on a north face), otherwise E004 with the message "hinge must be west or east on a north face".
+- `hinge` must be one of the two compass directions along the face (west or east on a north face), otherwise E013 (§8, §15 D19).
 
 ### 9.4 Wall polygons (faces.rs) for rendering
 
@@ -812,3 +812,4 @@ Decisions taken by the spec runs where the sections above left a choice open. Ea
 - **D19. Hinge check message.** The hinge check of §9.3 has its own code, `E013`, with the template in §8. The E004 template stays as it is. Card W1-19 adds the `Code::E013` variant, its template and its test (the card authorises the edit to `diagnostics.rs`).
 - **D20. E004 length argument.** `{length}` in E004 is the length of the room face the opening is on, never the length of a wall segment, even when the opening crosses two segments.
 - **D21. Wall suggestion in E003.** The "change the wall" suggestion uses `wall + residual` (signed), so a positive residual makes the wall thicker and a negative one thinner. This is what the code does; §5.2's `wall − |residual|` described only the negative case and is superseded. The suggestion is made only when the new thickness is at least 40 mm.
+- **D22. Refs on diagnostics.** `Diagnostic.refs` holds semantic ids, one meaning per code: I010 has the wall id, `["W:Garderob.east|Vardagsrum.west"]`; W003 has the two faces as `<Room>.<side>` strings, `["Sovrum.south","Vardagsrum.south"]`; E001/E002/E004/E007/E013 have the room, face or opening id they are about; E003 has the faces at the two ends of the cycle. `diagnose.rs` stores the wall id for I010 (not the two room names). `solve --json` writes `refs` only when the list is non-empty.
