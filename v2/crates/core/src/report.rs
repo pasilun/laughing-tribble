@@ -14,7 +14,7 @@
 
 use serde_json::{Map, Value, json};
 
-use crate::diagnostics::{Diagnostic, Severity};
+use crate::diagnostics::{Code, Diagnostic, Severity};
 use crate::intent::{OpeningKind, Side};
 use crate::resolved::{Resolved, ResolvedOpening, RoomRect, WallKind};
 
@@ -163,7 +163,26 @@ fn diagnostic(diagnostic: &Diagnostic) -> Value {
             out.insert(to.to_string(), value.clone());
         }
     }
+    if diagnostic.code == Code::W001 {
+        let letter = out
+            .get("axis")
+            .and_then(Value::as_str)
+            .and_then(axis_letter);
+        if let Some(letter) = letter {
+            out.insert("axis".to_string(), json!(letter));
+        }
+    }
     Value::Object(out)
+}
+
+/// The §7.7 axis letter for the display word the solver gives W001 (`x` for
+/// "east–west", `y` for "north–south"). `None` for any other word.
+fn axis_letter(word: &str) -> Option<&'static str> {
+    match word {
+        "east–west" => Some("x"),
+        "north–south" => Some("y"),
+        _ => None,
+    }
 }
 
 fn kind_name(kind: OpeningKind) -> &'static str {
@@ -188,5 +207,38 @@ fn severity_name(severity: Severity) -> &'static str {
         Severity::Error => "error",
         Severity::Warning => "warning",
         Severity::Info => "info",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dsl::parse;
+    use crate::resolved::resolve;
+
+    #[test]
+    fn w001_axis_is_x_or_y_for_a_loose_room() {
+        // C has no measurement on x, so it is loose there. The solver also
+        // reports loose rooms on y, so every W001 axis is checked.
+        let plan =
+            parse("room A 1000 x 2000\nroom B 1000 x 2000\n  east_of A gap\nroom C 1000 x 2000\n")
+                .expect("parse");
+        let (resolved, diagnostics) = resolve(&plan);
+        let value = solve_json("loose", resolved.as_ref(), &diagnostics);
+
+        let w001: Vec<&Value> = value["diagnostics"]
+            .as_array()
+            .expect("diagnostics array")
+            .iter()
+            .filter(|d| d["code"] == "W001")
+            .collect();
+        assert!(!w001.is_empty(), "{value:#}");
+        for d in &w001 {
+            let axis = d["axis"].as_str().expect("axis is a string");
+            assert!(axis == "x" || axis == "y", "axis was {axis:?} in {d}");
+        }
+        // Only C is loose on x, so exactly one W001 is on x.
+        let on_x = w001.iter().filter(|d| d["axis"] == "x").count();
+        assert_eq!(on_x, 1, "{value:#}");
     }
 }
