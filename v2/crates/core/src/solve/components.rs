@@ -4,16 +4,20 @@
 //! when no edge reaches them. Edges join faces, and union-find groups them.
 //! The component holding the anchor (the first declared room's west face on
 //! x, its north face on y) is fixed at 0. Every other component is
-//! under-constrained and gets a W001 (§6.4). Only the text is made here; the
-//! suggestion comes in a later card.
+//! under-constrained and gets a W001 (§6.4). [`components`] makes the W001
+//! text with its measurement arguments left as placeholders, so the solver's
+//! own output does not change. [`suggested_w001`] fills those arguments with
+//! the best candidate measurement (decision D5).
 
 use std::collections::HashMap;
 
 use serde_json::json;
 
 use super::graph::{Axis, Edge, FaceId};
+use super::tree::assign_coords;
 use crate::diagnostics::{Code, Diagnostic, Severity, message};
 use crate::intent::{Plan, RoomName, Side};
+use crate::units::Mm;
 
 /// A set of faces joined by edges on one axis.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -240,6 +244,225 @@ fn not_tied(axis: Axis, plan: &Plan, room: &RoomName, rooms: &[RoomName]) -> Dia
     }
 }
 
+/// Which side of the anchored room the loose room goes (D5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Direction {
+    /// The loose room is east of the anchored one (south on y).
+    After,
+    /// The loose room is west of the anchored one (north on y).
+    Before,
+}
+
+/// One candidate measurement for a loose component (spec §6.4, D5).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Candidate {
+    /// Length in mm of the overlap of the two rooms' spans on the other axis.
+    /// Zero when either room is outside the other axis's anchored component.
+    pub overlap: Mm,
+    /// The anchored room, `a`.
+    pub anchor: RoomName,
+    /// The loose room, `l`.
+    pub loose: RoomName,
+    /// Which side of `anchor` the loose room is on.
+    pub direction: Direction,
+}
+
+impl Candidate {
+    /// The `(from, to, relation)` words of the measurement on `axis`.
+    fn measure(&self, axis: Axis) -> (String, String, &'static str) {
+        let a = self.anchor.as_str();
+        let l = self.loose.as_str();
+        match (axis, self.direction) {
+            (Axis::X, Direction::After) => (format!("{a}.east"), format!("{l}.west"), "east_of"),
+            (Axis::X, Direction::Before) => (format!("{l}.east"), format!("{a}.west"), "west_of"),
+            (Axis::Y, Direction::After) => (format!("{a}.south"), format!("{l}.north"), "south_of"),
+            (Axis::Y, Direction::Before) => {
+                (format!("{l}.south"), format!("{a}.north"), "north_of")
+            }
+        }
+    }
+}
+
+/// Every candidate for the loose component `loose` on `axis`, in D5 order:
+/// anchored rooms in declaration order, then loose rooms in declaration order,
+/// then After before Before. `comps` are the components of `axis` from
+/// [`components`]. Empty when `comps` has no anchored component.
+pub fn candidates(
+    edges: &[Edge],
+    plan: &Plan,
+    axis: Axis,
+    comps: &[Component],
+    loose: &Component,
+) -> Vec<Candidate> {
+    let Some(anchored) = comps.iter().find(|c| c.anchored) else {
+        return Vec::new();
+    };
+    let spans = anchored_spans(edges, plan, other_axis(axis));
+    let mut out = Vec::new();
+    for anchor in &anchored.rooms {
+        for room in &loose.rooms {
+            let overlap = overlap(spans.get(anchor), spans.get(room));
+            for direction in [Direction::After, Direction::Before] {
+                out.push(Candidate {
+                    overlap,
+                    anchor: anchor.clone(),
+                    loose: room.clone(),
+                    direction,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// The best candidate of [`candidates`]: the largest overlap. A tie keeps the
+/// earlier candidate, so the order in [`candidates`] breaks ties. `None` when
+/// there are no candidates.
+pub fn best_candidate(
+    edges: &[Edge],
+    plan: &Plan,
+    axis: Axis,
+    comps: &[Component],
+    loose: &Component,
+) -> Option<Candidate> {
+    let mut best: Option<Candidate> = None;
+    for candidate in candidates(edges, plan, axis, comps, loose) {
+        if best
+            .as_ref()
+            .is_none_or(|kept| candidate.overlap > kept.overlap)
+        {
+            best = Some(candidate);
+        }
+    }
+    best
+}
+
+/// The W001 diagnostics of both axes, with the measurement filled in from the
+/// best candidate where there is one. A loose room with no candidate, and a
+/// depth-unknown room (whose wording has no measurement), keep their
+/// [`components`] text. `room` in `data` names the room the suggestion is for.
+pub fn suggested_w001(edges: &[Edge], plan: &Plan) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for axis in [Axis::X, Axis::Y] {
+        let (comps, diagnostics) = components(edges, plan, axis);
+        for diagnostic in diagnostics {
+            out.push(suggest_one(edges, plan, axis, &comps, diagnostic));
+        }
+    }
+    out
+}
+
+/// Fill in one W001 from `comps` (the components of `axis`).
+fn suggest_one(
+    edges: &[Edge],
+    plan: &Plan,
+    axis: Axis,
+    comps: &[Component],
+    mut diagnostic: Diagnostic,
+) -> Diagnostic {
+    let Some(room) = diagnostic
+        .data
+        .get("room")
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+    else {
+        return diagnostic;
+    };
+    let depth_unknown = axis == Axis::Y
+        && plan
+            .rooms
+            .values()
+            .any(|declared| declared.name.as_str() == room && declared.depth.is_none());
+    if depth_unknown {
+        return diagnostic;
+    }
+    // components() reports a component's first room not yet reported, so the
+    // first loose component holding the room is the one that reported it.
+    let Some(component) = comps
+        .iter()
+        .find(|c| !c.anchored && c.rooms.iter().any(|r| r.as_str() == room))
+    else {
+        return diagnostic;
+    };
+    let Some(best) = best_candidate(edges, plan, axis, comps, component) else {
+        return diagnostic;
+    };
+    let (from, to, relation) = best.measure(axis);
+    let loose = best.loose.as_str().to_string();
+    let of = best.anchor.as_str().to_string();
+    let gap = plan.default_wall.value.to_string();
+    diagnostic.message = message(
+        Code::W001,
+        &[
+            ("axis", axis_word(axis).to_string()),
+            ("room", loose.clone()),
+            ("from", from.clone()),
+            ("to", to.clone()),
+            ("relation", relation.to_string()),
+            ("of", of.clone()),
+            ("gap", gap.clone()),
+        ],
+    );
+    if let Some(object) = diagnostic.data.as_object_mut() {
+        object.insert("room".to_string(), json!(loose));
+        object.insert(
+            "suggestion".to_string(),
+            json!({
+                "from": from,
+                "to": to,
+                "relation": relation,
+                "of": of,
+                "gap": gap,
+            }),
+        );
+    }
+    diagnostic
+}
+
+/// The axis word used in the W001 text.
+fn axis_word(axis: Axis) -> &'static str {
+    match axis {
+        Axis::X => "east–west",
+        Axis::Y => "north–south",
+    }
+}
+
+fn other_axis(axis: Axis) -> Axis {
+    match axis {
+        Axis::X => Axis::Y,
+        Axis::Y => Axis::X,
+    }
+}
+
+/// The solved span `(min, max)` on `axis` of every room of the anchored
+/// component on `axis`. Other rooms have no span, because their coordinates
+/// are relative to another root.
+fn anchored_spans(edges: &[Edge], plan: &Plan, axis: Axis) -> HashMap<RoomName, (Mm, Mm)> {
+    let mut spans = HashMap::new();
+    let (comps, _) = components(edges, plan, axis);
+    let (coords, _) = assign_coords(edges, &comps, axis);
+    let Some(anchored) = comps.iter().find(|c| c.anchored) else {
+        return spans;
+    };
+    let [first, second] = axis_sides(axis);
+    for room in &anchored.rooms {
+        let at = |side: Side| coords.get(&(room.clone(), side_key(side))).copied();
+        if let (Some(p), Some(q)) = (at(first), at(second)) {
+            spans.insert(room.clone(), (p.min(q), p.max(q)));
+        }
+    }
+    spans
+}
+
+/// The overlap in mm of two spans, zero when they do not overlap or either is
+/// missing.
+fn overlap(a: Option<&(Mm, Mm)>, b: Option<&(Mm, Mm)>) -> Mm {
+    match (a, b) {
+        (Some(&(a0, a1)), Some(&(b0, b1))) => (a1.min(b1) - a0.max(b0)).max(0),
+        _ => 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,6 +538,49 @@ mod tests {
         assert_eq!(
             diagnostics[0].message,
             "B depth unknown; measure B.north to B.south"
+        );
+    }
+
+    #[test]
+    fn loose_room_suggestion_uses_the_best_facing_face() {
+        // Hall and Kitchen are anchored on both axes. Förråd is loose on x and
+        // aligned with Hall on y, so it overlaps Hall by 1500 mm and Kitchen by
+        // 1000 mm. Hall wins, and After (east_of) comes before Before.
+        let plan = parse(
+            "room Hall 3000 x 2000\nroom Kitchen 2000 x 1000\n  east_of Hall gap\n  align north Hall\nroom Förråd 1000 x 1500\n  align north Hall\n",
+        )
+        .expect("parse");
+        let (edge_list, diagnostics) = edges(&plan);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        let got = suggested_w001(&edge_list, &plan);
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert_eq!(got[0].code, Code::W001);
+        assert_eq!(
+            got[0].message,
+            r#"Not tied east–west: Förråd. Measure from Hall.east to Förråd.west, or add "Förråd east_of Hall gap 90"."#
+        );
+    }
+
+    #[test]
+    fn no_anchored_candidates_keeps_the_components_text() {
+        let plan = parse("room Hall 3000 x 2000\nroom Förråd 1000 x 1500\n").expect("parse");
+        let (edge_list, _) = edges(&plan);
+        let (mut comps, _) = components(&edge_list, &plan, Axis::X);
+        // Unanchor every component, so the loose room has no anchored room to
+        // be measured from.
+        for comp in &mut comps {
+            comp.anchored = false;
+        }
+        let loose = comps
+            .iter()
+            .find(|c| c.rooms.iter().any(|r| r.as_str() == "Förråd"))
+            .cloned()
+            .expect("Förråd has a component");
+        assert!(candidates(&edge_list, &plan, Axis::X, &comps, &loose).is_empty());
+        assert_eq!(
+            best_candidate(&edge_list, &plan, Axis::X, &comps, &loose),
+            None
         );
     }
 }

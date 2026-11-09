@@ -6,6 +6,8 @@
 //! - `plan fmt <file> [--write]`: print the canonical DSL, or rewrite the file.
 //! - `plan svg <file> [--out path]`: print the SVG drawing (or write it to `path`);
 //!   if the plan does not resolve, print the diagnostics and exit 1.
+//! - `plan suggest <file>`: print each W001 (loose room) with its suggested
+//!   measurement, one per line.
 //! - `plan --version`.
 //!
 //! Exit status: 0 on success, 1 when the plan has an Error (or does not parse),
@@ -17,10 +19,13 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
+use plan_core::solve::components::suggested_w001;
+use plan_core::solve::edges;
 use plan_core::{Diagnostic, Resolved, Severity, dsl, resolve, solve_json};
 
 const USAGE: &str = "usage:
   plan check <file>
+  plan suggest <file>
   plan solve --json <file>
   plan fmt <file> [--write]
   plan svg <file> [--out path]
@@ -42,6 +47,7 @@ fn main() -> ExitCode {
 fn run(words: &[&str]) -> Result<ExitCode, String> {
     match words {
         ["check", file] => check(file),
+        ["suggest", file] => suggest(file),
         ["solve", "--json", file] => solve(file),
         ["fmt", file] => fmt(file, false),
         ["fmt", file, "--write"] => fmt(file, true),
@@ -63,6 +69,24 @@ fn check(file: &str) -> Result<ExitCode, String> {
         println!("{}", describe(diagnostic));
     }
     Ok(exit_for(&diagnostics))
+}
+
+/// `plan suggest`: print each W001 with its suggested measurement, one per line.
+/// A parse error is printed and exits 1, as in `check`.
+fn suggest(file: &str) -> Result<ExitCode, String> {
+    let (_, src) = read_source(file)?;
+    let plan = match dsl::parse(&src) {
+        Ok(plan) => plan,
+        Err(diagnostic) => {
+            println!("{}", describe(&diagnostic));
+            return Ok(ExitCode::from(1));
+        }
+    };
+    let (all_edges, _) = edges(&plan);
+    for diagnostic in suggested_w001(&all_edges, &plan) {
+        println!("{}", describe(&diagnostic));
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 /// `plan solve --json`: print the §7.7 value. The exit status is 0 even when the
