@@ -350,3 +350,190 @@ mod tests {
         assert!(RoomName::new("Åäö_09").is_ok());
     }
 }
+
+#[cfg(test)]
+mod type_roundtrip_tests {
+    use super::*;
+    use crate::units::Source;
+    use serde::de::DeserializeOwned;
+    use std::fmt::Debug;
+
+    fn round_trip<T>(value: &T) -> Result<(), Box<dyn std::error::Error>>
+    where
+        T: Serialize + DeserializeOwned + PartialEq + Debug,
+    {
+        let json = serde_json::to_string(value)?;
+        let back: T = serde_json::from_str(&json)?;
+        assert_eq!(value, &back, "json was {json}");
+        Ok(())
+    }
+
+    fn q(value: Mm, source: Source) -> Quantity {
+        Quantity {
+            value,
+            source,
+            tolerance: source.default_tolerance(),
+        }
+    }
+
+    #[test]
+    fn phase_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        for p in [Phase::Existing, Phase::Demolish, Phase::New] {
+            round_trip(&p)?;
+        }
+        assert_eq!(serde_json::to_string(&Phase::Demolish)?, "\"demolish\"");
+        Ok(())
+    }
+
+    #[test]
+    fn opening_kind_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        for k in [OpeningKind::Door, OpeningKind::Window, OpeningKind::Passage] {
+            round_trip(&k)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn side_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        for s in [Side::North, Side::East, Side::South, Side::West] {
+            round_trip(&s)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn room_name_round_trips_and_rejects_invalid_json() -> Result<(), Box<dyn std::error::Error>> {
+        round_trip(&RoomName::new("Hall_1")?)?;
+        round_trip(&RoomName::new("Kök")?)?;
+        assert!(serde_json::from_str::<RoomName>("\"a b\"").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn face_ref_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        round_trip(&FaceRef {
+            room: RoomName::new("Kök")?,
+            side: Side::South,
+        })
+    }
+
+    #[test]
+    fn room_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        round_trip(&Room {
+            name: RoomName::new("Hall")?,
+            width: None,
+            depth: None,
+            apartment: None,
+            phase: Phase::New,
+        })?;
+        round_trip(&Room {
+            name: RoomName::new("Kök")?,
+            width: Some(q(3200, Source::Laser)),
+            depth: Some(q(2600, Source::Tape)),
+            apartment: Some("B".to_string()),
+            phase: Phase::Demolish,
+        })
+    }
+
+    #[test]
+    fn relation_round_trips_all_variants() -> Result<(), Box<dyn std::error::Error>> {
+        let a = RoomName::new("A")?;
+        let b = RoomName::new("B")?;
+        let gap = Gap::Wall(q(90, Source::Assumed));
+        let variants = [
+            Relation::EastOf {
+                subject: a.clone(),
+                of: b.clone(),
+                gap: gap.clone(),
+            },
+            Relation::WestOf {
+                subject: a.clone(),
+                of: b.clone(),
+                gap: Gap::Open,
+            },
+            Relation::SouthOf {
+                subject: a.clone(),
+                of: b.clone(),
+                gap: gap.clone(),
+            },
+            Relation::NorthOf {
+                subject: a.clone(),
+                of: b.clone(),
+                gap: Gap::Open,
+            },
+            Relation::Align {
+                side: Side::East,
+                rooms: vec![a, b],
+            },
+        ];
+        for r in &variants {
+            round_trip(r)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn gap_round_trips_both_variants() -> Result<(), Box<dyn std::error::Error>> {
+        round_trip(&Gap::Wall(q(121, Source::Drawing)))?;
+        round_trip(&Gap::Open)
+    }
+
+    #[test]
+    fn measure_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        round_trip(&Measure {
+            from: FaceRef {
+                room: RoomName::new("A")?,
+                side: Side::West,
+            },
+            to: FaceRef {
+                room: RoomName::new("B")?,
+                side: Side::East,
+            },
+            value: q(4800, Source::Laser),
+            reference: false,
+        })
+    }
+
+    #[test]
+    fn opening_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        round_trip(&Opening {
+            kind: OpeningKind::Window,
+            face: FaceRef {
+                room: RoomName::new("A")?,
+                side: Side::North,
+            },
+            at: q(600, Source::Tape),
+            width: q(1200, Source::Tape),
+            height: None,
+            hinge: None,
+            opens_into: None,
+            phase: Phase::Existing,
+        })
+    }
+
+    #[test]
+    fn wall_override_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        round_trip(&WallOverride {
+            face: FaceRef {
+                room: RoomName::new("A")?,
+                side: Side::North,
+            },
+            thickness: q(160, Source::Tape),
+        })
+    }
+
+    #[test]
+    fn empty_plan_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        round_trip(&Plan {
+            name: String::new(),
+            default_wall: q(90, Source::Assumed),
+            default_outer_wall: q(300, Source::Assumed),
+            rooms: BTreeMap::new(),
+            order: Vec::new(),
+            relations: Vec::new(),
+            measures: Vec::new(),
+            openings: Vec::new(),
+            wall_overrides: Vec::new(),
+        })
+    }
+}

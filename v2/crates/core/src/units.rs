@@ -62,3 +62,52 @@ mod tests {
         assert_eq!(Source::Assumed.default_tolerance(), 10);
     }
 }
+
+#[cfg(test)]
+mod type_roundtrip_tests {
+    use super::*;
+    use serde::de::DeserializeOwned;
+    use std::fmt::Debug;
+
+    fn round_trip<T>(value: &T) -> Result<(), Box<dyn std::error::Error>>
+    where
+        T: Serialize + DeserializeOwned + PartialEq + Debug,
+    {
+        let json = serde_json::to_string(value)?;
+        let back: T = serde_json::from_str(&json)?;
+        assert_eq!(value, &back, "json was {json}");
+        Ok(())
+    }
+
+    #[test]
+    fn mm_is_plain_integer_json() -> Result<(), Box<dyn std::error::Error>> {
+        let mm: Mm = 1234;
+        assert_eq!(serde_json::to_string(&mm)?, "1234");
+        round_trip(&mm)
+    }
+
+    #[test]
+    fn source_round_trips_all_variants() -> Result<(), Box<dyn std::error::Error>> {
+        for s in [
+            Source::Laser,
+            Source::Tape,
+            Source::Printed,
+            Source::Drawing,
+            Source::Estimated,
+            Source::Assumed,
+        ] {
+            round_trip(&s)?;
+        }
+        assert_eq!(serde_json::to_string(&Source::Printed)?, "\"printed\"");
+        Ok(())
+    }
+
+    #[test]
+    fn quantity_round_trips() -> Result<(), Box<dyn std::error::Error>> {
+        round_trip(&Quantity {
+            value: 3200,
+            source: Source::Laser,
+            tolerance: Source::Laser.default_tolerance(),
+        })
+    }
+}
