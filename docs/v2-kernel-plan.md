@@ -99,7 +99,7 @@ Prices: Fable 5.1 $10 in / $50 out; Opus 5.5 $4 / $20; Sonnet 5.5 $2 / $10; Haik
 - Sonnet 5.5 for the server and MCP adapter, editor, viewer, tests, importer and CI.
 - Haiku 5.5 for fixtures, docs and mechanical edits.
 - Fable 5.1 only if a design problem stalls (2.5× Opus 5.5).
-- Rough planning figure: $400–1,000 total, assuming 150–300 sessions of about 4M cached input, 0.3M fresh input and 60K output each (about $3.50 per Opus session, $2.20 per Sonnet session). Reusing the solver and the editor pieces below should pull it toward the low end. Unmeasured: meter Phase 1 and extrapolate.
+- Per-phase sessions and costs are in "Effort and cost by phase".
 
 **Running it (LLM using the MCP tools), per drawing like lgh 154, assuming 150K in / 5K out uncached:** Haiku 5.5 about $0.02, Sonnet 5.5 about $0.35, Opus 5.5 about $0.70. Prompt caching on the stable prefix cuts the input side by up to about 90%.
 
@@ -256,32 +256,41 @@ The user knows SketchUp and wants the same experience, tools and shortcuts on de
 - Write the model spec and invariants.
 - Turn real cases into fixtures: lgh 154 from the laser measurements, the calibrated Gnejsen 152–154 basplan (rev 40), v1's `flat`, `golden` and `cellar` fixtures, and the 153/154 plan (rev 50).
 - Spike, one or two days each:
-  - Solve lgh 154's walls as a SolidCraft sketch, including the 4.49 against 4.54 conflict.
+  - Solve lgh 154's walls as a SolidCraft sketch, including the 4.49 against 4.54 conflict. The main question is how walls with a thickness and a reference face map onto the solver's points and lines, so this spike decides the shape of Phase 1.
   - Snap on a 2D plan with BenchUp's inference engine.
-  - Write a `.skp` with OpenSKP and open it in SketchUp for Web.
+  - Write a `.skp` with OpenSKP and open it in SketchUp for Web. OpenSKP is C++ and TypeScript, so also test building it through `cc` as BenchUp does.
+  - Return a labelled, pre-sized render from v1's `plan_view` to Claude and check it names walls correctly. This can be prototyped in v1 now.
 - Precondition: the user creates an empty repo. This session's GitHub scope is only `pasilun/laughing-tribble`, so I can't create one, but I can add it with `add_repo` once it exists.
 
 **Phase 1: Kernel and CLI**
 - Model, face geometry with exact mitre and T-joins, command application, the solver adapter and conflict diagnostics.
 - Property tests (`proptest`): joints stay closed, a wall's faces stay parallel at its thickness, and commands are all-or-nothing.
-- Intent layer and the text DSL (parser, printer, round trip) with `source` and tolerance on dimensions.
+- Intent layer and the text DSL (parser, printer, round trip) with `source` and tolerance on dimensions. Turning relational statements ("Sovrum below Garderob, wall 90") into solver constraints is the largest single piece of work in the project.
+- Missing-measurement report from the solver's degree-of-freedom analysis.
 - **Acceptance:** lgh 154 built from clear sizes and 90 mm partitions only, written as a DSL document of a few lines. No south-wall step, no fudges, the 4.49 against 4.54 conflict is reported with its numbers, and changing an outer thickness moves no room.
 
 **Phase 2: Render and export**
-- SVG, PDF, DXF and `.skp` from the scene.
+- SVG, PDF, DXF and `.skp` from the scene. `.skp` goes through OpenSKP: a C++ build for native, its TypeScript build in a worker for the browser.
+- Labelled renders (set-of-marks), zoomed crops by element id or mm rectangle, and pre-sized PNGs with mm-per-pixel metadata (see "Giving the model vision").
 - Compare against v1's output on the fixtures. Differences should be only exact mitres.
 
-**Phase 3: Checks and rooms**
+**Phase 3: Checks, rooms and diagnostic views**
 - Port the review, permit and structure checks onto polygons.
 - Exact areas and clear sizes replace the raster flood fill.
+- Diagnostic views: conflict colouring, missing-measurement highlights with suggested laser shots, before/after diff, overlay on a source image.
 
 **Phase 4: Server and MCP**
-- The 7-tool surface described above, generated from the schema, with `dry_run`, structured diagnostics, optional picture and command-log storage.
-- Run the cross-tier eval (Opus, Sonnet, Haiku) here, before the editor, because the tool design is the main risk for cheap models.
-- Open question: reuse v1's accounts, sharing and OAuth for MCP, or start simpler. This is a large port and is its own sub-phase.
+- The 7-tool surface described above, generated from the schema, with `dry_run`, structured diagnostics, on-demand renders and command-log storage.
+- `import` of photos and sketches into structured readings, with a labelled render so the model proposes which wall each reading spans.
+- MCP App for "tap the wall you measured" when a reading is ambiguous.
+- Run the cross-tier eval (Opus, Sonnet, Haiku), including the vision tasks, here before the editor, because the tool design is the main risk for cheap models.
+
+**Phase 4b: Accounts, sharing and MCP OAuth**
+- An auth provider with OAuth 2.1 (see "Reuse, don't build"). Per-user plans, share links for the viewer, and OAuth for remote MCP clients. v1's accounts are not ported.
 
 **Phase 5: Desktop editor**
-- egui and wgpu app, native and browser, starting from BenchUp's setup. Lift the snapping engine, typed-value parser, dimension rendering, undo history and shortcuts.
+- egui and wgpu app, native and browser, starting from BenchUp's setup. Lift the snapping engine, typed-value parser, dimension rendering, undo history and shortcuts. Draw the plan with egui's 2D vector painter from the kernel's scene; BenchUp's 3D renderer is not needed.
+- Packaging and distribution: installers for Windows, macOS and Linux (BenchUp uses Velopack), code signing and macOS notarisation, and the browser build.
 - Each tool maps to kernel commands as in the table above. Dragging previews a command, and typed dimensions drive geometry through the solver.
 - Build Select, Wall (L), Room (R), Push/Pull, Tape Measure and Dimension first, then the rest.
 - Acceptance: the SketchUp-user test above.
@@ -296,6 +305,50 @@ The user knows SketchUp and wants the same experience, tools and shortcuts on de
 **Later: scan pipeline**
 - Port or replace the scan and trace tools. A Python/OpenCV service that calls the kernel's API is an option because it is batch work.
 
+## Effort and cost by phase (estimate, 2026-11-09)
+
+**Assumptions:**
+- A "session" is one focused agent task of about 1–3 hours.
+- Cost per session is about $3.50 on Opus 5.5, $2.20 on Sonnet 5.5 and $0.15 on Haiku 5.5. That assumes about 4M cached input, 0.3M fresh input and 60K output per session, at the prices in "Models and cost".
+- One maintainer reviews and tests. Their hours are listed separately and aren't priced.
+- None of this is measured yet. Meter Phase 0 and Phase 1 and re-estimate.
+
+| Phase | Opus / Sonnet / Haiku sessions | Agent cost | Maintainer hours | Calendar |
+|---|---|---|---|---|
+| 0 Spec, fixtures, reuse spikes | 8 / 8 / 4 | ~$45 | 6–10 | 1 week |
+| 1 Kernel, solver adapter, intent DSL, CLI | 30 / 25 / 5 | ~$160 | 25–40 | 3–4 weeks |
+| 2 Render and export (incl. `.skp`, labelled renders) | 6 / 18 / 4 | ~$60 | 10–15 | 1.5–2 weeks |
+| 3 Checks, rooms, diagnostic views | 6 / 16 / 4 | ~$55 | 10–15 | 1.5–2 weeks |
+| 4 Server, MCP, image import, MCP App | 10 / 25 / 5 | ~$90 | 15–25 | 2–3 weeks |
+| 4 Eval runs (separate) | — | ~$250–600 | included above | in parallel |
+| 4b Accounts, sharing, MCP OAuth | 1 / 8 / 1 | ~$20 | 5–8 | 1 week |
+| 5 Desktop editor and packaging | 12 / 55 / 10 | ~$165 | 40–60 | 4–6 weeks |
+| 6 Mobile viewer | 0 / 8 / 2 | ~$20 | 4–6 | 0.5–1 week |
+| 7 Import v1 and cut-over | 3 / 12 / 3 | ~$40 | 8–12 | 1–1.5 weeks |
+| **Total** | **76 / 175 / 38** | **~$650 + $250–600 evals ≈ $900–1,250** | **125–190** | **16–22 weeks** |
+| Later: scan pipeline | 6 / 15 / 3 | ~$55 + model tests | 10–20 | 2–3 weeks |
+
+**Range:** with the usual uncertainty, about **$650–2,000** of agent and eval spend. Calendar runs 4–6 months part-time, or about 3–4 months with near-full-time review.
+
+**What changed since the first estimate ($400–1,000):**
+- **Down:** SolidCraft's solver replaces writing one (about −30 Opus sessions). Lifting BenchUp's snapping, input parsing, undo and app setup saves about a fifth of the editor work.
+- **Up:**
+  - The editor is now a full SketchUp-style tool set in Rust with packaging and signing.
+  - Vision features: labelled renders, crops, diagnostic views, image import, MCP App.
+  - `.skp` export through C++ and TypeScript.
+  - Eval runs are now counted: about 20 tasks × 3 effort levels × 3 repeats per tier, $80–200 per full sweep, 3–5 sweeps.
+- **Largest single item:** Phase 1's intent layer, the relational DSL compiled into solver constraints.
+- **Biggest swing factor:** the Phase 0 solver spike. If walls don't map cleanly onto SolidCraft's sketch model, Phase 1 grows by 10–20 Opus sessions (about $35–70) and a week or two.
+
+**Running and fixed costs outside agent spend:**
+- **Hosting:** a small Rust server plus SQLite or libSQL, about $5–30 a month at this scale.
+- **Auth provider:** a free tier at this scale.
+- **Desktop code signing:**
+  - Apple Developer Program, $99 a year.
+  - A Windows code-signing certificate, typically about $100–400 a year.
+  - Unsigned builds are possible but trigger security warnings.
+- **LLM use per drawing:** about $0.02 on Haiku, $0.35 on Sonnet and $0.70 on Opus, less with caching. Each render image adds about 1–5k tokens.
+
 ## Verification
 
 - `cargo test` and `cargo clippy` in CI, for native and `wasm32` targets.
@@ -309,7 +362,9 @@ The user knows SketchUp and wants the same experience, tools and shortcuts on de
 ## Risks and open questions
 
 - **Hosting.** v1 is on Vercel. A long-lived Rust server fits Fly.io or Cloud Run. Decide before Phase 4.
-- **Auth and sharing.** v1 has accounts, sharing, invitations and OAuth. Porting them is a project in itself, so it needs an explicit decision.
+- **Auth and sharing.** Decided: an auth provider in Phase 4b, not a port of v1's accounts. Pick the provider before Phase 4.
+- **Solver mapping.** Walls with thickness and reference faces may not map cleanly onto SolidCraft's points and lines. The Phase 0 spike decides; the fallback is an in-house axis-aligned solver for walls, with SolidCraft kept for angled geometry.
+- **Desktop distribution.** Signing and notarisation need paid developer accounts and CI secrets; unsigned builds show OS security warnings.
 - **Borrowed code drift.** BenchUp and SolidCraft change daily. Vendor pinned copies with recorded source commits, keep adapters thin, and update deliberately.
 - **OpenSKP writer.** Writes only the 2013–2020 container and is reverse-engineered. If SketchUp for Web rejects its files, fall back to Trimble's hosted connector.
 - **egui look and accessibility.** egui doesn't look native, and its accessibility is weaker than a web UI's. Acceptable for a desktop CAD tool; the viewer stays a plain web page.
