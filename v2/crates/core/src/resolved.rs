@@ -109,6 +109,8 @@ pub struct ResolvedOpening {
     pub wall: WallId,
     /// Doors: the compass side of the hinge, as written.
     pub hinge: Option<Side>,
+    /// Doors: the room the leaf swings into, if the intent names one.
+    pub opens_into: Option<RoomName>,
 }
 
 /// Rooms joined by `open`, with their total area (§9.5).
@@ -230,6 +232,7 @@ fn opening_model(opening: &PlacedOpening) -> ResolvedOpening {
         end: opening.end,
         wall: opening.wall.clone(),
         hinge: opening.hinge,
+        opens_into: opening.opens_into.clone(),
     }
 }
 

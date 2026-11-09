@@ -158,6 +158,7 @@ expression: "solve_text(FIXTURE_A, \"lgh154-a\")"
       "hinge": "south",
       "id": "O:WC.west:1",
       "kind": "door",
+      "opens_into": "Hall",
       "wall": "W:Hall.east|WC.west",
       "width": 450
     }

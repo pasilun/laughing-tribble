@@ -10,7 +10,7 @@
 //!   and `tolerance`, renamed to `residual_mm` and `tolerance_mm` (§7.7 units).
 //! - An opening's `at` is measured from the face's west end (north and south
 //!   faces) or north end (east and west faces), as in the §7.7 examples.
-//! - `opens_into` is not written: a resolved opening does not carry it.
+//! - `opens_into` is written only for doors that name the room the leaf swings into.
 
 use serde_json::{Map, Value, json};
 
@@ -118,6 +118,9 @@ fn opening_json(model: &Resolved, opening: &ResolvedOpening) -> Value {
     out.insert("width".to_string(), json!(opening.end - opening.start));
     if let Some(hinge) = opening.hinge {
         out.insert("hinge".to_string(), json!(side_name(hinge)));
+    }
+    if let Some(room) = &opening.opens_into {
+        out.insert("opens_into".to_string(), json!(room.as_str()));
     }
     Value::Object(out)
 }
