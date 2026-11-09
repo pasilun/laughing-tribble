@@ -1,0 +1,25 @@
+plan "Gnejsen lgh 154, existing (laser 2026-11-07)"
+default_wall 90 source assumed
+default_outer_wall 300 source assumed
+
+room Garderob 1860 x 2360 source laser
+room Sovrum 1860 x 2090 source laser
+  south_of Garderob gap
+  align west Garderob
+room Hall 1100 x ?
+  east_of Garderob gap 121 source drawing
+  align north Garderob
+room WC 2370 x 990 source laser
+  east_of Hall gap
+  align north Hall
+room Vardagsrum 3560 x 3480 source laser
+  south_of Hall open
+  south_of WC gap 123 source drawing
+  align west Hall
+
+window Sovrum.south at 380 width 1350 source laser
+window Vardagsrum.south at 1610 width 1280 source laser
+door WC.west at 240 width 450 hinge south opens Hall source estimated
+passage Garderob.east at 0 width 680 source estimated
+
+measure Garderob.north to Sovrum.south = 4490 source laser

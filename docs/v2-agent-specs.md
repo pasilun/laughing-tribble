@@ -405,6 +405,29 @@ measure Garderob.north to Sovrum.south = 4490 source laser
 align south Sovrum Vardagsrum
 ```
 
+### 7.7 Expected-JSON schema (`*.expected.json`)
+
+Files live in `v2/fixtures/`, next to the `.plan` files. Tests compare the solver's output to these files. All lengths are integer mm, areas are mm² (not m²).
+
+```jsonc
+{
+  "fixture": "lgh154-a",              // file stem
+  "resolved": true,                   // false when any Error diagnostic stops the solve
+  "faces": { "<Room>": { "west": 0, "east": 1860, "north": 0, "south": 2360 } },  // only when resolved
+  "areas_mm2": { "<Room>": 4389600 },
+  "spaces": [ { "rooms": ["Hall", "Vardagsrum"], "area_mm2": 13613100 } ],
+  "openings": [ { "id": "O:WC.west:1", "kind": "door", "wall": "W:Hall.east|WC.west",
+                  "at": 240, "width": 450, "hinge": "south", "opens_into": "Hall" } ],
+  "diagnostics": [ { "code": "E003", "severity": "error", "axis": "y",
+                     "residual_mm": -50, "tolerance_mm": 19 } ]
+}
+```
+
+Rules for tests:
+- `diagnostics` is compared as a multiset on `code`, `severity`, and any other fields present in the expected object (`axis`, `residual_mm`, `tolerance_mm`, `refs`). Extra fields in the actual output are ignored. Message text is tested separately (W1-04, W1-13).
+- `residual_mm` is **stated minus implied**: B is 4490 − 4540 = −50, C is 0 − 53 = −53.
+- `interior_walls` (wall id, thickness, x and y extent) is **not** in the week-one expected files. See the note in §9.2 on the corner square; the spec run adds `interior_walls` when it resolves the rules.
+
 ### 7.6 Expected results (put in `*.expected.json`; tests compare exactly unless a tolerance is given)
 
 **Fixture A**, solved faces (x east, y south, anchor at Garderob west/north = 0):
@@ -421,7 +444,7 @@ Also for fixture A:
 - **Diagnostics:** exactly `W003` (facade step) and two `I010` (derived walls Garderob.east|Vardagsrum.west and Sovrum.east|Vardagsrum.west, both 121 mm), no errors.
 - **W003 text:** `Facade not straight: Sovrum.south 4540 vs Vardagsrum.south 4593 (53 mm). Add "align south Sovrum Vardagsrum" if it is straight.`
 - **Areas, m², 2 decimals:** Garderob 4.39, Sovrum 3.89, Hall 1.22, WC 2.35, Vardagsrum 12.39. Space {Hall, Vardagsrum} 13.61.
-- **Interior walls that must exist:**
+- **Interior walls that must exist (provisional until the corner rule in §9.2 is fixed; not yet in the expected files):**
   - Garderob.south|Sovrum.north, 90 thick, x 0–1860;
   - Garderob.east|Hall.west, 121, y 0–1113;
   - Garderob.east|Vardagsrum.west, 121, y 1113–2450 (bridged across the end of the Garderob/Sovrum wall);
@@ -436,7 +459,7 @@ Also for fixture A:
 - chain A: Garderob depth 2360, gap 90, Sovrum depth 2090; chain B: the measure;
 - text exactly as in §6.3; not resolved.
 
-**Fixture C**: E003 on the north–south axis, residual 53.
+**Fixture C**: E003 on the north–south axis, residual −53 (53 mm).
 - Chain A: Garderob depth 2360 + gap 90 + Sovrum depth 2090 = 4540.
 - Chain B: WC depth 990 + gap 123 + Vardagsrum depth 3480 = 4593, joined through `align north` (exact).
 - Cycle tolerance: 3 + 10 + 3 + 3 + 30 + 3 = 52. Since 53 > 52, it is a conflict.
@@ -520,6 +543,9 @@ For every room face:
 - nodes are rounded to mm and shared when coordinates are equal.
 
 **Facade step check (W003):** for each compass side, compare the inner faces of outer walls on that side whose spans are separated only by one interior wall. Emit W003 when the difference is 1–100 mm.
+
+
+**Known gap (found 2026-11-09, to be resolved by the spec run before card W1-17):** in fixture A, the corner square x 3081–3171, y 990–1113 (where the Hall/WC wall meets the WC/Vardagsrum wall) is covered by no segment: the uncovered piece of `Hall.east` (123 mm) is longer than the 100 mm extend limit, and the uncovered piece of `Vardagsrum.north` (90 mm) is in the middle of a face, not at its end. Proposed fix, to be checked: step 4 becomes "an uncovered segment no longer than 150 mm that touches an interior segment on at least one side joins that interior segment", and the corner then lies under both walls, which is fine for the union. The §7.6 wall list changes to match.
 
 ### 9.3 Openings
 

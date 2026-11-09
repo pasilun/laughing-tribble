@@ -1,0 +1,13 @@
+{
+  "fixture": "lgh154-b",
+  "resolved": false,
+  "diagnostics": [
+    {
+      "code": "E003",
+      "severity": "error",
+      "axis": "y",
+      "residual_mm": -50,
+      "tolerance_mm": 19
+    }
+  ]
+}

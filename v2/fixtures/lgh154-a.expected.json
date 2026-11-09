@@ -1,0 +1,104 @@
+{
+  "fixture": "lgh154-a",
+  "resolved": true,
+  "faces": {
+    "Garderob": {
+      "west": 0,
+      "east": 1860,
+      "north": 0,
+      "south": 2360
+    },
+    "Sovrum": {
+      "west": 0,
+      "east": 1860,
+      "north": 2450,
+      "south": 4540
+    },
+    "Hall": {
+      "west": 1981,
+      "east": 3081,
+      "north": 0,
+      "south": 1113
+    },
+    "WC": {
+      "west": 3171,
+      "east": 5541,
+      "north": 0,
+      "south": 990
+    },
+    "Vardagsrum": {
+      "west": 1981,
+      "east": 5541,
+      "north": 1113,
+      "south": 4593
+    }
+  },
+  "areas_mm2": {
+    "Garderob": 4389600,
+    "Sovrum": 3887400,
+    "Hall": 1224300,
+    "WC": 2346300,
+    "Vardagsrum": 12388800
+  },
+  "spaces": [
+    {
+      "rooms": [
+        "Hall",
+        "Vardagsrum"
+      ],
+      "area_mm2": 13613100
+    }
+  ],
+  "openings": [
+    {
+      "id": "O:Garderob.east:1",
+      "kind": "passage",
+      "wall": "W:Garderob.east|Hall.west",
+      "at": 0,
+      "width": 680
+    },
+    {
+      "id": "O:Sovrum.south:1",
+      "kind": "window",
+      "wall": "W:Sovrum.south:outer",
+      "at": 380,
+      "width": 1350
+    },
+    {
+      "id": "O:Vardagsrum.south:1",
+      "kind": "window",
+      "wall": "W:Vardagsrum.south:outer",
+      "at": 1610,
+      "width": 1280
+    },
+    {
+      "id": "O:WC.west:1",
+      "kind": "door",
+      "wall": "W:Hall.east|WC.west",
+      "at": 240,
+      "width": 450,
+      "hinge": "south",
+      "opens_into": "Hall"
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "I010",
+      "severity": "info",
+      "refs": [
+        "W:Garderob.east|Vardagsrum.west"
+      ]
+    },
+    {
+      "code": "I010",
+      "severity": "info",
+      "refs": [
+        "W:Sovrum.east|Vardagsrum.west"
+      ]
+    },
+    {
+      "code": "W003",
+      "severity": "warning"
+    }
+  ]
+}
