@@ -10,7 +10,7 @@ use serde_json::json;
 
 use crate::diagnostics::{Code, Diagnostic, Severity, message};
 use crate::intent::{Gap, Plan, Relation, RoomName, Side};
-use crate::units::Mm;
+use crate::units::{Mm, Source};
 
 /// The axis an edge lies on. `X` is east–west, `Y` is north–south.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +49,8 @@ pub struct Edge {
     pub tolerance: Mm,
     /// The statement this edge came from.
     pub origin: Origin,
+    /// Where the value came from; `None` for exact edges (`align`, `open`).
+    pub source: Option<Source>,
 }
 
 /// Build the edges of `plan` by the §6.1 table, in declaration order.
@@ -73,6 +75,7 @@ pub fn edges(plan: &Plan) -> (Vec<Edge>, Vec<Diagnostic>) {
                 value: width.value,
                 tolerance: width.tolerance,
                 origin: format!("room {name} width"),
+                source: Some(width.source),
             });
         }
         if let Some(depth) = &room.depth {
@@ -83,6 +86,7 @@ pub fn edges(plan: &Plan) -> (Vec<Edge>, Vec<Diagnostic>) {
                 value: depth.value,
                 tolerance: depth.tolerance,
                 origin: format!("room {name} depth"),
+                source: Some(depth.source),
             });
         }
     }
@@ -128,6 +132,7 @@ pub fn edges(plan: &Plan) -> (Vec<Edge>, Vec<Diagnostic>) {
                             value: 0,
                             tolerance: 0,
                             origin: format!("align {} {first} {other}", side_name(*side)),
+                            source: None,
                         });
                     }
                 }
@@ -152,6 +157,7 @@ pub fn edges(plan: &Plan) -> (Vec<Edge>, Vec<Diagnostic>) {
             value: measure.value.value,
             tolerance: measure.value.tolerance,
             origin: format!("measure {} to {}", face_text(from), face_text(to)),
+            source: Some(measure.value.source),
         });
     }
 
@@ -160,9 +166,9 @@ pub fn edges(plan: &Plan) -> (Vec<Edge>, Vec<Diagnostic>) {
 
 /// The edge for a gap between two faces. `open` is an exact zero gap.
 fn gap_edge(axis: Axis, from: FaceId, to: FaceId, gap: &Gap, origin: Origin) -> Edge {
-    let (value, tolerance) = match gap {
-        Gap::Wall(quantity) => (quantity.value, quantity.tolerance),
-        Gap::Open => (0, 0),
+    let (value, tolerance, source) = match gap {
+        Gap::Wall(quantity) => (quantity.value, quantity.tolerance, Some(quantity.source)),
+        Gap::Open => (0, 0, None),
     };
     Edge {
         axis,
@@ -171,6 +177,7 @@ fn gap_edge(axis: Axis, from: FaceId, to: FaceId, gap: &Gap, origin: Origin) -> 
         value,
         tolerance,
         origin,
+        source,
     }
 }
 
@@ -244,7 +251,15 @@ mod tests {
         }
     }
 
-    fn e(axis: Axis, from: FaceId, to: FaceId, value: Mm, tolerance: Mm, origin: &str) -> Edge {
+    fn e(
+        axis: Axis,
+        from: FaceId,
+        to: FaceId,
+        value: Mm,
+        tolerance: Mm,
+        origin: &str,
+        source: Option<Source>,
+    ) -> Edge {
         Edge {
             axis,
             from,
@@ -252,6 +267,7 @@ mod tests {
             value,
             tolerance,
             origin: origin.to_string(),
+            source,
         }
     }
 
@@ -268,6 +284,7 @@ mod tests {
                 1860,
                 3,
                 "room Garderob width",
+                Some(Source::Laser),
             ),
             e(
                 Y,
@@ -276,6 +293,7 @@ mod tests {
                 2360,
                 3,
                 "room Garderob depth",
+                Some(Source::Laser),
             ),
             e(
                 X,
@@ -284,6 +302,7 @@ mod tests {
                 1860,
                 3,
                 "room Sovrum width",
+                Some(Source::Laser),
             ),
             e(
                 Y,
@@ -292,6 +311,7 @@ mod tests {
                 2090,
                 3,
                 "room Sovrum depth",
+                Some(Source::Laser),
             ),
             e(
                 X,
@@ -300,6 +320,7 @@ mod tests {
                 1100,
                 10,
                 "room Hall width",
+                Some(Source::Assumed),
             ),
             e(
                 X,
@@ -308,6 +329,7 @@ mod tests {
                 2370,
                 3,
                 "room WC width",
+                Some(Source::Laser),
             ),
             e(
                 Y,
@@ -316,6 +338,7 @@ mod tests {
                 990,
                 3,
                 "room WC depth",
+                Some(Source::Laser),
             ),
             e(
                 X,
@@ -324,6 +347,7 @@ mod tests {
                 3560,
                 3,
                 "room Vardagsrum width",
+                Some(Source::Laser),
             ),
             e(
                 Y,
@@ -332,6 +356,7 @@ mod tests {
                 3480,
                 3,
                 "room Vardagsrum depth",
+                Some(Source::Laser),
             ),
             e(
                 Y,
@@ -340,6 +365,7 @@ mod tests {
                 90,
                 10,
                 "Sovrum south_of Garderob gap",
+                Some(Source::Assumed),
             ),
             e(
                 X,
@@ -348,6 +374,7 @@ mod tests {
                 0,
                 0,
                 "align west Sovrum Garderob",
+                None,
             ),
             e(
                 X,
@@ -356,6 +383,7 @@ mod tests {
                 121,
                 30,
                 "Hall east_of Garderob gap",
+                Some(Source::Drawing),
             ),
             e(
                 Y,
@@ -364,6 +392,7 @@ mod tests {
                 0,
                 0,
                 "align north Hall Garderob",
+                None,
             ),
             e(
                 X,
@@ -372,6 +401,7 @@ mod tests {
                 90,
                 10,
                 "WC east_of Hall gap",
+                Some(Source::Assumed),
             ),
             e(
                 Y,
@@ -380,6 +410,7 @@ mod tests {
                 0,
                 0,
                 "align north WC Hall",
+                None,
             ),
             e(
                 Y,
@@ -388,6 +419,7 @@ mod tests {
                 0,
                 0,
                 "Vardagsrum south_of Hall open",
+                None,
             ),
             e(
                 Y,
@@ -396,6 +428,7 @@ mod tests {
                 123,
                 30,
                 "Vardagsrum south_of WC gap",
+                Some(Source::Drawing),
             ),
             e(
                 X,
@@ -404,6 +437,7 @@ mod tests {
                 0,
                 0,
                 "align west Vardagsrum Hall",
+                None,
             ),
         ]
     }
@@ -414,6 +448,31 @@ mod tests {
         let (got, diagnostics) = edges(&plan);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(got, fixture_a_edges());
+    }
+
+    #[test]
+    fn fixture_a_edge_sources() {
+        let plan = parse(FIXTURE_A).expect("fixture A parses");
+        let (got, _) = edges(&plan);
+        let source_of = |origin: &str| {
+            got.iter()
+                .find(|edge| edge.origin == origin)
+                .unwrap_or_else(|| panic!("no edge with origin {origin}"))
+                .source
+        };
+        assert_eq!(source_of("room Garderob width"), Some(Source::Laser));
+        assert_eq!(
+            source_of("Hall east_of Garderob gap"),
+            Some(Source::Drawing)
+        );
+        let aligns: Vec<&Edge> = got
+            .iter()
+            .filter(|edge| edge.origin.starts_with("align"))
+            .collect();
+        assert_eq!(aligns.len(), 4, "fixture A has four align edges");
+        for edge in aligns {
+            assert_eq!(edge.source, None, "{}", edge.origin);
+        }
     }
 
     #[test]
@@ -462,7 +521,8 @@ mod tests {
                 fid("B", Side::East),
                 2000,
                 10,
-                "measure A.west to B.east"
+                "measure A.west to B.east",
+                Some(Source::Assumed),
             )
         );
     }
