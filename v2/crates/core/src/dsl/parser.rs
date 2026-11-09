@@ -30,6 +30,7 @@ use crate::intent::{
 };
 use crate::units::{Mm, Quantity, Source};
 
+use super::resolve::{NameRef, resolve_names};
 use super::{Token, TokenKind, lex};
 
 /// What the grammar accepts after `relation`'s `rel_kw`, shown in E006 text.
@@ -42,7 +43,8 @@ const SIZE: &str = r#"a number or "?""#;
 /// Parse DSL source into a [`Plan`].
 ///
 /// Returns the first error as a diagnostic: an E006 for a lexical or grammar
-/// error, or an E002 for a room declared twice.
+/// error, an E002 for a room declared twice, or an E001 for a name that is not
+/// a declared room (checked after the whole file is read).
 pub fn parse(src: &str) -> Result<Plan, Diagnostic> {
     let tokens = lex(src)?;
     let mut builder = Builder::new();
@@ -54,7 +56,14 @@ pub fn parse(src: &str) -> Result<Plan, Diagnostic> {
         };
         statement(&mut cur, &mut builder, line.indented)?;
     }
-    Ok(builder.finish())
+    let refs = std::mem::take(&mut builder.refs);
+    let plan = builder.finish();
+    if let Err(errors) = resolve_names(&plan, &refs)
+        && let Some(first) = errors.into_iter().next()
+    {
+        return Err(first);
+    }
+    Ok(plan)
 }
 
 /// One statement line without its `Indent`, `Comment` and `Newline` tokens.
@@ -98,6 +107,8 @@ struct Builder {
     last_room: Option<RoomName>,
     /// Indexes into `plan.relations` whose plain `gap` takes `default_wall`.
     plain_gaps: Vec<usize>,
+    /// Room names used in references, with their positions, for E001.
+    refs: Vec<NameRef>,
 }
 
 impl Builder {
@@ -117,6 +128,7 @@ impl Builder {
             room_lines: BTreeMap::new(),
             last_room: None,
             plain_gaps: Vec::new(),
+            refs: Vec::new(),
         }
     }
 
@@ -438,9 +450,31 @@ fn room(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
     b.add_room(span, room)
 }
 
+/// A room name used as a reference, kept for name resolution (E001).
+fn reference(cur: &mut Cursor, b: &mut Builder) -> Result<RoomName, Diagnostic> {
+    let span = cur.span();
+    let name = cur.name()?;
+    b.refs.push(NameRef {
+        name: name.clone(),
+        span,
+    });
+    Ok(name)
+}
+
+/// A face used as a reference; its room is kept for name resolution (E001).
+fn face_ref(cur: &mut Cursor, b: &mut Builder) -> Result<FaceRef, Diagnostic> {
+    let span = cur.span();
+    let face = cur.face()?;
+    b.refs.push(NameRef {
+        name: face.room.clone(),
+        span,
+    });
+    Ok(face)
+}
+
 fn relation(cur: &mut Cursor, b: &mut Builder, indented: bool) -> Result<(), Diagnostic> {
     let subject = if matches!(cur.kind(), Some(TokenKind::Name(_))) {
-        cur.name()?
+        reference(cur, b)?
     } else {
         match (indented, &b.last_room) {
             (true, Some(room)) => room.clone(),
@@ -448,7 +482,7 @@ fn relation(cur: &mut Cursor, b: &mut Builder, indented: bool) -> Result<(), Dia
         }
     };
     let dir = cur.dir()?;
-    let of = cur.name()?;
+    let of = reference(cur, b)?;
     let gap = match cur.gapspec()? {
         Some(gap) => gap,
         None => {
@@ -478,9 +512,9 @@ fn align(cur: &mut Cursor, b: &mut Builder, indented: bool) -> Result<(), Diagno
     cur.skip();
     let side = cur.side()?;
     let mut rooms: Vec<RoomName> = last.into_iter().collect();
-    rooms.push(cur.name()?);
+    rooms.push(reference(cur, b)?);
     while matches!(cur.kind(), Some(TokenKind::Name(_))) {
-        rooms.push(cur.name()?);
+        rooms.push(reference(cur, b)?);
     }
     cur.finish()?;
     b.plan.relations.push(Relation::Align { side, rooms });
@@ -489,9 +523,9 @@ fn align(cur: &mut Cursor, b: &mut Builder, indented: bool) -> Result<(), Diagno
 
 fn measure(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
     cur.skip();
-    let from = cur.face()?;
+    let from = face_ref(cur, b)?;
     cur.expect_kw("to")?;
-    let to = cur.face()?;
+    let to = face_ref(cur, b)?;
     cur.expect_tok(TokenKind::Eq, "=")?;
     let value = cur.int("a number")?;
     let src = cur.src()?;
@@ -508,7 +542,7 @@ fn measure(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
 
 fn opening(cur: &mut Cursor, b: &mut Builder, kind: OpeningKind) -> Result<(), Diagnostic> {
     cur.skip();
-    let face = cur.face()?;
+    let face = face_ref(cur, b)?;
     cur.expect_kw("at")?;
     let at = cur.int("a number")?;
     cur.expect_kw("width")?;
@@ -524,7 +558,7 @@ fn opening(cur: &mut Cursor, b: &mut Builder, kind: OpeningKind) -> Result<(), D
         None
     };
     let opens_into = if cur.opt_kw("opens") {
-        Some(cur.name()?)
+        Some(reference(cur, b)?)
     } else {
         None
     };
@@ -546,7 +580,7 @@ fn opening(cur: &mut Cursor, b: &mut Builder, kind: OpeningKind) -> Result<(), D
 
 fn wall(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
     cur.skip();
-    let face = cur.face()?;
+    let face = face_ref(cur, b)?;
     cur.expect_kw("thickness")?;
     let value = cur.int("a number")?;
     let src = cur.src()?;
