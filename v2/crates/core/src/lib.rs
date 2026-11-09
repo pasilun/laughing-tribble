@@ -5,9 +5,11 @@
 
 #![forbid(unsafe_code)]
 
+pub mod diagnostics;
 pub mod intent;
 pub mod units;
 
+pub use diagnostics::{Code, Diagnostic, Severity, Span, message};
 pub use intent::{
     FaceRef, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room, RoomName,
     RoomNameError, Side, WallOverride,
