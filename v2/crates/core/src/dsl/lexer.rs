@@ -16,8 +16,12 @@
 //! - A `STRING` may not contain a line end. An unterminated string is an error.
 //! - Comments run from `#` to the end of the line; the token text is what
 //!   follows `#`.
-//! - Lexing stops at the first error. It returns `Err` with one E006 diagnostic
-//!   and no tokens. The error span is the position of the offending character.
+//! - A character that starts no token (for example `*`) is not a lexer error.
+//!   It becomes a `TokenKind::Unknown` token with its span, and the parser
+//!   reports it as E006 with the text the grammar needs at that point.
+//! - Other lexical errors stop lexing at the first error. It returns `Err` with
+//!   one E006 diagnostic and no tokens. The error span is the position of the
+//!   offending character.
 
 use serde_json::json;
 
@@ -101,6 +105,9 @@ pub enum TokenKind {
     Comment(String),
     /// End of a line.
     Newline,
+    /// A character that starts no token, for example `*`. The parser reports
+    /// it as E006 where the grammar needs something else.
+    Unknown(char),
 }
 
 /// Lex DSL source into tokens, or return the first E006 error.
@@ -161,7 +168,7 @@ impl Lexer {
                 _ => {
                     let span = self.span();
                     self.bump();
-                    return Err(error(span, "a token", &describe(Some(c))));
+                    self.push(TokenKind::Unknown(c), span);
                 }
             }
         }
@@ -541,15 +548,14 @@ mod tests {
     }
 
     #[test]
-    fn unknown_character_is_e006_at_its_position() {
+    fn unknown_character_is_a_token_at_its_position() {
         let src = format!("{}*", "A".repeat(17));
-        let diagnostic = lex(&format!("{}\n{src}", "\n".repeat(5))).expect_err("E006");
-        assert_eq!(diagnostic.code, Code::E006);
-        assert_eq!(diagnostic.span, Some(Span { line: 7, col: 18 }));
-        assert_eq!(
-            diagnostic.message,
-            "Line 7, column 18: expected a token, found \"*\"."
-        );
+        let tokens = lex(&format!("{}\n{src}", "\n".repeat(5))).expect("lex should succeed");
+        let star = tokens
+            .iter()
+            .find(|t| t.kind == TokenKind::Unknown('*'))
+            .expect("Unknown('*') token");
+        assert_eq!(star.span, Span { line: 7, col: 18 });
     }
 
     #[test]

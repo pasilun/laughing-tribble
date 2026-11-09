@@ -651,6 +651,7 @@ fn describe(kind: &TokenKind) -> String {
         TokenKind::X => quoted_text("x"),
         TokenKind::Comment(_) => "a comment".to_string(),
         TokenKind::Newline => "end of line".to_string(),
+        TokenKind::Unknown(c) => quoted_text(&c.to_string()),
     }
 }
 
@@ -900,6 +901,13 @@ mod tests {
             d.message,
             r#"Line 1, column 16: expected "x", found "2000"."#
         );
+    }
+
+    #[test]
+    fn e006_unknown_character_where_size_separator_is_needed() {
+        let d = e006_of("room A 3000 * 2000\n");
+        assert_eq!(d.code, Code::E006);
+        assert_eq!(d.message, r#"Line 1, column 13: expected "x", found "*"."#);
     }
 
     #[test]
