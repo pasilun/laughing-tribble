@@ -644,4 +644,69 @@ mod tests {
         assert!(svg.contains(">A&amp;B<"), "{svg}");
         assert!(!svg.contains("A&B"), "{svg}");
     }
+
+    const FIXTURE_B: &str = include_str!("../../../fixtures/lgh154-b.plan");
+    const FIXTURE_C: &str = include_str!("../../../fixtures/lgh154-c.plan");
+
+    /// For the `conflict:1` mark of `src` drawn at 1600 tokens: the label's
+    /// anchor in px, the mark's midpoint in px, and the mark's length in px.
+    fn conflict_label_anchor(src: &str) -> ([f64; 2], [f64; 2], f64) {
+        let plan = plan_core::dsl::parse(src).expect("fixture parses");
+        let resolved = plan_core::resolve_draft(&plan).0.expect("draft resolves");
+        let marks = crate::marks::conflict_marks(&resolved);
+        let opts = RenderOptions {
+            view: View::Plan,
+            region: None,
+            max_tokens: 1600,
+        };
+        let rendered = render_marked(&resolved, &opts, &marks).expect("fixture renders");
+        assert_eq!(rendered.viewport.mm_per_px, 6.0);
+        let mark = marks
+            .iter()
+            .find(|m| m.id == "conflict:1")
+            .expect("conflict:1 mark");
+        let mid = [
+            (mark.from[0] + mark.to[0]) as f64 / 2.0,
+            (mark.from[1] + mark.to[1]) as f64 / 2.0,
+        ];
+        let mid_px = point_px(mid, &rendered.viewport).expect("midpoint in image");
+        let len_mm = ((mark.to[0] - mark.from[0]) as f64).hypot((mark.to[1] - mark.from[1]) as f64);
+        let label = rendered
+            .labels
+            .iter()
+            .find(|l| l.id == "conflict:1")
+            .expect("label for conflict:1");
+        (
+            label.anchor_px,
+            mid_px,
+            len_mm / rendered.viewport.mm_per_px,
+        )
+    }
+
+    #[test]
+    fn short_mark_label_moves_beside_it() {
+        // Fixture C's mark is 1 mm (under 40 px): its label is 20 px east of the midpoint.
+        let (anchor, mid_px, len_px) = conflict_label_anchor(FIXTURE_C);
+        assert!(len_px < 40.0, "{len_px}");
+        assert!(
+            (anchor[0] - (mid_px[0] + 20.0)).abs() < 1e-9,
+            "{anchor:?} {mid_px:?}"
+        );
+        assert!(
+            (anchor[1] - mid_px[1]).abs() < 1e-9,
+            "{anchor:?} {mid_px:?}"
+        );
+
+        // Fixture B's mark is about 748 px long: its label stays on the midpoint.
+        let (anchor, mid_px, len_px) = conflict_label_anchor(FIXTURE_B);
+        assert!(len_px >= 40.0, "{len_px}");
+        assert!(
+            (anchor[0] - mid_px[0]).abs() < 1e-9,
+            "{anchor:?} {mid_px:?}"
+        );
+        assert!(
+            (anchor[1] - mid_px[1]).abs() < 1e-9,
+            "{anchor:?} {mid_px:?}"
+        );
+    }
 }
