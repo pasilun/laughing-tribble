@@ -32,6 +32,9 @@ pub fn solve_json(stem: &str, resolved: Option<&Resolved>, diagnostics: &[Diagno
         out.insert("spaces".to_string(), spaces(model));
         out.insert("openings".to_string(), openings(model));
         out.insert("interior_walls".to_string(), interior_walls(model));
+        if !model.apartments.is_empty() {
+            out.insert("apartments".to_string(), json!(model.apartments));
+        }
     }
     out.insert(
         "diagnostics".to_string(),

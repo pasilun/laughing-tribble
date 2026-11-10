@@ -61,6 +61,9 @@ pub struct Resolved {
     /// Rooms that are parts of another room (§15 D46): part → parent, for each
     /// part with a rectangle whose parent also has one.
     pub room_parts: BTreeMap<RoomName, RoomName>,
+    /// Total area in mm² of the rooms of each apartment that have a rectangle (§15 D47).
+    /// Empty when no room names an apartment.
+    pub apartments: BTreeMap<String, i64>,
     /// Every diagnostic found while resolving (warnings and infos; errors give `None`).
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -142,6 +145,9 @@ pub struct Wall {
     pub fire: Option<String>,
     /// Existing, demolished or new (§15 D34). `Existing` without a wall override.
     pub phase: Phase,
+    /// An interior wall between rooms of different apartments, where at least one
+    /// of the two rooms has one (§15 D47). Always `false` for outer walls.
+    pub separating: bool,
 }
 
 /// An opening placed on its face (§5.3 `ResolvedOpening`).
@@ -349,9 +355,11 @@ fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>)
             bearing: attributes.is_some_and(|o| o.bearing),
             fire: attributes.and_then(|o| o.fire.clone()),
             phase: attributes.map_or(Phase::Existing, |o| o.phase),
+            separating: kind == WallKind::Interior && is_separating(plan, wall),
         };
         wall_models.insert(wall.id.clone(), model);
     }
+    let apartments = apartment_areas(plan, &rooms);
     let room_phases = rooms
         .keys()
         .filter_map(|name| Some((name.clone(), plan.rooms.get(name)?.phase)))
@@ -384,9 +392,37 @@ fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>)
             .collect(),
         room_phases,
         room_parts,
+        apartments,
         diagnostics: diagnostics.clone(),
     };
     (Some(resolved), diagnostics)
+}
+
+/// True when an interior wall lies between rooms of different apartments and
+/// at least one of them has an apartment (§15 D47). Two rooms without one, or
+/// two in the same one, are not separated. An apartment-less room next to a flat
+/// (a stairwell, say) is.
+fn is_separating(plan: &Plan, wall: &BuiltWall) -> bool {
+    let Some(other) = wall.other.as_ref() else {
+        return false;
+    };
+    let apartment = |room: &RoomName| plan.rooms.get(room).and_then(|r| r.apartment.clone());
+    let (ours, theirs) = (apartment(&wall.face.room), apartment(&other.room));
+    ours != theirs && (ours.is_some() || theirs.is_some())
+}
+
+/// The total area in mm² of the rooms of each apartment, for the rooms that have
+/// a rectangle (§15 D47). Rooms without an apartment are not counted.
+fn apartment_areas(plan: &Plan, rooms: &BTreeMap<RoomName, RoomRect>) -> BTreeMap<String, i64> {
+    let mut areas: BTreeMap<String, i64> = BTreeMap::new();
+    for room in plan.rooms.values() {
+        let (Some(apartment), Some(rect)) = (&room.apartment, rooms.get(&room.name)) else {
+            continue;
+        };
+        *areas.entry(apartment.clone()).or_insert(0) +=
+            (rect.east - rect.west) * (rect.south - rect.north);
+    }
+    areas
 }
 
 /// The rooms of `plan` whose two faces on `axis` (west and east on x, north and
@@ -1025,5 +1061,77 @@ room B 1500 x 1000 source laser
         let (resolved, diagnostics) = resolve(&plan);
         assert!(resolved.is_some(), "{diagnostics:?}");
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    /// §15 D47: three rooms in a row. A and B are two flats, C has no apartment,
+    /// so both walls are separating and the flats have their areas.
+    const APARTMENTS: &str = "plan \"p\"
+default_wall 90
+default_outer_wall 300
+
+room A 3000 x 2000 source laser apartment \"1\"
+room B 2000 x 2000 source laser apartment \"2\"
+  east_of A gap
+  align north A
+room C 1000 x 2000 source laser
+  east_of B gap
+  align north B
+";
+
+    #[test]
+    fn walls_between_apartments_are_separating_and_areas_summed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(APARTMENTS);
+        let (resolved, diagnostics) = resolve(&plan);
+        assert!(!has_error(&diagnostics), "{diagnostics:?}");
+        let resolved = resolved.ok_or("the plan should resolve")?;
+        for id in ["W:A.east|B.west", "W:B.east|C.west"] {
+            let wall = resolved.walls.get(id).ok_or("no interior wall")?;
+            assert!(wall.separating, "{id}");
+        }
+        assert!(
+            resolved
+                .walls
+                .values()
+                .filter(|w| w.kind == WallKind::Outer)
+                .all(|w| !w.separating)
+        );
+        let apartments: Vec<(&str, i64)> = resolved
+            .apartments
+            .iter()
+            .map(|(name, area)| (name.as_str(), *area))
+            .collect();
+        assert_eq!(apartments, vec![("1", 6_000_000), ("2", 4_000_000)]);
+        Ok(())
+    }
+
+    #[test]
+    fn rooms_without_apartments_give_no_separating_wall_and_no_key()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plain = APARTMENTS
+            .replace(" apartment \"1\"", "")
+            .replace(" apartment \"2\"", "");
+        let plan = fixture(&plain);
+        let (resolved, diagnostics) = resolve(&plan);
+        assert!(!has_error(&diagnostics), "{diagnostics:?}");
+        let resolved = resolved.ok_or("the plan should resolve")?;
+        assert!(resolved.walls.values().all(|w| !w.separating));
+        assert!(resolved.apartments.is_empty());
+        let json = crate::report::solve_json("p", Some(&resolved), &diagnostics);
+        assert!(json.get("apartments").is_none(), "{json}");
+        Ok(())
+    }
+
+    #[test]
+    fn apartments_key_is_in_solve_json_when_named() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(APARTMENTS);
+        let (resolved, diagnostics) = resolve(&plan);
+        let resolved = resolved.ok_or("the plan should resolve")?;
+        let json = crate::report::solve_json("p", Some(&resolved), &diagnostics);
+        assert_eq!(
+            json["apartments"],
+            json!({ "1": 6_000_000, "2": 4_000_000 })
+        );
+        Ok(())
     }
 }

@@ -80,6 +80,14 @@ pub fn summary(plan_id: &str, resolve: &Resolve) -> Result<Value, Vec<Diagnostic
         };
         lines.push(format!("{name} {w} x {d} mm, {area} m²"));
     }
+    if let Some(model) = resolved {
+        for (name, area) in &model.apartments {
+            lines.push(format!(
+                "Apartment {name}: {:.2} m²",
+                *area as f64 / 1_000_000.0
+            ));
+        }
+    }
     let (walls, openings) = resolved.map_or((0, 0), |r| (r.walls.len(), r.openings.len()));
     lines.push(format!("Walls: {walls}, openings: {openings}."));
     let count = |s: Severity| {
@@ -118,7 +126,7 @@ pub fn json_view(plan_id: &str, resolve: &Resolve, fields: &[Field]) -> Value {
 /// The §7.7 keys that belong to a field group.
 fn keys(field: &Field) -> &'static [&'static str] {
     match field {
-        Field::Rooms => &["faces", "areas_mm2", "spaces", "adjusted"],
+        Field::Rooms => &["faces", "areas_mm2", "spaces", "apartments", "adjusted"],
         Field::Walls => &["interior_walls"],
         Field::Openings => &["openings"],
         Field::Diagnostics => &["diagnostics"],

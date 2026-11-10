@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::diagnostics::{Code, Diagnostic, Severity, message};
 use crate::intent::{FixtureKind, OpeningKind, Phase, Plan};
-use crate::resolved::Resolved;
+use crate::resolved::{Resolved, Wall};
 
 /// The title block keys a permit drawing needs, in the order they are checked (§15 D41).
 const REQUIRED_TITLE_KEYS: [&str; 4] = ["property", "drawing", "applicant", "date"];
@@ -39,13 +39,16 @@ pub fn review(plan: &Plan, resolved: &Resolved) -> Vec<Diagnostic> {
                 data: json!({ "wall": id }),
             });
         }
-        if let Some(fire) = &wall.fire
+        if let Some(fire) = fire_text(wall)
             && wall.phase == Phase::Demolish
         {
             out.push(Diagnostic {
                 code: Code::W031,
                 severity: Severity::Warning,
-                message: message(Code::W031, &[("id", id.clone()), ("fire", fire.clone())]),
+                message: message(
+                    Code::W031,
+                    &[("id", id.clone()), ("fire", fire.to_string())],
+                ),
                 span: None,
                 refs: vec![id.clone()],
                 data: json!({ "wall": id, "fire": fire }),
@@ -81,7 +84,7 @@ pub fn review(plan: &Plan, resolved: &Resolved) -> Vec<Diagnostic> {
                     data: json!({ "opening": id, "wall": wall_id }),
                 });
             }
-            if let Some(fire) = &wall.fire
+            if let Some(fire) = fire_text(wall)
                 && wall.phase != Phase::Demolish
             {
                 out.push(Diagnostic {
@@ -93,7 +96,7 @@ pub fn review(plan: &Plan, resolved: &Resolved) -> Vec<Diagnostic> {
                             ("kind", kind.to_string()),
                             ("id", id.clone()),
                             ("wall", wall_id.clone()),
-                            ("fire", fire.clone()),
+                            ("fire", fire.to_string()),
                         ],
                     ),
                     span: None,
@@ -180,6 +183,16 @@ pub fn review(plan: &Plan, resolved: &Resolved) -> Vec<Diagnostic> {
     }
 
     out
+}
+
+/// The fire text that W031 and W033 use for a wall: its own `fire` text, else
+/// `apartment boundary` for a separating wall (§15 D47), else none.
+fn fire_text(wall: &Wall) -> Option<&str> {
+    match &wall.fire {
+        Some(fire) => Some(fire.as_str()),
+        None if wall.separating => Some("apartment boundary"),
+        None => None,
+    }
 }
 
 #[cfg(test)]
@@ -366,6 +379,33 @@ mod tests {
         let src = kok_with_title("fixture stove Kok.north at 200");
         let (plan, resolved) = plan_and_resolved_of(&src)?;
         assert!(review(&plan, &resolved).is_empty());
+        Ok(())
+    }
+
+    /// §15 D47: two flats; the wall between them is a fire-cell boundary
+    /// with the text `apartment boundary`, so a new door in it is W033.
+    #[test]
+    fn new_door_in_apartment_boundary_gives_w033() -> Result<(), Box<dyn std::error::Error>> {
+        let src = "plan \"p\"
+default_wall 90
+default_outer_wall 300
+
+room A 3000 x 2000 source laser apartment \"1\"
+room B 2000 x 2000 source laser apartment \"2\"
+  east_of A gap 90
+  align north A
+door A.east at 300 width 900 hinge north opens B new
+";
+        let (plan, resolved) = plan_and_resolved_of(src)?;
+        let found = review(&plan, &resolved);
+        let w033: Vec<&Diagnostic> = found.iter().filter(|d| d.code == Code::W033).collect();
+        assert_eq!(w033.len(), 1, "{found:?}");
+        assert!(
+            w033[0].message.contains("(apartment boundary)"),
+            "{}",
+            w033[0].message
+        );
+        assert_eq!(w033[0].data["fire"], "apartment boundary");
         Ok(())
     }
 }

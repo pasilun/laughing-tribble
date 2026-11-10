@@ -250,18 +250,21 @@ fn room(name: &str, rect: &RoomRect, area: Option<i64>, fonts: RoomFonts, sheet:
 /// A wall: a grey rectangle, labelled with its id. The rectangle is the
 /// [`corner_rect`] of the wall (D28); the label is centred on the wall's own
 /// x and y extents. A demolished wall is a white rectangle with a dashed red
-/// outline, a new wall is near-black, and an existing wall is grey. `s` is the
-/// opening stroke width, which also sets the dash pattern.
+/// outline, a new wall is near-black, and an existing wall is grey. An existing
+/// bearing or separating wall (§15 D47) is darker grey, interior or outer. `s` is
+/// the opening stroke width, which also sets the dash pattern.
 fn wall_element(wall: &Wall, resolved: &Resolved, s: f64) -> String {
     let (x0, y0, x1, y1) = corner_rect(wall, resolved);
     let (x, y) = (x0, y0);
     let (w, h) = (x1 - x0, y1 - y0);
+    let heavy = wall.bearing || wall.separating;
     let (fill, outline) = match (wall.phase, wall.kind) {
         (Phase::Demolish, _) => (
             "#ffffff",
             format!(r##" stroke="#c62828" stroke-width="{s}"{}"##, dash_attr(s)),
         ),
         (Phase::New, _) => ("#1a1a1a", String::new()),
+        (Phase::Existing, _) if heavy => ("#4a4a4a", String::new()),
         (Phase::Existing, WallKind::Interior) => ("#a6a6a6", String::new()),
         (Phase::Existing, WallKind::Outer) => ("#6e6e6e", String::new()),
     };
@@ -756,8 +759,39 @@ mod tests {
     fn existing_outer_wall_is_unchanged() {
         let svg = review_1_svg();
         let wall = element_with(&svg, "W:A.north:outer");
-        assert!(wall.contains(r##"fill="#6e6e6e""##), "{wall}");
+        assert!(wall.contains(r##"fill="#4a4a4a""##), "{wall}");
         assert!(!wall.contains("stroke-dasharray"), "{wall}");
+    }
+
+    /// §15 D47: two flats, so the wall between them is separating.
+    const APARTMENTS: &str = "plan \"p\"
+default_wall 90
+default_outer_wall 300
+
+room A 3000 x 2000 source laser apartment \"1\"
+room B 2000 x 2000 source laser apartment \"2\"
+  east_of A gap
+  align north A
+";
+
+    fn apartments_svg() -> String {
+        let plan = parse(APARTMENTS).expect("apartments parse");
+        let (resolved, diagnostics) = resolve(&plan);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        plan_svg(&resolved.expect("apartments resolve"))
+    }
+
+    #[test]
+    fn separating_wall_is_dark_grey() {
+        let svg = apartments_svg();
+        let wall = element_with(&svg, "W:A.east|B.west");
+        assert!(wall.contains(r##"fill="#4a4a4a""##), "{wall}");
+    }
+
+    #[test]
+    fn fixture_a_has_no_dark_grey_wall() {
+        let svg = fixture_a_svg();
+        assert!(!svg.contains(r##"fill="#4a4a4a""##));
     }
 
     #[test]
