@@ -573,6 +573,7 @@ dependencies = [
  "insta",
  "plan-core",
  "plan-render",
+ "serde_json",
 ]
 
 [[package]]

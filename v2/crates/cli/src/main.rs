@@ -8,6 +8,8 @@
 //!   if the plan does not resolve, print the diagnostics and exit 1.
 //! - `plan suggest <file>`: print each W001 (loose room) with its suggested
 //!   measurement, one per line.
+//! - `plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N]
+//!   [--region ID | --rect x,y,w,h]`: write the PNG and print its viewport as JSON.
 //! - `plan --version`.
 //!
 //! Exit status: 0 on success, 1 when the plan has an Error (or does not parse),
@@ -22,6 +24,8 @@ use std::process::ExitCode;
 use plan_core::solve::components::suggested_w001;
 use plan_core::solve::{edges, unmeasured};
 use plan_core::{Diagnostic, Resolved, Severity, dsl, load, solve_json};
+use plan_render::viewport::DEFAULT_TOKENS;
+use plan_render::{Region, RenderOptions, View};
 
 const USAGE: &str = "usage:
   plan check <file>
@@ -29,7 +33,11 @@ const USAGE: &str = "usage:
   plan solve --json <file>
   plan fmt <file> [--write]
   plan svg <file> [--out path]
+  plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h]
   plan --version";
+
+/// Usage line of `plan png`, printed on its own to stderr (exit 2).
+const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -53,6 +61,7 @@ fn run(words: &[&str]) -> Result<ExitCode, String> {
         ["fmt", file, "--write"] => fmt(file, true),
         ["svg", file] => svg(file, None),
         ["svg", file, "--out", out] => svg(file, Some(out)),
+        ["png", rest @ ..] => png_command(rest),
         ["--version"] => {
             println!("plan {}", env!("CARGO_PKG_VERSION"));
             Ok(ExitCode::SUCCESS)
@@ -163,6 +172,112 @@ fn svg(file: &str, out: Option<&str>) -> Result<ExitCode, String> {
         }
         None => print!("{text}"),
     }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// The arguments of `plan png`: the file, the output path and the render options.
+struct PngArgs<'a> {
+    file: &'a str,
+    out: &'a str,
+    view: View,
+    max_tokens: u32,
+    region: Option<Region>,
+}
+
+/// Parse `FILE -o OUT [--view V] [--max-tokens N] [--region ID | --rect x,y,w,h]`.
+/// `None` is a usage error: a missing file or `-o`, an unknown option, a bad
+/// value, or both `--region` and `--rect`.
+fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
+    let (&file, rest) = words.split_first()?;
+    let mut out = None;
+    let mut view = View::Labels;
+    let mut max_tokens = DEFAULT_TOKENS;
+    let mut region = None;
+    let mut rect = None;
+    for pair in rest.chunks(2) {
+        let [flag, value] = pair else {
+            return None;
+        };
+        match *flag {
+            "-o" => out = Some(*value),
+            "--view" => {
+                view = match *value {
+                    "plan" => View::Plan,
+                    "labels" => View::Labels,
+                    _ => return None,
+                }
+            }
+            "--max-tokens" => max_tokens = value.parse().ok()?,
+            "--region" => region = Some(Region::Id((*value).to_string())),
+            "--rect" => rect = Some(Region::RectMm(parse_rect(value)?)),
+            _ => return None,
+        }
+    }
+    if region.is_some() && rect.is_some() {
+        return None;
+    }
+    Some(PngArgs {
+        file,
+        out: out?,
+        view,
+        max_tokens,
+        region: region.or(rect),
+    })
+}
+
+/// `x,y,w,h` in integer mm.
+fn parse_rect(text: &str) -> Option<[i64; 4]> {
+    let mut parts = text.split(',').map(|part| part.parse::<i64>().ok());
+    let rect = [
+        parts.next()??,
+        parts.next()??,
+        parts.next()??,
+        parts.next()??,
+    ];
+    parts.next().is_none().then_some(rect)
+}
+
+/// `plan png`: render the plan to `-o`, and print the viewport as one line of JSON.
+/// A plan that does not resolve prints its Error diagnostics and exits 1; so does a
+/// render that fails (an unknown region id).
+fn png_command(words: &[&str]) -> Result<ExitCode, String> {
+    let Some(args) = png_args(words) else {
+        eprintln!("{PNG_USAGE}");
+        return Ok(ExitCode::from(2));
+    };
+    let (_, src) = read_source(args.file)?;
+    let (resolved, diagnostics) = solve_source(&src);
+    let Some(resolved) = resolved else {
+        for diagnostic in diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == Severity::Error)
+        {
+            println!("{}", describe(diagnostic));
+        }
+        return Ok(ExitCode::from(1));
+    };
+    let options = RenderOptions {
+        view: args.view,
+        region: args.region,
+        max_tokens: args.max_tokens,
+    };
+    let rendered = match plan_render::render(&resolved, &options) {
+        Ok(rendered) => rendered,
+        Err(diagnostic) => {
+            println!("{}", describe(&diagnostic));
+            return Ok(ExitCode::from(1));
+        }
+    };
+    let bytes = match plan_render::png(&rendered) {
+        Ok(bytes) => bytes,
+        Err(diagnostic) => {
+            println!("{}", describe(&diagnostic));
+            return Ok(ExitCode::from(1));
+        }
+    };
+    fs::write(args.out, bytes).map_err(|error| format!("cannot write {}: {error}", args.out))?;
+    let line = serde_json::to_string(&rendered.viewport).map_err(|error| error.to_string())?;
+    println!("{line}");
     Ok(ExitCode::SUCCESS)
 }
 

@@ -16,6 +16,7 @@ workspace = true
 [dependencies]
 plan-core = { path = "../core" }
 plan-render = { path = "../render" }
+serde_json = "1"
 
 [dev-dependencies]
 insta = "1.49.0"
