@@ -380,7 +380,6 @@ pub struct Stub {
 
 /// Attributes of the wall on one face, e.g. an outer wall measured 160 mm, or a
 /// load-bearing wall (spec §15 D34).
-/// load-bearing wall (spec §15 D34).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WallOverride {
     /// The face whose wall is overridden.
