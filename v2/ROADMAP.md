@@ -6,10 +6,10 @@ Order of work, decided with the maintainer on 2026-11-10. It replaces the outloo
 |---|---|---|
 | 1 | Kernel and CLI: model, DSL, solver, walls, openings, areas (week one) | Done |
 | 2 | Least squares, suggestions, renders sized for Claude, MCP server with check, get, apply, render (week two) | Done, except W2-R1-f2 (ready) |
-| 3 | Audit fixes and validation; closed corners and door swings; PDF sheets; wall attributes and the permit review (week three, cards W3-01…W3-R3) | Cards written 2026-11-10 |
-| 4 | `.skp` export through OpenSKP | Needs a spike first, see below |
-| 5 | Diagnostic views: conflicts, missing measurements, before/after diff, overlay on a source image (`render` views that answer E022 today) | Not started |
-| 6 | Full permit sheet: title block, Swedish texts, before/after sheets, dimension lines | Not started |
+| 3 | Audit fixes and validation; closed corners and door swings; PDF sheets; wall attributes and the permit review (week three, cards W3-01…W3-R3) | Done 2026-11-10, except W3-R2-f2 (ready) |
+| 4 | `.skp` export through OpenSKP | Skipped for now (maintainer, 2026-11-10) |
+| 5 | Diagnostic views: conflicts, missing measurements, diff (cards W4-01…W4-R1). Overlay on a source image moves to row 7 | Cards written 2026-11-10 |
+| 6 | Permit sheet: title block, Swedish texts, before/after sheets, dimension chains on two sides (cards W4-09…W4-R2) | Cards written 2026-11-10 |
 | 7 | Import of laser photos and sketches into readings; MCP App "tap the wall"; `find` and `history` tools; command-log storage | Not started |
 | 8 | Eval across Haiku, Sonnet and Opus on a fixed task set | Not started |
 | 9 | Import of v1 plans and cut-over | Not started |
@@ -20,7 +20,8 @@ Order of work, decided with the maintainer on 2026-11-10. It replaces the outloo
 
 ## Open points
 
-- **`.skp` spike (row 4).** OpenSKP is C++ from a third-party repo. An earlier attempt to compile third-party code in a cloud session was stopped by the safety check, so a build run cannot do this spike. Either the maintainer runs it locally (write a four-wall `.skp`, open it in SketchUp for Web), or `.skp` goes through Trimble's hosted SketchUp connector instead. No cards until that is settled.
+- **`.skp` (row 4)** is skipped for now. When it comes back: OpenSKP is third-party C++ that a cloud run could not compile earlier, so it needs a local spike or Trimble's hosted connector.
 - **Solver reuse.** SolidCraft's sketch solver is not used. The in-house axis solver covers straight walls; revisit only when angled walls are needed (row 10).
 - **Manual check still open:** add the MCP server to Claude Code on Haiku (`v2/crates/server/README.md`) and run `check` and `render` on `lgh154-b`.
 - **Free-standing walls, angled walls, non-rectangular rooms** (`docs/v2-agent-specs.md` §13) are needed before the editor; the spec run for row 10 decides the DSL.
+- **Not yet carded from rows 5–6:** door swings can cross a small room's label; interior dimension lines; chains on the south and east sides; v1's kitchen-plug, ventilation and property-name checks (they need fixtures).

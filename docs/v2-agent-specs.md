@@ -315,7 +315,8 @@ pub struct AxisGraphSolver;      // §6.2, Phase 1
 file        = { line } ;
 line        = [ statement ] [ comment ] NEWLINE ;
 comment     = "#" { any } ;
-statement   = plan | default | room | relation | align | measure | opening | wall ;
+statement   = plan | default | title | room | relation | align | measure | opening | wall ;
+title       = "title" KEY STRING ;   (* KEY: property, address, applicant, drawing, drawn_by, date, description; §15 D41 *)
 plan        = "plan" STRING ;
 default     = ("default_wall" | "default_outer_wall") qty ;
 room        = "room" NAME size "x" size [ src ] [ "apartment" STRING ] [ phase ] ;
@@ -529,6 +530,7 @@ pub struct Diagnostic {
 | W032 | Warning | Review: new opening in a load-bearing wall | `{kind} {id} is new and sits in load-bearing wall {wall}; this needs a structural engineer's statement.` |
 | W033 | Warning | Review: new opening in a fire-cell boundary | `{kind} {id} is new and sits in fire-cell boundary {wall} ({fire}); a fire protection description is required.` |
 | I030 | Info | Review: new opening without height | `{kind} {id} is new and has no height; add "height <mm>" if the engineer needs it.` |
+| I031 | Info | Review: title block entry missing | `Title block has no {key}; add: title {key} "…"` |
 
 Codes E011–E023 (E013 added in D19) and I020 were added by the spec run of 2026-11-09 (§15 D10, D13, D17, D8).
 
@@ -842,3 +844,13 @@ Decisions taken by the spec runs where the sections above left a choice open. Ea
 - **D34. Wall attributes.** `wall FACE [thickness N [src]] [bearing] [fire "EI60"] [demolish|new]`. The attributes apply to every wall segment made from that face, and to an interior wall when either of its two faces has them. Thickness still only affects outer walls (interior thickness is the relation's gap). This is the part of §13 "phases on walls" that the permit review needs; free-standing walls stay deferred. Cards W3-18…20.
 - **D35. Permit review.** `review(resolved)` ports the v1 checks the v2 model can express (load-bearing, fire, opening height) as W030–W033 and I030. It is separate from `resolve`: `plan review`, and a `review` list in MCP `check`. The other v1 checks (title block, property name, kitchen plugs, ventilation, room names) need a title block and fixtures, which v2 does not have yet. Cards W3-21…23.
 - **D36. Order of work (maintainer, 2026-11-10).** No DXF. The desktop editor, accounts and sharing, and the mobile viewer (which needs share links) come last. The order is kept in `v2/ROADMAP.md`, which replaces `docs/v2-week1-pro.md` §8 for the spec runs.
+
+**Spec run 2026-11-10, second (week-four cards: diagnostic views and the permit sheet):**
+
+- **D37. Draft geometry.** `resolve_draft` builds the model even when measurements conflict: an axis with E003 keeps its first-pass (spanning-tree) coordinates, and openings that cannot be placed are left out. Only E014, E015, E010 and E005 leave nothing to draw. `resolve` is unchanged and still returns nothing on any error. Card W4-02.
+- **D38. Marks and the conflict view.** A mark is a line between two parallel faces with a label, drawn over the plain plan view and labelled through the same placer as room names. E003 `data` gains `from`, `to`, `stated`, `implied` (the stated edge's faces and values). A mark between faces sits at the middle of the rooms' overlap on the other axis, or of the gap between them. Cards W4-01, W4-03, W4-04.
+- **D39. Missing view.** For the picture only, each room that is not tied is placed where its first W001 suggests (the suggested relation with the default wall, and an alignment on the other axis), so it is drawn beside its neighbour and not on top of the first room. The picture marks that measurement in amber, and up to three I020 suggestions in blue. Rooms with an unknown size that nothing fixes are not drawn (D24). Cards W4-05, W4-06.
+- **D40. Diff view.** Walls and openings are compared by id between two resolved plans: added green, removed red dashed, changed amber. The MCP `render` view `diff` compares the stored plan with a dry-run `patch`. Ids can change when a room is renamed or a wall splits; such a wall shows as one removed and one added. `overlay` (plan over a source image) still answers E022; it comes with image import. Cards W4-07, W4-08.
+- **D41. Title block.** `title KEY "text"` statements with seven fixed keys, stored as a map on the plan and printed after the defaults. The sheet prints them in a two-row strip, in English or Swedish. The review adds I031 for a missing property, drawing, applicant or date (v1's `title-block` check). Cards W4-09, W4-10, W4-13.
+- **D42. Dimension chains.** Two chains on the sheet, along the north and the west side: ticks at the faces of the rooms that have an outer wall on that side, segment lengths printed when they are at least 6 mm long on paper, and a total. They reserve 14 mm of paper on those two sides. Interior dimension lines and chains on all four sides are left for later. Card W4-11.
+- **D43. Before and after sheets.** `phase_view` filters a resolved plan: "before" drops what is new and draws what will be demolished as ordinary walls; "after" drops what is demolished and draws what is new as ordinary walls. The geometry is shared (rooms do not change size between the two), as in v1. Card W4-12.
