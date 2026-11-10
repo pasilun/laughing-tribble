@@ -81,6 +81,15 @@ pub enum Code {
     /// E013: door hinge not along its face (spec §9.3, D19).
     #[serde(rename = "E013")]
     E013,
+    /// E020: unknown plan (MCP).
+    #[serde(rename = "E020")]
+    E020,
+    /// E021: invalid plan id (MCP).
+    #[serde(rename = "E021")]
+    E021,
+    /// E023: plan file read or write failed (MCP).
+    #[serde(rename = "E023")]
+    E023,
     /// W001: under-constrained (spec §6.4 wording; depth-unknown variant when `unknown_depth` is given).
     #[serde(rename = "W001")]
     W001,
@@ -113,6 +122,9 @@ impl Code {
             Code::E011 => "E011",
             Code::E012 => "E012",
             Code::E013 => "E013",
+            Code::E020 => "E020",
+            Code::E021 => "E021",
+            Code::E023 => "E023",
             Code::W001 => "W001",
             Code::W003 => "W003",
             Code::W004 => "W004",
@@ -189,6 +201,12 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
         }
         Code::E012 => fill("Render failed: {reason}.", args),
         Code::E013 => fill(r#"Hinge "{found}" on {face} must be {a} or {b}."#, args),
+        Code::E020 => fill(r#"Unknown plan "{id}". Create it with apply."#, args),
+        Code::E021 => fill(
+            r#"Invalid plan_id "{id}": use 1 to 64 letters, digits, "-" or "_"."#,
+            args,
+        ),
+        Code::E023 => fill(r#"Could not {action} plan "{id}": {reason}."#, args),
         Code::W001 => {
             if lookup(args, "unknown_depth").is_some() {
                 fill(
@@ -472,6 +490,37 @@ mod tests {
             ],
         );
         assert_eq!(text, r#"Hinge "east" on WC.west must be north or south."#);
+    }
+
+    #[test]
+    fn e020_exact_wording() {
+        let text = message(Code::E020, &[arg("id", "nope")]);
+        assert_eq!(text, r#"Unknown plan "nope". Create it with apply."#);
+    }
+
+    #[test]
+    fn e021_exact_wording() {
+        let text = message(Code::E021, &[arg("id", "../etc")]);
+        assert_eq!(
+            text,
+            r#"Invalid plan_id "../etc": use 1 to 64 letters, digits, "-" or "_"."#
+        );
+    }
+
+    #[test]
+    fn e023_exact_wording() {
+        let text = message(
+            Code::E023,
+            &[
+                arg("action", "read"),
+                arg("id", "lgh154-a"),
+                arg("reason", "permission denied"),
+            ],
+        );
+        assert_eq!(
+            text,
+            r#"Could not read plan "lgh154-a": permission denied."#
+        );
     }
 
     #[test]
