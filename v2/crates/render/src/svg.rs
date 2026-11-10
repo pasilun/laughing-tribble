@@ -47,7 +47,11 @@ pub(crate) const PLAN_ROOM_FONTS: RoomFonts = RoomFonts {
 pub fn plan_svg(resolved: &Resolved) -> String {
     let view = view_box(resolved);
     let mut elements = vec![grid(&view)];
-    elements.extend(drawn_elements(resolved, PLAN_ROOM_FONTS));
+    elements.extend(drawn_elements(
+        resolved,
+        PLAN_ROOM_FONTS,
+        OPENING_LINE as f64,
+    ));
 
     let mut out = format!(
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="{x} {y} {w} {h}">"##,
@@ -134,8 +138,13 @@ fn grid(view: &View) -> String {
 }
 
 /// The rooms, walls and openings, in that order, each as one SVG element.
-/// `fonts` sets the room label sizes; everything else is in mm.
-pub(crate) fn drawn_elements(resolved: &Resolved, fonts: RoomFonts) -> Vec<String> {
+/// `fonts` sets the room label sizes and `opening_stroke` the width of the
+/// opening lines, both in viewBox units; everything else is in mm.
+pub(crate) fn drawn_elements(
+    resolved: &Resolved,
+    fonts: RoomFonts,
+    opening_stroke: f64,
+) -> Vec<String> {
     let mut elements = Vec::new();
     for (name, rect) in &resolved.rooms {
         elements.push(room(name.as_str(), rect, fonts));
@@ -144,7 +153,7 @@ pub(crate) fn drawn_elements(resolved: &Resolved, fonts: RoomFonts) -> Vec<Strin
         elements.push(wall_element(wall));
     }
     for opening in resolved.openings.values() {
-        elements.push(opening_element(opening, resolved));
+        elements.push(opening_element(opening, resolved, opening_stroke));
     }
     elements
 }
@@ -204,7 +213,8 @@ fn wall_element(wall: &Wall) -> String {
 ///
 /// The gap spans the opening's `start..end` along its face and the wall's
 /// thickness across it. If the wall is missing, the thickness is the room face.
-fn opening_element(opening: &ResolvedOpening, resolved: &Resolved) -> String {
+/// The coloured line is `stroke` wide.
+fn opening_element(opening: &ResolvedOpening, resolved: &Resolved, stroke: f64) -> String {
     let horizontal = matches!(opening.face.side, Side::North | Side::South);
     let (lo, hi) = resolved
         .walls
@@ -236,7 +246,7 @@ fn opening_element(opening: &ResolvedOpening, resolved: &Resolved) -> String {
     };
     let label = id_label(&opening.id, cx, cy, !horizontal);
     format!(
-        r##"<g class="opening" data-id="{id}"><rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" fill="#ffffff"/><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{OPENING_LINE}"/>{label}</g>"##,
+        r##"<g class="opening" data-id="{id}"><rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" fill="#ffffff"/><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke}"/>{label}</g>"##,
         id = escape(&opening.id),
         gx = gap.0,
         gy = gap.1,

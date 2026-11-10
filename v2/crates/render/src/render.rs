@@ -231,7 +231,9 @@ fn svg_text(resolved: &Resolved, vp: &Viewport, labels: &[PlacedLabel]) -> Strin
         name: 12.0 * mpp,
         area: 12.0 * mpp,
     };
-    for element in drawn_elements(resolved, fonts) {
+    // Opening lines are 3 px wide, so they keep their size at any scale.
+    let opening_stroke = 3.0 * mpp;
+    for element in drawn_elements(resolved, fonts, opening_stroke) {
         out.push_str(&without_text(&element));
         out.push('\n');
     }
@@ -367,6 +369,28 @@ mod tests {
             1600,
         );
         assert_eq!(plan_render(1600).viewport, expected);
+    }
+
+    #[test]
+    fn opening_line_is_three_px_wide() {
+        // Same opening, drawn at 1 mm/px and at 6 mm/px: 3 mm and 18 mm.
+        let fine = crop(Region::RectMm([0, 0, 1000, 500]));
+        assert_eq!(fine.viewport.mm_per_px, 1.0);
+        assert_eq!(opening_stroke_width(&fine.svg), "3");
+
+        let coarse = plan_render(1600);
+        assert_eq!(coarse.viewport.mm_per_px, 6.0);
+        assert_eq!(opening_stroke_width(&coarse.svg), "18");
+    }
+
+    /// The `stroke-width` of the first opening's coloured line.
+    fn opening_stroke_width(svg: &str) -> &str {
+        let rest = svg
+            .split(r#"<g class="opening""#)
+            .nth(1)
+            .expect("an opening group");
+        let line = rest.split("<line ").nth(1).expect("opening line");
+        attr(line, "stroke-width")
     }
 
     #[test]
