@@ -68,7 +68,8 @@ pub enum ChangeOp {
 pub struct Change {
     /// What happened.
     pub op: ChangeOp,
-    /// The kind of statement: `room`, `relation`, `align`, `measure`, `opening` or `wall`.
+    /// The kind of statement: `room`, `relation`, `align`, `measure`, `opening`,
+    /// `wall` or `title`.
     pub kind: &'static str,
     /// The key of the statement, written as in the DSL, for example `room Hall`
     /// or `measure Garderob.north to Sovrum.south`.
@@ -116,6 +117,16 @@ pub fn apply(plan: &Plan, patch: &str, dry_run: bool) -> ApplyResult {
             Some(rest) if rest.starts_with(char::is_whitespace) => (true, rest.trim_start()),
             _ => (false, text),
         };
+        // A title line is keyed by its KEY (§15 D41), not by a statement kind.
+        if body.split_whitespace().next() == Some("title") {
+            match parse_title(body, remove, line) {
+                Ok((key, text)) => {
+                    diff.extend(set_title(&mut working, key, text, remove));
+                }
+                Err(diagnostic) => diagnostics.push(diagnostic),
+            }
+            continue;
+        }
         let source = match anchored(body, indent, last_room.as_ref(), line) {
             Ok(source) => source,
             Err(diagnostic) => {
@@ -176,6 +187,41 @@ fn run_command(
             }
         }
     }
+}
+
+/// Parse a `title KEY "TEXT"` line (without any `- ` prefix) into its key and
+/// text. For a removal the text is ignored, so `- title KEY` is enough.
+fn parse_title(body: &str, remove: bool, line: u32) -> Result<(String, String), Diagnostic> {
+    let words: Vec<&str> = body.split_whitespace().collect();
+    let source = match (remove, words.get(1)) {
+        (true, Some(key)) => format!("{}title {key} \"\"\n", padding(line)),
+        _ => format!("{}{body}\n", padding(line)),
+    };
+    let parsed = parse(&source)?;
+    parsed
+        .title
+        .into_iter()
+        .next()
+        .ok_or_else(|| not_a_statement(body, line))
+}
+
+/// Set or remove the title text for `key`. Setting replaces or adds. Removing
+/// a key that is not in the plan gives no change, as for other statements.
+fn set_title(plan: &mut Plan, key: String, text: String, remove: bool) -> Option<Change> {
+    let target = format!("title {key}");
+    let op = if remove {
+        plan.title.remove(&key)?;
+        ChangeOp::Removed
+    } else if plan.title.insert(key, text).is_some() {
+        ChangeOp::Replaced
+    } else {
+        ChangeOp::Added
+    };
+    Some(Change {
+        op,
+        kind: "title",
+        target,
+    })
 }
 
 /// Replace or add a statement, by its key.
@@ -332,6 +378,7 @@ fn parse_statement(working: &Plan, body: &str, line: u32) -> Result<Statement, D
         .map(str::to_string);
 
     let mut context = working.clone();
+    context.title.clear();
     context.relations.clear();
     context.measures.clear();
     context.openings.clear();
@@ -709,5 +756,52 @@ mod tests {
         let message = result.diagnostics.first().map(|d| d.message.as_str());
         assert_eq!(message, Some(file_message.as_str()));
         Ok(())
+    }
+
+    #[test]
+    fn title_patch_replaces_the_text_of_its_key() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(FIXTURE_A);
+        let with_title = apply(&plan, "title drawing \"A-01\"", false);
+        assert!(with_title.ok, "{:?}", with_title.diagnostics);
+        let base = with_title.plan.ok_or("ok result has no plan")?;
+
+        let result = apply(&base, "title drawing \"A-02\"", false);
+        assert!(result.ok, "{:?}", result.diagnostics);
+        let new_plan = result.plan.ok_or("ok result has no plan")?;
+        assert_eq!(
+            new_plan.title.get("drawing").map(String::as_str),
+            Some("A-02")
+        );
+        assert_eq!(new_plan.title.len(), 1);
+        assert_eq!(result.diff.len(), 1);
+        assert_eq!(result.diff[0].op, ChangeOp::Replaced);
+        assert_eq!(result.diff[0].kind, "title");
+        Ok(())
+    }
+
+    #[test]
+    fn dash_title_removes_its_key_and_ignores_the_text() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(FIXTURE_A);
+        let with_title = apply(&plan, "title drawing \"A-01\"", false);
+        let base = with_title.plan.ok_or("ok result has no plan")?;
+
+        let result = apply(&base, "- title drawing \"\"", false);
+        assert!(result.ok, "{:?}", result.diagnostics);
+        assert_eq!(result.plan.as_ref(), Some(&plan));
+        assert_eq!(result.diff.len(), 1);
+        assert_eq!(result.diff[0].op, ChangeOp::Removed);
+        Ok(())
+    }
+
+    #[test]
+    fn title_with_unknown_key_is_e006() {
+        let result = apply(&fixture(FIXTURE_A), "title colour \"red\"", false);
+        assert!(!result.ok);
+        assert_eq!(
+            count(&result.diagnostics, Code::E006),
+            1,
+            "{:?}",
+            result.diagnostics
+        );
     }
 }

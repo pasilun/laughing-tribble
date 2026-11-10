@@ -32,6 +32,10 @@ pub struct Plan {
     pub openings: Vec<Opening>,
     /// Per-face wall thickness overrides.
     pub wall_overrides: Vec<WallOverride>,
+    /// Title block text by key (spec §15 D41): `property`, `address`,
+    /// `applicant`, `drawing`, `drawn_by`, `date` or `description`.
+    #[serde(default)]
+    pub title: BTreeMap<String, String>,
 }
 
 /// A room name: unique, case-sensitive, matching `[A-Za-zÅÄÖåäö0-9_]+`.
@@ -344,6 +348,7 @@ mod tests {
                 fire: None,
                 phase: Phase::Existing,
             }],
+            title: BTreeMap::from([("drawing".to_string(), "A-01".to_string())]),
         };
 
         let json = serde_json::to_string(&plan)?;
@@ -547,6 +552,7 @@ mod type_roundtrip_tests {
             measures: Vec::new(),
             openings: Vec::new(),
             wall_overrides: Vec::new(),
+            title: BTreeMap::new(),
         })
     }
 }

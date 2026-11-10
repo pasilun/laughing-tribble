@@ -16,11 +16,12 @@ use plan_core::{
     RoomName, Side, Source, WallOverride,
 };
 use proptest::prelude::*;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 /// Keywords of the DSL. A generated room name must not be one of these.
 const KEYWORDS: &[&str] = &[
     "plan",
+    "title",
     "default_wall",
     "default_outer_wall",
     "room",
@@ -78,6 +79,7 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
                 collection_measures(names.clone()),
                 collection_walls(names.clone()),
                 collection_openings(names.clone()),
+                title(),
             )
                 .prop_map(
                     move |(
@@ -89,6 +91,7 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
                         measures,
                         wall_overrides,
                         openings,
+                        title,
                     )| {
                         Plan {
                             name,
@@ -100,6 +103,7 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
                             measures,
                             openings,
                             wall_overrides,
+                            title,
                         }
                     },
                 )
@@ -108,6 +112,31 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
             canonicalize(&mut plan);
             plan
         })
+}
+
+/// The title block: zero to two of the seven keys, each with a fixed text that
+/// has no double quotes.
+fn title() -> impl Strategy<Value = BTreeMap<String, String>> {
+    const KEYS: [&str; 7] = [
+        "property",
+        "address",
+        "applicant",
+        "drawing",
+        "drawn_by",
+        "date",
+        "description",
+    ];
+    const TEXTS: [&str; 4] = ["Gnejsen 6", "A-01", "2026-11-10", "Stockholm"];
+    prop::collection::btree_map(
+        prop::sample::select(KEYS.to_vec()),
+        prop::sample::select(TEXTS.to_vec()),
+        0..=2,
+    )
+    .prop_map(|map| {
+        map.into_iter()
+            .map(|(key, text)| (key.to_string(), text.to_string()))
+            .collect()
+    })
 }
 
 /// The plan name: letters, digits and spaces, up to 20 characters.

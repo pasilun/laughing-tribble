@@ -1,6 +1,7 @@
 //! Printer: the canonical text of a plan (spec §7.2).
 //!
-//! Layout: the `plan` line and the two defaults, a blank line, the rooms in
+//! Layout: the `plan` line, the two defaults and the `title` lines, a blank
+//! line, the rooms in
 //! declaration order each followed by its relations, a blank line, then the
 //! `measure`, `wall`, `door`, `window` and `passage` lines.
 //!
@@ -24,6 +25,7 @@
 //!   order. [`canonicalize`] does the sorting; the printer reads a canonical clone.
 //! - Comments are not kept (spec §7.2).
 
+use super::parser::TITLE_KEYS;
 use crate::intent::{
     FaceRef, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room, RoomName, Side,
     WallOverride,
@@ -93,7 +95,7 @@ fn take_relations(
 
 /// Print a plan in canonical form. The result ends with a newline.
 pub fn print(plan: &Plan) -> String {
-    let header = vec![
+    let mut header = vec![
         format!("plan {}", quoted(&plan.name)),
         format!(
             "default_wall {}{}",
@@ -106,6 +108,7 @@ pub fn print(plan: &Plan) -> String {
             source_clause(&plan.default_outer_wall)
         ),
     ];
+    header.extend(title_lines(plan));
 
     let mut rooms = Vec::new();
     for name in &plan.order {
@@ -132,6 +135,19 @@ pub fn print(plan: &Plan) -> String {
         .join("\n\n");
     out.push('\n');
     out
+}
+
+/// The `title KEY "TEXT"` lines, in the key order of spec §15 D41 (not
+/// alphabetical). Keys the DSL does not know are not written.
+fn title_lines(plan: &Plan) -> Vec<String> {
+    TITLE_KEYS
+        .iter()
+        .filter_map(|key| {
+            plan.title
+                .get(*key)
+                .map(|text| format!("title {key} {}", quoted(text)))
+        })
+        .collect()
 }
 
 /// The `measure`, `wall`, `door`, `window` and `passage` lines, in that order.
@@ -663,5 +679,27 @@ passage Garderob.east at 0 width 680 source estimated
             statement_text(src),
             "wall A.west thickness 120 source tape bearing fire \"EI60\" new"
         );
+    }
+
+    #[test]
+    fn title_lines_print_after_defaults_in_key_order() {
+        let src = "title drawing \"A-01\"\ntitle property \"Stockholm Gnejsen 6\"\n\
+                   room A 1000 x 2000\n";
+        let expected = "plan \"\"\n\
+                        default_wall 90\n\
+                        default_outer_wall 300\n\
+                        title property \"Stockholm Gnejsen 6\"\n\
+                        title drawing \"A-01\"\n\
+                        \n\
+                        room A 1000 x 2000\n";
+        assert_eq!(print_of(src), expected);
+        assert_round_trip(&parse(src).expect("parses"));
+    }
+
+    #[test]
+    fn fixtures_print_no_title_lines() {
+        for src in [FIXTURE_A, FIXTURE_B, FIXTURE_C] {
+            assert!(!print_of(src).contains("title "));
+        }
     }
 }

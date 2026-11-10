@@ -30,6 +30,7 @@ use crate::diagnostics::{Code, Diagnostic, Severity, Span, message};
 /// Keywords from the §7.1 grammar. Lower case only.
 const KEYWORDS: &[&str] = &[
     "plan",
+    "title",
     "default_wall",
     "default_outer_wall",
     "room",

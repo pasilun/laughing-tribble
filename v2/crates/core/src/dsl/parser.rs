@@ -40,6 +40,19 @@ const SIDE_LIST: &str = r#""north", "east", "south" or "west""#;
 const SOURCE_LIST: &str = r#""laser", "tape", "printed", "drawing", "estimated" or "assumed""#;
 const SIZE: &str = r#"a number or "?""#;
 const WALL_PART_LIST: &str = r#""thickness", "bearing", "fire" or a phase"#;
+/// The title block keys (spec §7.1, §15 D41). Read as ordinary words, so
+/// `drawing` is a keyword token and the others are names.
+pub(crate) const TITLE_KEYS: [&str; 7] = [
+    "property",
+    "address",
+    "applicant",
+    "drawing",
+    "drawn_by",
+    "date",
+    "description",
+];
+const TITLE_KEY_LIST: &str =
+    "a title key (property, address, applicant, drawing, drawn_by, date, description)";
 
 /// Parse DSL source into a [`Plan`].
 ///
@@ -125,6 +138,7 @@ impl Builder {
                 measures: Vec::new(),
                 openings: Vec::new(),
                 wall_overrides: Vec::new(),
+                title: BTreeMap::new(),
             },
             room_lines: BTreeMap::new(),
             last_room: None,
@@ -305,6 +319,21 @@ impl Cursor {
         Ok(dir)
     }
 
+    /// A title key: one of [`TITLE_KEYS`], as a name or a keyword token.
+    fn title_key(&mut self) -> Result<String, Diagnostic> {
+        let text = match self.kind() {
+            Some(TokenKind::Name(text)) => text,
+            Some(TokenKind::Keyword(kw)) => kw.to_string(),
+            _ => return Err(self.fail(TITLE_KEY_LIST)),
+        };
+        if TITLE_KEYS.contains(&text.as_str()) {
+            self.pos += 1;
+            Ok(text)
+        } else {
+            Err(self.fail(TITLE_KEY_LIST))
+        }
+    }
+
     /// A face: `NAME "." side`.
     fn face(&mut self) -> Result<FaceRef, Diagnostic> {
         let room = self.name()?;
@@ -393,6 +422,7 @@ fn statement(cur: &mut Cursor, b: &mut Builder, indented: bool) -> Result<(), Di
         "align" => align(cur, b, indented),
         _ if indented => Err(cur.fail("a relation or align")),
         "plan" => plan(cur, b),
+        "title" => title(cur, b),
         "default_wall" | "default_outer_wall" => default_stmt(cur, b, keyword),
         "room" => room(cur, b),
         "measure" => measure(cur, b),
@@ -409,6 +439,16 @@ fn plan(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
     let name = cur.string()?;
     cur.finish()?;
     b.plan.name = name;
+    Ok(())
+}
+
+/// `title KEY STRING`. A repeated key replaces the earlier text.
+fn title(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
+    cur.skip();
+    let key = cur.title_key()?;
+    let text = cur.string()?;
+    cur.finish()?;
+    b.plan.title.insert(key, text);
     Ok(())
 }
 
@@ -1064,6 +1104,41 @@ mod tests {
         assert_eq!(
             d.message,
             r#"Line 1, column 6: expected a room name, found "bearing"."#
+        );
+    }
+
+    #[test]
+    fn title_lines_parse_into_the_map() {
+        let plan = parse("title property \"Stockholm Gnejsen 6\"\ntitle drawing \"A-01\"\n")
+            .expect("title lines parse");
+        assert_eq!(
+            plan.title.get("property").map(String::as_str),
+            Some("Stockholm Gnejsen 6")
+        );
+        assert_eq!(plan.title.get("drawing").map(String::as_str), Some("A-01"));
+        assert_eq!(plan.title.len(), 2);
+    }
+
+    #[test]
+    fn title_key_can_be_a_room_name_elsewhere() {
+        let plan = parse("room date 1000 x 2000\n").expect("room named date parses");
+        assert_eq!(room(&plan, "date").width, Some(q(1000, Source::Assumed)));
+    }
+
+    #[test]
+    fn repeated_title_key_replaces_the_earlier_text() {
+        let plan = parse("title drawing \"A-01\"\ntitle drawing \"A-02\"\n").expect("parses");
+        assert_eq!(plan.title.get("drawing").map(String::as_str), Some("A-02"));
+        assert_eq!(plan.title.len(), 1);
+    }
+
+    #[test]
+    fn unknown_title_key_is_e006() {
+        let d = e006_of("title colour \"red\"\n");
+        assert_eq!(d.code, Code::E006);
+        assert_eq!(
+            d.message,
+            r#"Line 1, column 7: expected a title key (property, address, applicant, drawing, drawn_by, date, description), found "colour"."#
         );
     }
 }
