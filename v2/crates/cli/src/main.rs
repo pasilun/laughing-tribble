@@ -10,11 +10,12 @@
 //!   if the plan does not resolve, print the diagnostics and exit 1.
 //! - `plan suggest <file>`: print each W001 (loose room) with its suggested
 //!   measurement, one per line.
-//! - `plan png <file> -o <out.png> [--view plan|labels|conflicts] [--max-tokens N]
+//! - `plan png <file> -o <out.png> [--view plan|labels|conflicts|missing] [--max-tokens N]
 //!   [--region ID | --rect x,y,w,h] [--diff BEFORE]`: write the PNG and print its viewport
 //!   as JSON (with `--diff`, the plan view of the file with the differences from BEFORE
 //!   drawn on top, and a `diff` object of counts; with `--view conflicts`, the draft
-//!   plan view with a mark per conflict, and a `marks` count).
+//!   plan view with a mark per conflict, and a `marks` count; with `--view missing`,
+//!   the preview plan view with the measurements to take, and a `marks` count).
 //! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]`:
 //!   write the sheet as a PDF and print its paper, scale and byte count as JSON.
 //!   `--phase before|after` draws the building before or after the works (spec §15 D43).
@@ -43,12 +44,12 @@ const USAGE: &str = "usage:
   plan solve --json <file>
   plan fmt <file> [--write]
   plan svg <file> [--out path]
-  plan png <file> -o <out.png> [--view plan|labels|conflicts] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]
+  plan png <file> -o <out.png> [--view plan|labels|conflicts|missing] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]
   plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]
   plan --version";
 
 /// Usage line of `plan png`, printed on its own to stderr (exit 2).
-const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels|conflicts] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]";
+const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels|conflicts|missing] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]";
 
 /// Usage line of `plan pdf`, printed on its own to stderr (exit 2).
 const PDF_USAGE: &str = "usage: plan pdf FILE -o OUT.pdf [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]";
@@ -259,6 +260,8 @@ struct PngArgs<'a> {
     view: View,
     /// `--view conflicts`: the draft model, with a mark per conflict.
     conflicts: bool,
+    /// `--view missing`: the preview plan, with the measurements to take.
+    missing: bool,
     max_tokens: u32,
     region: Option<Region>,
     diff: Option<&'a str>,
@@ -266,12 +269,13 @@ struct PngArgs<'a> {
 
 /// Parse `FILE -o OUT [--view V] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]`.
 /// `None` is a usage error: a missing file or `-o`, an unknown option, a bad
-/// value, both `--region` and `--rect`, or `--view conflicts` with `--diff`.
+/// value, both `--region` and `--rect`, or `--view conflicts|missing` with `--diff`.
 fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
     let (&file, rest) = words.split_first()?;
     let mut out = None;
     let mut view = View::Labels;
     let mut conflicts = false;
+    let mut missing = false;
     let mut max_tokens = DEFAULT_TOKENS;
     let mut region = None;
     let mut rect = None;
@@ -284,8 +288,9 @@ fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
             "-o" => out = Some(*value),
             "--view" => {
                 conflicts = *value == "conflicts";
+                missing = *value == "missing";
                 view = match *value {
-                    "plan" | "conflicts" => View::Plan,
+                    "plan" | "conflicts" | "missing" => View::Plan,
                     "labels" => View::Labels,
                     _ => return None,
                 }
@@ -300,7 +305,7 @@ fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
     if region.is_some() && rect.is_some() {
         return None;
     }
-    if conflicts && diff.is_some() {
+    if (conflicts || missing) && diff.is_some() {
         return None;
     }
     Some(PngArgs {
@@ -308,6 +313,7 @@ fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
         out: out?,
         view,
         conflicts,
+        missing,
         max_tokens,
         region: region.or(rect),
         diff,
@@ -353,6 +359,9 @@ fn png_command(words: &[&str]) -> Result<ExitCode, String> {
     };
     if args.conflicts {
         return png_conflicts(args);
+    }
+    if args.missing {
+        return png_missing(args);
     }
     let Some(resolved) = png_resolve(args.file)? else {
         return Ok(ExitCode::from(1));
@@ -422,12 +431,50 @@ fn png_conflicts(args: PngArgs) -> Result<ExitCode, String> {
         return Ok(print_unresolved(&diagnostics));
     };
     let marks = plan_render::marks::conflict_marks(&resolved);
+    write_marked(args, &resolved, &marks)
+}
+
+/// `plan png --view missing`: the file's preview plan (`preview_missing`, so a loose
+/// room is drawn where its first W001 suggests), its plan view with the measurements
+/// to take (`missing_marks`, at most three suggestions), and the JSON viewport with
+/// `"marks": N`. A parse error prints as usual; a preview that does not resolve prints
+/// its diagnostics. Both exit 1.
+fn png_missing(args: PngArgs) -> Result<ExitCode, String> {
+    let (_, src) = read_source(args.file)?;
+    let plan = match dsl::parse(&src) {
+        Ok(plan) => plan,
+        Err(diagnostic) => {
+            out(&describe(&diagnostic));
+            return Ok(ExitCode::from(1));
+        }
+    };
+    let preview = plan_core::preview::preview_missing(&plan);
+    let (resolved, diagnostics) = plan_core::resolve_draft(&preview.plan);
+    let Some(resolved) = resolved else {
+        return Ok(print_unresolved(&diagnostics));
+    };
+    let i020 = unmeasured(&plan);
+    let marks =
+        plan_render::marks::missing_marks(&resolved, &preview.assumed, &i020, MISSING_SUGGESTIONS);
+    write_marked(args, &resolved, &marks)
+}
+
+/// How many I020 suggestions `plan png --view missing` draws.
+const MISSING_SUGGESTIONS: usize = 3;
+
+/// Draw `resolved` in the plan view with `marks`, write the PNG to `args.out`, and
+/// print the viewport JSON with `"marks": N`. Exit 1 when the render or PNG fails.
+fn write_marked(
+    args: PngArgs,
+    resolved: &Resolved,
+    marks: &[plan_render::Mark],
+) -> Result<ExitCode, String> {
     let options = RenderOptions {
         view: View::Plan,
         region: args.region,
         max_tokens: args.max_tokens,
     };
-    let rendered = match plan_render::render_marked(&resolved, &options, &marks) {
+    let rendered = match plan_render::render_marked(resolved, &options, marks) {
         Ok(rendered) => rendered,
         Err(diagnostic) => {
             out(&describe(&diagnostic));

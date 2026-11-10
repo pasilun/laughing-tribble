@@ -125,6 +125,24 @@ fn conflicts_view_draws_the_marks() {
 }
 
 #[test]
+fn missing_view_draws_the_measurements_to_take() {
+    let out = out_path("png-missing.png");
+    let output = plan(&[
+        "png",
+        &fixture("lgh154-a.plan"),
+        "-o",
+        &out,
+        "--view",
+        "missing",
+    ]);
+    assert_eq!(code(&output), 0);
+    let bytes = std::fs::read(&out).expect("png written");
+    assert!(bytes.starts_with(b"\x89PNG"));
+    let stdout = String::from_utf8(output.stdout).expect("utf8");
+    assert!(stdout.contains(r#""marks":3"#), "{stdout}");
+}
+
+#[test]
 fn labels_view_of_a_conflicting_plan_exits_1_with_e003() {
     let out = out_path("png-b-labels.png");
     let output = plan(&[

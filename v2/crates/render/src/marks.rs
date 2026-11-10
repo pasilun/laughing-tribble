@@ -4,7 +4,7 @@
 //! (in [`render`](crate::render)) draws them in `<g id="marks">` and labels them
 //! through the same placer as the room names.
 
-use plan_core::{Code, Resolved};
+use plan_core::{Code, Diagnostic, Resolved};
 
 use crate::viewport::Viewport;
 
@@ -129,6 +129,51 @@ pub fn conflict_marks(resolved: &Resolved) -> Vec<Mark> {
         let text = format!("stated {stated}, chain gives {implied} ({residual} mm)");
         if let Some(mark) = mark_between(resolved, &id, from, to, text, MarkKind::Conflict) {
             marks.push(mark);
+        }
+    }
+    marks
+}
+
+/// Marks for measurements to take: one Missing mark per W001 in `w001` (they need
+/// `data.from` and `data.to`), then one Suggest mark per I020 in `i020`, at most
+/// `max_suggest` of them. Ids are `missing:{n}` and `suggest:{n}`, n from 1. A
+/// diagnostic without both keys, or whose mark is `None`, is skipped (spec §15 D39).
+pub fn missing_marks(
+    resolved: &Resolved,
+    w001: &[Diagnostic],
+    i020: &[Diagnostic],
+    max_suggest: usize,
+) -> Vec<Mark> {
+    let mut marks = Vec::new();
+    for diagnostic in w001 {
+        let (Some(from), Some(to)) = (
+            diagnostic.data["from"].as_str(),
+            diagnostic.data["to"].as_str(),
+        ) else {
+            continue;
+        };
+        let id = format!("missing:{}", marks.len() + 1);
+        let text = format!("measure {from} → {to}");
+        if let Some(mark) = mark_between(resolved, &id, from, to, text, MarkKind::Missing) {
+            marks.push(mark);
+        }
+    }
+    let mut suggested = 0;
+    for diagnostic in i020 {
+        if suggested == max_suggest {
+            break;
+        }
+        let (Some(from), Some(to)) = (
+            diagnostic.data["from"].as_str(),
+            diagnostic.data["to"].as_str(),
+        ) else {
+            continue;
+        };
+        let id = format!("suggest:{}", suggested + 1);
+        let text = format!("measure {from} → {to}");
+        if let Some(mark) = mark_between(resolved, &id, from, to, text, MarkKind::Suggest) {
+            marks.push(mark);
+            suggested += 1;
         }
     }
     marks
@@ -360,5 +405,47 @@ mod tests {
     #[test]
     fn fixture_a_has_no_conflict_marks() {
         assert!(conflict_marks(&draft(FIXTURE_A)).is_empty());
+    }
+
+    #[test]
+    fn fixture_a_draws_its_three_suggestions() {
+        let resolved = draft(FIXTURE_A);
+        let plan = plan_core::dsl::parse(FIXTURE_A).expect("fixture parses");
+        let i020 = plan_core::solve::unmeasured(&plan);
+        let marks = missing_marks(&resolved, &[], &i020, 3);
+        assert_eq!(marks.len(), 3);
+        assert!(marks.iter().all(|m| m.kind == MarkKind::Suggest));
+        assert_eq!(marks[0].id, "suggest:1");
+        assert_eq!(marks[0].from, [0, 556]);
+        assert_eq!(marks[0].to, [3081, 556]);
+        assert_eq!(marks[0].text, "measure Garderob.west → Hall.east");
+        assert_eq!(marks[2].from, [1981, 556]);
+        assert_eq!(marks[2].to, [3081, 556]);
+    }
+
+    #[test]
+    fn missing_marks_respects_max_suggest() {
+        let resolved = draft(FIXTURE_A);
+        let plan = plan_core::dsl::parse(FIXTURE_A).expect("fixture parses");
+        let i020 = plan_core::solve::unmeasured(&plan);
+        assert_eq!(missing_marks(&resolved, &[], &i020, 1).len(), 1);
+        assert!(missing_marks(&resolved, &[], &i020, 0).is_empty());
+    }
+
+    #[test]
+    fn preview_w001_becomes_a_missing_mark() {
+        let src = "plan \"preview\"\ndefault_wall 90 source assumed\ndefault_outer_wall 300 source assumed\nroom A 2000 x 1000 source laser\nroom B 1500 x 1000 source laser\n";
+        let plan = plan_core::dsl::parse(src).expect("parses");
+        let preview = plan_core::preview::preview_missing(&plan);
+        let (resolved, _) = plan_core::resolve_draft(&preview.plan);
+        let resolved = resolved.expect("preview resolves");
+        let i020 = plan_core::solve::unmeasured(&plan);
+        let marks = missing_marks(&resolved, &preview.assumed, &i020, 3);
+        let first = &marks[0];
+        assert_eq!(first.kind, MarkKind::Missing);
+        assert_eq!(first.id, "missing:1");
+        assert_eq!(first.text, "measure A.east → B.west");
+        assert_eq!(first.from, [2000, 500]);
+        assert_eq!(first.to, [2090, 500]);
     }
 }
