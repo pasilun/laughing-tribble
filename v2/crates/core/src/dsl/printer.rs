@@ -580,7 +580,8 @@ passage Garderob.east at 0 width 680 source estimated
     /// `parse(print(plan))` equals `plan`, except that the lists the printer
     /// sorts (relations, measures, openings, wall overrides) are compared as
     /// sets. Their order in `Plan` is the declaration order, which the
-    /// canonical form does not keep.
+    /// canonical form does not keep. Fixtures are compared without regard to
+    /// order because the canonical form sorts them (spec §7.2).
     fn assert_round_trip(plan: &Plan) {
         let back = parse(&print(plan)).expect("canonical text parses");
         assert_same_items(&back.relations, &plan.relations);
