@@ -20,7 +20,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use plan_core::solve::components::suggested_w001;
-use plan_core::solve::edges;
+use plan_core::solve::{edges, unmeasured};
 use plan_core::{Diagnostic, Resolved, Severity, dsl, load, solve_json};
 
 const USAGE: &str = "usage:
@@ -71,22 +71,48 @@ fn check(file: &str) -> Result<ExitCode, String> {
     Ok(exit_for(&diagnostics))
 }
 
-/// `plan suggest`: print each W001 with its suggested measurement, one per line.
-/// A parse error is printed and exits 1, as in `check`.
+/// `plan suggest`: print the numbered list of suggested measurements (every W001,
+/// then every I020), or `No suggestions.`. A plan that does not load prints its
+/// diagnostics as `check` does and exits 1.
 fn suggest(file: &str) -> Result<ExitCode, String> {
     let (_, src) = read_source(file)?;
-    let plan = match dsl::parse(&src) {
-        Ok(plan) => plan,
-        Err(diagnostic) => {
-            println!("{}", describe(&diagnostic));
-            return Ok(ExitCode::from(1));
+    let (text, code) = suggest_report(&src);
+    print!("{text}");
+    Ok(ExitCode::from(code))
+}
+
+/// The text `plan suggest` prints for `src`, and its exit status (0 or 1).
+fn suggest_report(src: &str) -> (String, u8) {
+    let loaded = match load(src) {
+        Ok(loaded) => loaded,
+        Err(diagnostics) => {
+            let text: String = diagnostics
+                .iter()
+                .map(|diagnostic| format!("{}\n", describe(diagnostic)))
+                .collect();
+            return (text, 1);
         }
     };
-    let (all_edges, _) = edges(&plan);
-    for diagnostic in suggested_w001(&all_edges, &plan) {
-        println!("{}", describe(&diagnostic));
+    let plan = &loaded.plan;
+    let (all_edges, _) = edges(plan);
+    let mut list = suggested_w001(&all_edges, plan);
+    list.extend(unmeasured(plan));
+    if list.is_empty() {
+        return ("No suggestions.\n".to_string(), 0);
     }
-    Ok(ExitCode::SUCCESS)
+    let text: String = list
+        .iter()
+        .enumerate()
+        .map(|(index, diagnostic)| {
+            format!(
+                "{}. {} {}\n",
+                index + 1,
+                diagnostic.code,
+                diagnostic.message
+            )
+        })
+        .collect();
+    (text, 0)
 }
 
 /// `plan solve --json`: print the §7.7 value. The exit status is 0 even when the
@@ -212,5 +238,26 @@ mod tests {
     #[test]
     fn solve_json_fixture_c() {
         insta::assert_snapshot!("solve_lgh154_c", solve_text(FIXTURE_C, "lgh154-c"));
+    }
+
+    /// Test plan 1 of W2-09: a loose room with two laser rooms.
+    const LOOSE_ROOM: &str = "room Hall 1000 x 2000 source laser
+room Förråd 800 x 2000 source laser
+  align north Hall
+";
+
+    #[test]
+    fn suggest_fixture_a() {
+        insta::assert_snapshot!("suggest_fixture_a", suggest_report(FIXTURE_A).0);
+    }
+
+    #[test]
+    fn suggest_loose_room() {
+        insta::assert_snapshot!("suggest_loose_room", suggest_report(LOOSE_ROOM).0);
+    }
+
+    #[test]
+    fn suggest_unparseable_plan_exits_1() {
+        assert_eq!(suggest_report("room A 3000 * 2000").1, 1);
     }
 }

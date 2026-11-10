@@ -1,0 +1,5 @@
+---
+source: crates/cli/src/main.rs
+expression: suggest_report(LOOSE_ROOM).0
+---
+1. W001 Not tied east–west: Förråd. Measure from Hall.east to Förråd.west, or add "Förråd east_of Hall gap 90".

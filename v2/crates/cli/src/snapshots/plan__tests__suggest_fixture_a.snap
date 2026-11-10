@@ -1,0 +1,7 @@
+---
+source: crates/cli/src/main.rs
+expression: suggest_report(FIXTURE_A).0
+---
+1. I020 Gap Hall east_of Garderob 121 mm has source drawing (±30 mm); measure Garderob.west to Hall.east with the laser.
+2. I020 Gap Vardagsrum south_of WC 123 mm has source drawing (±30 mm); measure WC.north to Vardagsrum.south with the laser.
+3. I020 Hall width 1100 mm has source assumed (±10 mm); measure Hall.west to Hall.east with the laser.
