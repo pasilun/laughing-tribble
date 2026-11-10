@@ -11,6 +11,7 @@ pub mod commands;
 pub mod diagnostics;
 pub mod dsl;
 pub mod intent;
+pub mod preview;
 pub mod report;
 pub mod resolved;
 pub mod review;
