@@ -1,0 +1,28 @@
+plan "Two flats and a stairwell"
+default_wall 100
+default_outer_wall 400
+title property "Test 1"
+title applicant "Test"
+title drawing "A-01"
+title date "2026-11-10"
+
+room Rum1 3600 x 4000 source laser apartment "1"
+room Kok1 2400 x 4000 source laser apartment "1"
+  east_of Rum1 gap 100
+  align north Rum1
+room Trapphus 2600 x 4000 source laser
+  east_of Kok1 gap 300 source laser
+  align north Kok1
+room Rum2 3600 x 4000 source laser apartment "2"
+  east_of Trapphus gap 300 source laser
+  align north Trapphus
+room Matvra 2400 x 1500 source laser apartment "1" part Kok1
+  south_of Kok1 open
+  align west Kok1
+
+wall Trapphus.west bearing
+stub Kok1.west at 2000 length 600
+door Rum1.east at 300 width 900 hinge north opens Kok1
+fixture stove Kok1.north at 200
+fixture sink Kok1.north at 900
+fixture balcony Rum1.south at 800 width 2000 depth 1300
