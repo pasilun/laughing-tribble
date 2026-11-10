@@ -12,11 +12,11 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::build::{
-    BuiltWall, Coords, PlacedOpening, SegmentKind, built_walls, diagnose, place_openings,
-    room_areas, spaces,
+    BuiltWall, Coords, PlacedOpening, SegmentKind, built_walls, diagnose, place_fixtures,
+    place_openings, room_areas, spaces,
 };
 use crate::diagnostics::{Code, Diagnostic, Severity, message};
-use crate::intent::{FaceRef, OpeningKind, Phase, Plan, RoomName, Side, WallOverride};
+use crate::intent::{FaceRef, FixtureKind, OpeningKind, Phase, Plan, RoomName, Side, WallOverride};
 use crate::solve::components::with_suggested_data;
 use crate::solve::{
     AdjustedEdge, Axis, Component, CycleCheck, Edge, FaceId, FaceKey, adjusted_diagnostic,
@@ -49,6 +49,8 @@ pub struct Resolved {
     pub walls: BTreeMap<WallId, Wall>,
     /// Openings by id.
     pub openings: BTreeMap<OpeningId, ResolvedOpening>,
+    /// Fixtures by id, `F:<Room>.<side>:<n>` (§15 D44).
+    pub fixtures: BTreeMap<String, ResolvedFixture>,
     /// Rooms joined by `open`, with their total area.
     pub spaces: Vec<Space>,
     /// The phase of every room that has a rectangle in `rooms`.
@@ -161,6 +163,25 @@ pub struct ResolvedOpening {
     pub height: Option<Mm>,
 }
 
+/// A fixture as a rectangle in mm, x east, y south (§15 D44).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ResolvedFixture {
+    /// The id, `F:<Room>.<side>:<n>`, numbered per face by `at`, then kind word.
+    pub id: String,
+    /// The kind of fixture.
+    pub kind: FixtureKind,
+    /// The room face it stands against.
+    pub face: FaceRef,
+    /// Extent along x in mm, as `(min, max)`.
+    pub x: (Mm, Mm),
+    /// Extent along y in mm, as `(min, max)`.
+    pub y: (Mm, Mm),
+    /// Free text label, if any.
+    pub label: Option<String>,
+    /// Existing, demolished or new.
+    pub phase: Phase,
+}
+
 /// Rooms joined by `open`, with their total area (§9.5).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Space {
@@ -264,6 +285,9 @@ fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>)
     diagnostics.extend(diagnose(&walls));
     let (openings, opening_diags) = place_openings(plan, &coords, &walls);
     diagnostics.extend(opening_diags);
+    let rooms = rooms(plan, &coords);
+    let (fixtures, fixture_diags) = place_fixtures(plan, &rooms, &walls);
+    diagnostics.extend(fixture_diags);
     if stops(&diagnostics) {
         return (None, diagnostics);
     }
@@ -301,7 +325,6 @@ fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>)
         };
         wall_models.insert(wall.id.clone(), model);
     }
-    let rooms = rooms(plan, &coords);
     let room_phases = rooms
         .keys()
         .filter_map(|name| Some((name.clone(), plan.rooms.get(name)?.phase)))
@@ -314,6 +337,7 @@ fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>)
             .iter()
             .map(|opening| (opening.id.clone(), opening_model(opening)))
             .collect(),
+        fixtures,
         spaces: spaces(plan, &areas)
             .into_iter()
             .map(|space| Space {
