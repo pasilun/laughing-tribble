@@ -3,7 +3,8 @@
 //! [`conflict_diagnostic`] turns one [`CycleCheck`] with `conflict == true` into
 //! a [`Diagnostic`]. The sentence comes from [`message`]; the two chains are
 //! read from the edge list the check was made on. Checks within tolerance give
-//! `None` here; [`within_tolerance_diagnostic`] gives their W004 instead.
+//! `None` here; their W004 comes from [`adjusted_diagnostic`] once the residual
+//! is distributed.
 
 use serde_json::json;
 
@@ -82,65 +83,6 @@ pub fn conflict_diagnostic(check: &CycleCheck, edges: &[Edge]) -> Option<Diagnos
             "chain_a": chain_data(&chain_a),
             "chain_b": chain_data(&chain_b),
             "suggestions": suggestions,
-        }),
-    })
-}
-
-/// The W004 diagnostic for a cycle that is off by a non-zero residual within
-/// its tolerance (week-one §5.2), or `None` when the check conflicts, the
-/// residual is zero, or one of its edge indices is missing from `edges`.
-///
-/// Week one does not spread the residual: the first-pass values are kept. The
-/// list argument gives each edge of the cycle as `origin old→new`, with `old`
-/// and `new` both the edge's value, since nothing is adjusted. `refs` are the
-/// rooms on the cycle, and `data.edges` lists chain A then the stated edge.
-pub fn within_tolerance_diagnostic(check: &CycleCheck, edges: &[Edge]) -> Option<Diagnostic> {
-    if check.conflict || check.residual == 0 {
-        return None;
-    }
-    let chain_a = resolve(&check.chain_a, edges)?;
-    let chain_b = resolve(&check.chain_b, edges)?;
-    let cycle: Vec<(&ChainEdge, &Edge)> = chain_a.iter().chain(chain_b.iter()).copied().collect();
-
-    let list: Vec<String> = cycle
-        .iter()
-        .map(|(_, edge)| format!("{} {}→{}", edge.origin, edge.value, edge.value))
-        .collect();
-    let args: Vec<(&str, String)> = vec![("list", list.join(", "))];
-
-    let mut refs: Vec<String> = Vec::new();
-    for (_, edge) in &cycle {
-        for room in [&edge.from.room, &edge.to.room] {
-            let name = room.to_string();
-            if !refs.contains(&name) {
-                refs.push(name);
-            }
-        }
-    }
-
-    let edge_data: Vec<serde_json::Value> = cycle
-        .iter()
-        .map(|(step, edge)| {
-            json!({
-                "edge": step.edge,
-                "origin": edge.origin,
-                "value": edge.value,
-                "source": edge.source.map(source_word),
-            })
-        })
-        .collect();
-
-    Some(Diagnostic {
-        code: Code::W004,
-        severity: Severity::Warning,
-        message: message(Code::W004, &args),
-        span: None,
-        refs,
-        data: json!({
-            "axis": check.axis,
-            "residual": check.residual,
-            "tolerance": check.tolerance,
-            "edges": edge_data,
         }),
     })
 }
@@ -411,9 +353,10 @@ mod tests {
         assert_eq!(conflict_diagnostic(&check, &edge_list), None);
     }
 
-    /// A synthetic plan: the fixture B cycle (Garderob depth, a 90 mm wall,
-    /// Sovrum depth) closed by one measure of `measured` mm, on the north–south axis.
-    fn synthetic_checks(measured: i64) -> (Vec<Edge>, Vec<CycleCheck>) {
+    /// Resolves a synthetic plan: the fixture B cycle (Garderob depth, a 90 mm
+    /// wall, Sovrum depth) closed by one measure of `measured` mm, on the
+    /// north–south axis. Returns every diagnostic `resolve` gives.
+    fn synthetic_diagnostics(measured: i64) -> Vec<Diagnostic> {
         let text = format!(
             r#"plan "W1-14 synthetic"
 default_wall 90 source assumed
@@ -427,47 +370,38 @@ measure Garderob.north to Sovrum.south = {measured} source laser
 "#
         );
         let plan = parse(&text).expect("synthetic plan parses");
-        let (edge_list, _) = edges(&plan);
-        let (comps, _) = components(&edge_list, &plan, Axis::Y);
-        let (coords, tree) = assign_coords(&edge_list, &comps, Axis::Y);
-        let found = check_cycles(&edge_list, &coords, &tree, Axis::Y);
-        (edge_list, found)
+        let (_, diagnostics) = crate::resolved::resolve(&plan);
+        diagnostics
     }
 
     #[test]
     fn within_tolerance_gives_w004_and_no_e003() {
         // The implied side is 4540 mm; 4530 leaves a residual of −10 mm.
-        let (edge_list, found) = synthetic_checks(4530);
-        assert_eq!(found.len(), 1, "{found:?}");
-        let check = &found[0];
-        assert!(!check.conflict, "{check:?}");
-        assert_eq!(check.residual, -10);
-        assert!(check.residual.abs() <= check.tolerance, "{check:?}");
-
-        assert_eq!(conflict_diagnostic(check, &edge_list), None);
-        let diagnostic = within_tolerance_diagnostic(check, &edge_list).expect("W004");
-        assert_eq!(diagnostic.code, Code::W004);
-        assert_eq!(diagnostic.severity, Severity::Warning);
-        assert_eq!(diagnostic.span, None);
+        let diagnostics = synthetic_diagnostics(4530);
         assert_eq!(
-            diagnostic.message,
-            "Adjusted to fit within tolerance: room Garderob depth 2360→2360, Sovrum south_of Garderob gap 90→90, room Sovrum depth 2090→2090, measure Garderob.north to Sovrum.south 4530→4530."
+            diagnostics.iter().filter(|d| d.code == Code::E003).count(),
+            0,
+            "{diagnostics:?}"
         );
-        assert_eq!(diagnostic.refs, vec!["Garderob", "Sovrum"]);
-        assert_eq!(diagnostic.data["axis"], "y");
-        assert_eq!(diagnostic.data["residual"], -10);
-        assert_eq!(diagnostic.data["tolerance"], check.tolerance);
-        assert_eq!(diagnostic.data["edges"].as_array().map(Vec::len), Some(4));
+        let w004: Vec<&Diagnostic> = diagnostics
+            .iter()
+            .filter(|d| d.code == Code::W004)
+            .collect();
+        assert_eq!(w004.len(), 1, "{diagnostics:?}");
+        assert_eq!(w004[0].severity, Severity::Warning);
+        assert_eq!(
+            w004[0].message,
+            "Adjusted to fit within tolerance: room Garderob depth 2360→2359, room Sovrum depth 2090→2089, Sovrum south_of Garderob gap 90→82, measure Garderob.north to Sovrum.south 4530→4531."
+        );
     }
 
     #[test]
     fn zero_residual_gives_no_w004() {
         // 4540 mm closes the cycle exactly.
-        let (edge_list, found) = synthetic_checks(4540);
-        assert_eq!(found.len(), 1, "{found:?}");
-        let check = &found[0];
-        assert_eq!(check.residual, 0);
-        assert!(!check.conflict, "{check:?}");
-        assert_eq!(within_tolerance_diagnostic(check, &edge_list), None);
+        let diagnostics = synthetic_diagnostics(4540);
+        assert!(
+            diagnostics.iter().all(|d| d.code != Code::W004),
+            "{diagnostics:?}"
+        );
     }
 }

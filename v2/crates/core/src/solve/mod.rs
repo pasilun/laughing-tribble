@@ -15,7 +15,7 @@ pub mod tree;
 pub mod unmeasured;
 
 pub use components::{Component, components};
-pub use conflicts::{adjusted_diagnostic, conflict_diagnostic, within_tolerance_diagnostic};
+pub use conflicts::{adjusted_diagnostic, conflict_diagnostic};
 pub use cycles::{CycleCheck, check_cycles};
 pub use distribute::{AdjustedEdge, Distribution, distribute};
 pub use graph::{Axis, Edge, FaceId, Origin, edges};
