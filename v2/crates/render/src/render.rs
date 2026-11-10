@@ -112,7 +112,8 @@ pub(crate) fn render_with(
 /// The label requests of `view`, anchored at the centre of each element in px.
 ///
 /// Rooms are always labelled (`name area`, priority 0), then each mark at the
-/// midpoint of its line (priority 0). Walls (1) and openings (2) carry their
+/// midpoint of its line (priority 0), moved 20 px to the side when the line is
+/// shorter than 40 px (spec §15 D38, second amendment). Walls (1) and openings (2) carry their
 /// id, and only in [`View::Labels`]. Elements whose anchor lies outside the
 /// image get no request.
 fn label_requests(resolved: &Resolved, view: View, vp: &Viewport, marks: &[Mark]) -> Vec<LabelReq> {
@@ -130,7 +131,18 @@ fn label_requests(resolved: &Resolved, view: View, vp: &Viewport, marks: &[Mark]
             (mark.from[0] + mark.to[0]) as f64 / 2.0,
             (mark.from[1] + mark.to[1]) as f64 / 2.0,
         ];
-        if let Some(anchor_px) = point_px(mid, vp) {
+        if let Some(mut anchor_px) = point_px(mid, vp) {
+            // A mark shorter than 40 px gets its label 20 px to the side, so the
+            // label does not hide it (spec §15 D38, second amendment).
+            let len_mm =
+                ((mark.to[0] - mark.from[0]) as f64).hypot((mark.to[1] - mark.from[1]) as f64);
+            if len_mm / vp.mm_per_px < 40.0 {
+                if mark.from[0] == mark.to[0] {
+                    anchor_px[0] += 20.0;
+                } else if mark.from[1] == mark.to[1] {
+                    anchor_px[1] -= 20.0;
+                }
+            }
             reqs.push(LabelReq {
                 id: mark.id.clone(),
                 text: mark.text.clone(),
