@@ -6,6 +6,7 @@
 
 use plan_core::{Diagnostic, RectMm, Resolved, element_ids, element_rect};
 
+use crate::labels::PlacedLabel;
 use crate::svg::{FONT_FAMILY, GRID, PAD, RoomFonts, drawn_elements, multiples};
 use crate::viewport::{Viewport, fit};
 
@@ -38,10 +39,6 @@ pub struct Rendered {
     pub viewport: Viewport,
     pub labels: Vec<PlacedLabel>,
 }
-
-/// A placed id label. A placeholder until W2-14 fills it in.
-#[derive(Clone, Debug, PartialEq)]
-pub struct PlacedLabel;
 
 /// Draw a resolved plan. Lengths in mm, x east, y south.
 ///

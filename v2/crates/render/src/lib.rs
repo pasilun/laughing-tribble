@@ -5,9 +5,11 @@
 
 #![forbid(unsafe_code)]
 
+pub mod labels;
 pub mod render;
 pub mod svg;
 pub mod viewport;
 
+pub use labels::{LabelReq, PlacedLabel, place};
 pub use render::{Region, RenderOptions, Rendered, View, render};
 pub use svg::plan_svg;
