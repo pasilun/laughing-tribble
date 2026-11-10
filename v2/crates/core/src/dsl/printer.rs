@@ -22,16 +22,19 @@
 //! - `phase` is written only when it is not `existing`.
 //! - Measures are sorted by their `from` face, then by `to`. Walls are sorted by
 //!   face. Openings are sorted by kind, then face, then `at`. Fixtures are
-//!   sorted by face, then `at`, then kind word. Ties keep their order.
+//!   sorted by face, then `at`, then kind word. Stubs are sorted by face, then
+//!   `at`. Ties keep their order.
 //!   [`canonicalize`] does the sorting; the printer reads a canonical clone.
 //! - A fixture's sizes are written when its kind has no default size, or when
 //!   either size differs from the default. `offset` is written when not 0.
+//! - A stub's `thickness` is written only when it is `Some`, and its `offset`
+//!   only when not 0 (spec §15 D45).
 //! - Comments are not kept (spec §7.2).
 
 use super::parser::TITLE_KEYS;
 use crate::intent::{
     FaceRef, Fixture, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room, RoomName,
-    Side, WallOverride,
+    Side, Stub, WallOverride,
 };
 use crate::units::{Quantity, Source};
 
@@ -84,6 +87,8 @@ pub fn canonicalize(plan: &mut Plan) {
     plan.fixtures.sort_by(|a, b| {
         (face_key(&a.face), a.at, a.kind.word()).cmp(&(face_key(&b.face), b.at, b.kind.word()))
     });
+    plan.stubs
+        .sort_by(|a, b| (face_key(&a.face), a.at).cmp(&(face_key(&b.face), b.at)));
 }
 
 /// Move every relation in `pool` that `keep` accepts to `out`, in pool order.
@@ -156,14 +161,15 @@ fn title_lines(plan: &Plan) -> Vec<String> {
         .collect()
 }
 
-/// The `measure`, `wall`, `door`, `window` and `passage` lines, in that order,
-/// then the `fixture` lines.
+/// The `measure`, `wall`, `stub`, `door`, `window` and `passage` lines, in that
+/// order, then the `fixture` lines.
 fn statement_lines(plan: &Plan) -> Vec<String> {
     let mut canon = plan.clone();
     canonicalize(&mut canon);
 
     let mut lines: Vec<String> = canon.measures.iter().map(measure_line).collect();
     lines.extend(canon.wall_overrides.iter().map(wall_line));
+    lines.extend(canon.stubs.iter().map(stub_line));
     for kind in [OpeningKind::Door, OpeningKind::Window, OpeningKind::Passage] {
         lines.extend(
             canon
@@ -197,6 +203,28 @@ fn fixture_line(fixture: &Fixture) -> String {
         line.push_str(&format!(" label {}", quoted(text)));
     }
     line.push_str(phase_text(fixture.phase));
+    line
+}
+
+/// `stub FACE at N length N [thickness N] [offset N] [bearing] [demolish|new]`
+/// (spec §15 D45).
+fn stub_line(stub: &Stub) -> String {
+    let mut line = format!(
+        "stub {} at {} length {}",
+        face_text(&stub.face),
+        stub.at,
+        stub.length
+    );
+    if let Some(thickness) = stub.thickness {
+        line.push_str(&format!(" thickness {thickness}"));
+    }
+    if stub.offset != 0 {
+        line.push_str(&format!(" offset {}", stub.offset));
+    }
+    if stub.bearing {
+        line.push_str(" bearing");
+    }
+    line.push_str(phase_text(stub.phase));
     line
 }
 
@@ -806,5 +834,56 @@ passage Garderob.east at 0 width 680 source estimated
         for src in [FIXTURE_A, FIXTURE_B, FIXTURE_C] {
             assert!(!print_of(src).contains("title "));
         }
+    }
+
+    /// The statement lines of `src` that start with `stub`.
+    fn stub_text(src: &str) -> String {
+        print_of(src)
+            .lines()
+            .filter(|line| line.starts_with("stub "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn stub_with_length_only_round_trips() {
+        let src = "room Kok 2400 x 4000\nstub Kok.west at 2000 length 600\n";
+        assert_eq!(stub_text(src), "stub Kok.west at 2000 length 600");
+        assert_round_trip(&parse(src).expect("parses"));
+    }
+
+    #[test]
+    fn stub_with_every_part_round_trips() {
+        let src = "room Kok 2400 x 4000\n\
+                   stub Kok.west at 2000 length 600 thickness 150 offset 500 bearing new\n";
+        assert_eq!(
+            stub_text(src),
+            "stub Kok.west at 2000 length 600 thickness 150 offset 500 bearing new"
+        );
+        assert_round_trip(&parse(src).expect("parses"));
+    }
+
+    #[test]
+    fn stubs_are_sorted_by_face_then_at_and_print_after_walls() {
+        let src = "room A 1000 x 2000\n\
+                   stub A.west at 900 length 300\n\
+                   stub A.north at 500 length 300\n\
+                   stub A.north at 100 length 300\n\
+                   wall A.north thickness 120\n\
+                   door A.west at 100 width 800\n";
+        let text = print_of(src);
+        assert_eq!(
+            stub_text(src),
+            "stub A.north at 100 length 300\n\
+             stub A.north at 500 length 300\n\
+             stub A.west at 900 length 300"
+        );
+        let wall = text.find("wall ").expect("wall line");
+        let stub = text.find("stub ").expect("stub line");
+        let door = text.find("door ").expect("door line");
+        assert!(wall < stub && stub < door, "{text}");
+        let mut plan = parse(src).expect("parses");
+        canonicalize(&mut plan);
+        assert_round_trip(&plan);
     }
 }

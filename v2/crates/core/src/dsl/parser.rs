@@ -26,7 +26,7 @@ use serde_json::json;
 use crate::diagnostics::{Code, Diagnostic, Severity, Span, message};
 use crate::intent::{
     FaceRef, Fixture, FixtureKind, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room,
-    RoomName, Side, WallOverride,
+    RoomName, Side, Stub, WallOverride,
 };
 use crate::units::{Mm, Quantity, Source};
 
@@ -156,6 +156,7 @@ impl Builder {
                 measures: Vec::new(),
                 openings: Vec::new(),
                 fixtures: Vec::new(),
+                stubs: Vec::new(),
                 wall_overrides: Vec::new(),
                 title: BTreeMap::new(),
             },
@@ -450,6 +451,7 @@ fn statement(cur: &mut Cursor, b: &mut Builder, indented: bool) -> Result<(), Di
         "passage" => opening(cur, b, OpeningKind::Passage),
         "wall" => wall(cur, b),
         "fixture" => fixture(cur, b),
+        "stub" => stub(cur, b),
         _ => Err(cur.fail("a statement")),
     }
 }
@@ -720,6 +722,40 @@ fn fixture(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
         depth,
         offset,
         label,
+        phase,
+    });
+    Ok(())
+}
+
+/// `stub FACE at N length N [thickness N] [offset N] [bearing] [phase]` (spec
+/// §15 D45). `thickness` stays `None` when it is left out, and `offset` is 0.
+fn stub(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
+    cur.skip();
+    let face = face_ref(cur, b)?;
+    cur.expect_kw("at")?;
+    let at = cur.int("a number")?;
+    cur.expect_kw("length")?;
+    let length = cur.int("a number")?;
+    let thickness = if cur.opt_kw("thickness") {
+        Some(cur.int("a number")?)
+    } else {
+        None
+    };
+    let offset = if cur.opt_kw("offset") {
+        cur.int("a number")?
+    } else {
+        0
+    };
+    let bearing = cur.opt_kw("bearing");
+    let phase = cur.phase().unwrap_or(Phase::Existing);
+    cur.finish()?;
+    b.plan.stubs.push(Stub {
+        face,
+        at,
+        length,
+        thickness,
+        offset,
+        bearing,
         phase,
     });
     Ok(())
@@ -1296,5 +1332,56 @@ mod tests {
             d.message,
             r#"Line 1, column 7: expected a title key (property, address, applicant, drawing, drawn_by, date, description), found "colour"."#
         );
+    }
+
+    #[test]
+    fn stub_with_length_only_takes_the_defaults() {
+        let plan =
+            parse("room Kok 2400 x 4000\nstub Kok.west at 2000 length 600\n").expect("parse");
+        assert_eq!(
+            plan.stubs,
+            vec![Stub {
+                face: face("Kok", Side::West),
+                at: 2000,
+                length: 600,
+                thickness: None,
+                offset: 0,
+                bearing: false,
+                phase: Phase::Existing,
+            }]
+        );
+    }
+
+    #[test]
+    fn stub_with_every_part_parses() {
+        let plan = parse(
+            "room Kok 2400 x 4000\nstub Kok.west at 2000 length 600 thickness 150 offset 500 bearing new\n",
+        )
+        .expect("parse");
+        assert_eq!(
+            plan.stubs,
+            vec![Stub {
+                face: face("Kok", Side::West),
+                at: 2000,
+                length: 600,
+                thickness: Some(150),
+                offset: 500,
+                bearing: true,
+                phase: Phase::New,
+            }]
+        );
+    }
+
+    #[test]
+    fn stub_without_length_is_e006() {
+        let d = e006_of("room Kok 2400 x 4000\nstub Kok.west at 2000\n");
+        assert_eq!(d.code, Code::E006);
+        assert!(d.message.contains("\"length\""), "{}", d.message);
+    }
+
+    #[test]
+    fn room_named_stub_is_rejected() {
+        let d = e006_of("room stub 1000 x 2000\n");
+        assert_eq!(d.code, Code::E006);
     }
 }

@@ -11,7 +11,7 @@
 //!   printer writes one clause from `at`.
 
 use plan_core::dsl::canonicalize;
-use plan_core::intent::{Fixture, FixtureKind};
+use plan_core::intent::{Fixture, FixtureKind, Stub};
 use plan_core::{
     FaceRef, Gap, Measure, Mm, Opening, OpeningKind, Phase, Plan, Quantity, Relation, Room,
     RoomName, Side, Source, WallOverride,
@@ -45,6 +45,8 @@ const KEYWORDS: &[&str] = &[
     "window",
     "passage",
     "fixture",
+    "stub",
+    "length",
     "at",
     "width",
     "depth",
@@ -85,6 +87,7 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
                 collection_walls(names.clone()),
                 collection_openings(names.clone()),
                 collection_fixtures(names.clone()),
+                collection_stubs(names.clone()),
                 title(),
             )
                 .prop_map(
@@ -98,6 +101,7 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
                         wall_overrides,
                         openings,
                         fixtures,
+                        stubs,
                         title,
                     )| {
                         Plan {
@@ -110,6 +114,7 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
                             measures,
                             openings,
                             fixtures,
+                            stubs,
                             wall_overrides,
                             title,
                         }
@@ -415,4 +420,30 @@ fn fixture(names: Vec<RoomName>) -> impl Strategy<Value = Fixture> {
 
 fn collection_fixtures(names: Vec<RoomName>) -> impl Strategy<Value = Vec<Fixture>> {
     prop::collection::vec(fixture(names), 0..=2)
+}
+
+/// A wall stub on a face of a generated room: `at` 0..1500, length 300..900,
+/// the default thickness, no offset, any bearing and phase.
+fn stub(names: Vec<RoomName>) -> impl Strategy<Value = Stub> {
+    (
+        face(names),
+        0..1500i64,
+        300..=900i64,
+        any::<bool>(),
+        phase(),
+    )
+        .prop_map(|(face, at, length, bearing, phase)| Stub {
+            face,
+            at,
+            length,
+            thickness: None,
+            offset: 0,
+            bearing,
+            phase,
+        })
+}
+
+/// Zero or one stub, so that no two stubs share a face and `at`.
+fn collection_stubs(names: Vec<RoomName>) -> impl Strategy<Value = Vec<Stub>> {
+    prop::collection::vec(stub(names), 0..=1)
 }

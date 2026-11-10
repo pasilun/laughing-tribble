@@ -49,6 +49,8 @@ const KEYWORDS: &[&str] = &[
     "window",
     "passage",
     "fixture",
+    "stub",
+    "length",
     "at",
     "width",
     "depth",

@@ -33,6 +33,9 @@ pub struct Plan {
     /// Fixtures standing against room faces (spec §15 D44).
     #[serde(default)]
     pub fixtures: Vec<Fixture>,
+    /// Wall stubs standing on room faces (spec §15 D45).
+    #[serde(default)]
+    pub stubs: Vec<Stub>,
     /// Per-face wall thickness overrides.
     pub wall_overrides: Vec<WallOverride>,
     /// Title block text by key (spec §15 D41): `property`, `address`,
@@ -352,7 +355,28 @@ pub struct Fixture {
     pub phase: Phase,
 }
 
+/// A wall stub: a piece of wall that starts on a room face and runs straight
+/// into the room, or stands free when `offset` is not 0 (spec §15 D45).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Stub {
+    /// The room face it starts on.
+    pub face: FaceRef,
+    /// Offset along the face; origin rule as for openings (spec §9.3).
+    pub at: Mm,
+    /// Run out from the face, in mm.
+    pub length: Mm,
+    /// Wall thickness in mm; `None` takes `default_wall` at resolve time.
+    pub thickness: Option<Mm>,
+    /// Distance from the face to the start of the stub; 0 when it starts on the face.
+    pub offset: Mm,
+    /// Load-bearing wall.
+    pub bearing: bool,
+    /// Existing, to be demolished, or new.
+    pub phase: Phase,
+}
+
 /// Attributes of the wall on one face, e.g. an outer wall measured 160 mm, or a
+/// load-bearing wall (spec §15 D34).
 /// load-bearing wall (spec §15 D34).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WallOverride {
@@ -433,6 +457,7 @@ mod tests {
                 phase: Phase::New,
             }],
             fixtures: Vec::new(),
+            stubs: Vec::new(),
             wall_overrides: vec![WallOverride {
                 face: face(&kitchen, Side::North),
                 thickness: Some(q(160, Source::Tape)),
@@ -446,6 +471,14 @@ mod tests {
         let json = serde_json::to_string(&plan)?;
         let back: Plan = serde_json::from_str(&json)?;
         assert_eq!(plan, back);
+        Ok(())
+    }
+
+    #[test]
+    fn plan_without_stubs_key_reads_as_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let json = r#"{"name":"","default_wall":{"value":90,"source":"assumed","tolerance":0},"default_outer_wall":{"value":300,"source":"assumed","tolerance":0},"rooms":{},"order":[],"relations":[],"measures":[],"openings":[],"wall_overrides":[]}"#;
+        let plan: Plan = serde_json::from_str(json)?;
+        assert!(plan.stubs.is_empty());
         Ok(())
     }
 
@@ -644,6 +677,7 @@ mod type_roundtrip_tests {
             measures: Vec::new(),
             openings: Vec::new(),
             fixtures: Vec::new(),
+            stubs: Vec::new(),
             wall_overrides: Vec::new(),
             title: BTreeMap::new(),
         })

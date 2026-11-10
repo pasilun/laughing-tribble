@@ -1,14 +1,16 @@
 //! SVG drawing of a resolved plan (W1-23).
 //!
 //! The viewBox is in mm, with x east and y south like the core coordinates.
-//! Elements are written in a fixed order: grid, rooms, walls, fixtures, openings. Every
+//! Elements are written in a fixed order: grid, rooms, walls, stubs, fixtures, openings. Every
 //! collection is a `BTreeMap`, so the same model always gives the same text.
 //! Each element carries its id in `data-id` and as a label on the drawing.
 
 use plan_core::Resolved;
 use plan_core::build::format_m2;
 use plan_core::intent::{FixtureKind, OpeningKind, Phase, Side};
-use plan_core::resolved::{ResolvedFixture, ResolvedOpening, RoomRect, Wall, WallKind};
+use plan_core::resolved::{
+    ResolvedFixture, ResolvedOpening, ResolvedStub, RoomRect, Wall, WallKind,
+};
 use plan_core::units::Mm;
 
 use crate::corners::corner_rect;
@@ -139,8 +141,8 @@ fn grid(view: &View) -> String {
     format!(r##"<g class="grid" stroke="#d0d0d0" stroke-width="8">{lines}</g>"##)
 }
 
-/// The rooms, walls, fixtures and openings, in that order, each as one SVG
-/// element. `fonts` sets the room and label sizes and `opening_stroke` the width
+/// The rooms, walls, stubs, fixtures and openings, in that order, each as one
+/// SVG element. `fonts` sets the room and label sizes and `opening_stroke` the width
 /// of the opening lines, both in viewBox units; everything else is in mm.
 pub(crate) fn drawn_elements(
     resolved: &Resolved,
@@ -153,6 +155,9 @@ pub(crate) fn drawn_elements(
     }
     for wall in resolved.walls.values() {
         elements.push(wall_element(wall, resolved, opening_stroke));
+    }
+    for stub in resolved.stubs.values() {
+        elements.push(stub_element(stub, opening_stroke));
     }
     for fixture in resolved.fixtures.values() {
         elements.push(fixture_element(fixture, fonts, opening_stroke));
@@ -227,6 +232,29 @@ fn wall_element(wall: &Wall, resolved: &Resolved, s: f64) -> String {
     format!(
         r##"<g class="wall" data-id="{id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"{outline}/>{label}</g>"##,
         id = escape(&wall.id),
+    )
+}
+
+/// A wall stub (spec §15 D45): its rectangle as one group, with no label. It is
+/// styled as a wall of its phase (W3-20): existing in the interior wall grey,
+/// new near-black, and demolished white with a dashed red outline. `s` is the
+/// opening stroke width, which also sets the dash pattern.
+fn stub_element(stub: &ResolvedStub, s: f64) -> String {
+    let (fill, outline) = match stub.phase {
+        Phase::Demolish => (
+            "#ffffff",
+            format!(r##" stroke="#c62828" stroke-width="{s}"{}"##, dash_attr(s)),
+        ),
+        Phase::New => ("#1a1a1a", String::new()),
+        Phase::Existing => ("#a6a6a6", String::new()),
+    };
+    format!(
+        r##"<g class="wall stub" data-id="{id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"{outline}/></g>"##,
+        id = escape(&stub.id),
+        x = stub.x.0,
+        y = stub.y.0,
+        w = stub.x.1 - stub.x.0,
+        h = stub.y.1 - stub.y.0,
     )
 }
 
@@ -716,6 +744,32 @@ mod tests {
             .unwrap_or_else(|| panic!("no fixture {data_id}"));
         let rest = &svg[start..];
         &rest[..rest.find("</g>").expect("closing tag") + "</g>".len()]
+    }
+
+    #[test]
+    fn stub_is_a_wall_group_in_the_interior_grey() {
+        let plan = parse("plan \"Kok\"\ndefault_wall 100 source assumed\nroom Kok 2400 x 4000 source laser\nstub Kok.west at 2000 length 600\n").expect("parses");
+        let (resolved, _) = resolve(&plan);
+        let svg = plan_svg(&resolved.expect("resolves"));
+        assert!(
+            svg.contains(
+                r##"class="wall stub" data-id="S:Kok.west:1"><rect x="0" y="2000" width="600" height="100" fill="#a6a6a6""##
+            ),
+            "{svg}"
+        );
+    }
+
+    #[test]
+    fn demolished_stub_is_white_and_dashed_red() {
+        let svg = plan_svg(&kok_with("stub Kok.west at 2000 length 600 demolish"));
+        let start = svg
+            .find(r##"data-id="S:Kok.west:1""##)
+            .expect("the stub is drawn");
+        let group = &svg[start..];
+        let group = &group[..group.find("</g>").expect("closing tag")];
+        assert!(group.contains(r##"fill="#ffffff""##), "{group}");
+        assert!(group.contains("#c62828"), "{group}");
+        assert!(group.contains("stroke-dasharray"), "{group}");
     }
 
     #[test]

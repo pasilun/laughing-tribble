@@ -13,7 +13,7 @@ use serde_json::json;
 
 use crate::build::{
     BuiltWall, Coords, PlacedOpening, SegmentKind, built_walls, diagnose, place_fixtures,
-    place_openings, room_areas, spaces,
+    place_openings, place_stubs, room_areas, spaces,
 };
 use crate::diagnostics::{Code, Diagnostic, Severity, message};
 use crate::intent::{FaceRef, FixtureKind, OpeningKind, Phase, Plan, RoomName, Side, WallOverride};
@@ -51,6 +51,9 @@ pub struct Resolved {
     pub openings: BTreeMap<OpeningId, ResolvedOpening>,
     /// Fixtures by id, `F:<Room>.<side>:<n>` (§15 D44).
     pub fixtures: BTreeMap<String, ResolvedFixture>,
+    /// Wall stubs by id, `S:<Room>.<side>:<n>` (§15 D45). Not walls: they are
+    /// kept apart from `walls`, so wall ids do not change.
+    pub stubs: BTreeMap<String, ResolvedStub>,
     /// Rooms joined by `open`, with their total area.
     pub spaces: Vec<Space>,
     /// The phase of every room that has a rectangle in `rooms`.
@@ -182,6 +185,25 @@ pub struct ResolvedFixture {
     pub phase: Phase,
 }
 
+/// A wall stub as a rectangle in mm, x east, y south (§15 D45).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ResolvedStub {
+    /// The id, `S:<Room>.<side>:<n>`, numbered per face by `at`.
+    pub id: String,
+    /// The room face it starts on.
+    pub face: FaceRef,
+    /// Extent along x in mm, as `(min, max)`.
+    pub x: (Mm, Mm),
+    /// Extent along y in mm, as `(min, max)`.
+    pub y: (Mm, Mm),
+    /// Wall thickness in mm: the stub's own, else `default_wall`.
+    pub thickness: Mm,
+    /// Load-bearing wall.
+    pub bearing: bool,
+    /// Existing, demolished or new.
+    pub phase: Phase,
+}
+
 /// Rooms joined by `open`, with their total area (§9.5).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Space {
@@ -288,6 +310,8 @@ fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>)
     let rooms = rooms(plan, &coords);
     let (fixtures, fixture_diags) = place_fixtures(plan, &rooms, &walls);
     diagnostics.extend(fixture_diags);
+    let (stubs, stub_diags) = place_stubs(plan, &rooms);
+    diagnostics.extend(stub_diags);
     if stops(&diagnostics) {
         return (None, diagnostics);
     }
@@ -338,6 +362,7 @@ fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>)
             .map(|opening| (opening.id.clone(), opening_model(opening)))
             .collect(),
         fixtures,
+        stubs,
         spaces: spaces(plan, &areas)
             .into_iter()
             .map(|space| Space {

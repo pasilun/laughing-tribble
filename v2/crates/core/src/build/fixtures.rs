@@ -127,7 +127,7 @@ fn along(wall: &BuiltWall, side: Side) -> (Mm, Mm) {
 
 /// The solved span of a room face along its own axis, `(lo, hi)`: west and east
 /// for north and south faces, north and south for east and west faces.
-fn face_span(side: Side, room: &RoomRect) -> (Mm, Mm) {
+pub(super) fn face_span(side: Side, room: &RoomRect) -> (Mm, Mm) {
     match side {
         Side::North | Side::South => (room.west, room.east),
         Side::East | Side::West => (room.north, room.south),
@@ -187,7 +187,7 @@ fn number_fixtures(plan: &Plan) -> Vec<(usize, String)> {
 }
 
 /// `Room.side` with the side in lower case, as used in ids and messages.
-fn face_label(face: &FaceRef) -> String {
+pub(super) fn face_label(face: &FaceRef) -> String {
     let side = match face.side {
         Side::North => "north",
         Side::East => "east",

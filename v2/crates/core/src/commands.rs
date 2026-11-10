@@ -23,7 +23,7 @@ use crate::diagnostics::{Code, Diagnostic, Severity, Span, message};
 use crate::dsl::{parse, print};
 use crate::intent::{
     FaceRef, Fixture, FixtureKind, Measure, Opening, OpeningKind, Plan, Relation, Room, RoomName,
-    Side, WallOverride,
+    Side, Stub, WallOverride,
 };
 use crate::resolved::{Resolved, has_error, resolve};
 use crate::units::Mm;
@@ -43,6 +43,8 @@ pub enum Statement {
     Wall(WallOverride),
     /// A `fixture` line.
     Fixture(Fixture),
+    /// A `stub` line (spec §15 D45).
+    Stub(Stub),
 }
 
 /// A change to a plan, as read from a patch line.
@@ -72,7 +74,7 @@ pub struct Change {
     /// What happened.
     pub op: ChangeOp,
     /// The kind of statement: `room`, `relation`, `align`, `measure`, `opening`,
-    /// `wall`, `fixture` or `title`.
+    /// `wall`, `fixture`, `stub` or `title`.
     pub kind: &'static str,
     /// The key of the statement, written as in the DSL, for example `room Hall`
     /// or `measure Garderob.north to Sovrum.south`.
@@ -248,6 +250,7 @@ fn set_statement(plan: &mut Plan, statement: Statement) -> Change {
         Statement::Opening(opening) => upsert(&mut plan.openings, opening, opening_key),
         Statement::Wall(wall) => upsert(&mut plan.wall_overrides, wall, wall_key),
         Statement::Fixture(fixture) => upsert(&mut plan.fixtures, fixture, fixture_key),
+        Statement::Stub(stub) => upsert(&mut plan.stubs, stub, stub_key),
     };
     Change { op, kind, target }
 }
@@ -289,6 +292,7 @@ fn remove_statement(
         Statement::Fixture(fixture) => {
             remove(&mut plan.fixtures, &fixture_key(&fixture), fixture_key)
         }
+        Statement::Stub(stub) => remove(&mut plan.stubs, &stub_key(&stub), stub_key),
     };
     removed.then_some(Change {
         op: ChangeOp::Removed,
@@ -340,6 +344,8 @@ enum Key {
     Wall(FaceRef),
     /// A fixture, by (face, at, kind) (spec §10.1, §15 D44).
     Fixture(FaceRef, Mm, FixtureKind),
+    /// A stub, by (face, at) (spec §15 D45).
+    Stub(FaceRef, Mm),
 }
 
 fn relation_key(relation: &Relation) -> Key {
@@ -376,6 +382,10 @@ fn fixture_key(fixture: &Fixture) -> Key {
     Key::Fixture(fixture.face.clone(), fixture.at, fixture.kind)
 }
 
+fn stub_key(stub: &Stub) -> Key {
+    Key::Stub(stub.face.clone(), stub.at)
+}
+
 /// Parse one patch line (without its `- ` prefix) into one statement, using the
 /// rooms of `working` as the names it may refer to.
 ///
@@ -397,6 +407,7 @@ fn parse_statement(working: &Plan, body: &str, line: u32) -> Result<Statement, D
     context.openings.clear();
     context.wall_overrides.clear();
     context.fixtures.clear();
+    context.stubs.clear();
     if let Some(name) = &declared {
         context.rooms.retain(|room, _| room.as_str() != name);
         context.order.retain(|room| room.as_str() != name);
@@ -420,6 +431,7 @@ fn parse_statement(working: &Plan, body: &str, line: u32) -> Result<Statement, D
     found.extend(parsed.openings.into_iter().map(Statement::Opening));
     found.extend(parsed.wall_overrides.into_iter().map(Statement::Wall));
     found.extend(parsed.fixtures.into_iter().map(Statement::Fixture));
+    found.extend(parsed.stubs.into_iter().map(Statement::Stub));
 
     if found.len() != 1 {
         return Err(not_a_statement(body, line));
@@ -526,6 +538,7 @@ fn refers_to(plan: &Plan, name: &RoomName) -> bool {
             .any(|o| &o.face.room == name || o.opens_into.as_ref() == Some(name))
         || plan.wall_overrides.iter().any(|w| &w.face.room == name)
         || plan.fixtures.iter().any(|f| &f.face.room == name)
+        || plan.stubs.iter().any(|s| &s.face.room == name)
 }
 
 /// The kind word of a statement, for the diff.
@@ -538,6 +551,7 @@ fn kind_of(statement: &Statement) -> &'static str {
         Statement::Opening(_) => "opening",
         Statement::Wall(_) => "wall",
         Statement::Fixture(_) => "fixture",
+        Statement::Stub(_) => "stub",
     }
 }
 
@@ -573,6 +587,7 @@ fn describe(statement: &Statement) -> String {
             face_text(&fixture.face),
             fixture.at
         ),
+        Statement::Stub(stub) => format!("stub {} at {}", face_text(&stub.face), stub.at),
     }
 }
 
@@ -853,6 +868,35 @@ mod tests {
         assert_eq!(new_plan.fixtures.len(), 1);
         assert_eq!(new_plan.fixtures[0].width, 500);
         assert_eq!(result.diff[0].op, ChangeOp::Replaced);
+        Ok(())
+    }
+
+    #[test]
+    fn stub_line_adds_replaces_and_removes_by_face_and_at() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let plan = fixture(FIXTURE_A);
+        let added = apply(&plan, "stub Garderob.north at 200 length 600", false);
+        assert!(added.ok, "{:?}", added.diagnostics);
+        let with = added.plan.ok_or("ok result has no plan")?;
+        assert_eq!(with.stubs.len(), 1);
+        assert_eq!(added.diff[0].kind, "stub");
+        assert_eq!(added.diff[0].op, ChangeOp::Added);
+
+        let replaced = apply(
+            &with,
+            "stub Garderob.north at 200 length 900 bearing",
+            false,
+        );
+        assert!(replaced.ok, "{:?}", replaced.diagnostics);
+        let new_plan = replaced.plan.ok_or("ok result has no plan")?;
+        assert_eq!(new_plan.stubs.len(), 1);
+        assert_eq!(new_plan.stubs[0].length, 900);
+        assert_eq!(replaced.diff[0].op, ChangeOp::Replaced);
+
+        let removed = apply(&new_plan, "- stub Garderob.north at 200 length 900", false);
+        assert!(removed.ok, "{:?}", removed.diagnostics);
+        assert_eq!(removed.plan.as_ref().map(|p| p.stubs.len()), Some(0));
+        assert_eq!(removed.diff[0].op, ChangeOp::Removed);
         Ok(())
     }
 

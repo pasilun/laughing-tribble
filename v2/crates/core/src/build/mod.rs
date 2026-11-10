@@ -5,7 +5,8 @@
 //! segments (§9.2 steps 1–2), and [`merge`] runs steps 3–7 and assigns wall ids.
 //! [`diagnose`] reports the facade steps (W003) and derived walls (I010).
 //! [`areas`] gives room areas in mm² and the spaces joined by `open` (§9.5).
-//! [`fixtures`] places the fixture rectangles against their faces (§15 D44).
+//! [`fixtures`] places the fixture rectangles against their faces (§15 D44),
+//! and [`stubs`] places the wall stubs (§15 D45).
 
 pub mod areas;
 pub mod diagnose;
@@ -13,6 +14,7 @@ pub mod faces;
 pub mod fixtures;
 pub mod merge;
 pub mod openings;
+pub mod stubs;
 pub mod walls;
 
 pub use areas::{Mm2, Space, centi_m2, format_m2, room_areas, spaces};
@@ -21,4 +23,5 @@ pub use faces::{Coords, FacingPair, facing_faces};
 pub use fixtures::place_fixtures;
 pub use merge::{BuiltWall, built_walls};
 pub use openings::{PlacedOpening, place_openings};
+pub use stubs::place_stubs;
 pub use walls::{SegmentKind, WallSegment, wall_segments};

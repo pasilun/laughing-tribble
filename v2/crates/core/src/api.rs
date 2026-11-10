@@ -82,8 +82,8 @@ impl RectMm {
 }
 
 /// The rectangle of one element: a room name (its solved inner faces), a wall id
-/// (`W:…`, its body), an opening id (`O:…`) or a fixture id (`F:…`, its
-/// rectangle). `None` for an unknown id.
+/// (`W:…`, its body), an opening id (`O:…`), a fixture id (`F:…`, its
+/// rectangle) or a stub id (`S:…`, its rectangle). `None` for an unknown id.
 ///
 /// Walls use the body extents already computed for `interior_walls` (§7.7) and
 /// outer walls alike. An opening spans its `start`..`end` along its face and the
@@ -116,6 +116,14 @@ pub fn element_rect(resolved: &Resolved, id: &str) -> Option<RectMm> {
             y1: fixture.y.1,
         });
     }
+    if let Some(stub) = resolved.stubs.get(id) {
+        return Some(RectMm {
+            x0: stub.x.0,
+            y0: stub.y.0,
+            x1: stub.x.1,
+            y1: stub.y.1,
+        });
+    }
     let opening = resolved.openings.get(id)?;
     let wall = resolved.walls.get(&opening.wall)?;
     let rect = match opening.face.side {
@@ -135,8 +143,8 @@ pub fn element_rect(resolved: &Resolved, id: &str) -> Option<RectMm> {
     Some(rect)
 }
 
-/// Every room name, wall id, opening id and fixture id: rooms (by name), then
-/// walls, then openings, then fixtures.
+/// Every room name, wall id, opening id, fixture id and stub id: rooms (by
+/// name), then walls, then openings, then fixtures, then stubs.
 pub fn element_ids(resolved: &Resolved) -> Vec<String> {
     resolved
         .rooms
@@ -145,6 +153,7 @@ pub fn element_ids(resolved: &Resolved) -> Vec<String> {
         .chain(resolved.walls.keys().cloned())
         .chain(resolved.openings.keys().cloned())
         .chain(resolved.fixtures.keys().cloned())
+        .chain(resolved.stubs.keys().cloned())
         .collect()
 }
 
