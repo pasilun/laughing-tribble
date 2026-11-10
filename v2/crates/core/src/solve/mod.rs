@@ -9,6 +9,7 @@ pub mod components;
 pub mod conflicts;
 pub mod cycles;
 pub mod graph;
+pub mod lsq;
 pub mod tree;
 
 pub use components::{Component, components};
