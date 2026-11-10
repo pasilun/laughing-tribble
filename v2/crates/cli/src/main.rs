@@ -14,8 +14,9 @@
 //!   [--region ID | --rect x,y,w,h] [--diff BEFORE]`: write the PNG and print its viewport
 //!   as JSON (with `--diff`, the plan view of the file with the differences from BEFORE
 //!   drawn on top, and a `diff` object of counts).
-//! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims]`:
+//! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]`:
 //!   write the sheet as a PDF and print its paper, scale and byte count as JSON.
+//!   `--phase before|after` draws the building before or after the works (spec §15 D43).
 //! - `plan --version`.
 //!
 //! Exit status: 0 on success, 1 when the plan has an Error (or does not parse),
@@ -30,8 +31,9 @@ use std::process::ExitCode;
 use plan_core::solve::components::suggested_w001;
 use plan_core::solve::{edges, unmeasured};
 use plan_core::{Diagnostic, Resolved, Severity, dsl, load, solve_json};
+use plan_render::phase::sheet_title;
 use plan_render::viewport::DEFAULT_TOKENS;
-use plan_render::{Lang, Paper, Region, RenderOptions, SheetOptions, View};
+use plan_render::{Lang, Paper, PhaseView, Region, RenderOptions, SheetOptions, View, phase_view};
 
 const USAGE: &str = "usage:
   plan check <file>
@@ -41,14 +43,14 @@ const USAGE: &str = "usage:
   plan fmt <file> [--write]
   plan svg <file> [--out path]
   plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]
-  plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims]
+  plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]
   plan --version";
 
 /// Usage line of `plan png`, printed on its own to stderr (exit 2).
 const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]";
 
 /// Usage line of `plan pdf`, printed on its own to stderr (exit 2).
-const PDF_USAGE: &str = "usage: plan pdf FILE -o OUT.pdf [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims]";
+const PDF_USAGE: &str = "usage: plan pdf FILE -o OUT.pdf [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]";
 
 /// Write a line to stdout. A closed pipe ends the program quietly with exit 0.
 fn out(text: &str) {
@@ -400,11 +402,12 @@ struct PdfArgs<'a> {
     date: Option<&'a str>,
     lang: Lang,
     dims: bool,
+    view: PhaseView,
 }
 
-/// Parse `FILE -o OUT [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims]`.
+/// Parse `FILE -o OUT [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]`.
 /// `None` is a usage error: a missing file or `-o`, an unknown option, a missing
-/// value, an unknown paper or language, or a scale that is not a positive integer.
+/// value, an unknown paper, language or phase, or a scale that is not a positive integer.
 fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
     let (&file, rest) = words.split_first()?;
     let mut out = None;
@@ -414,6 +417,7 @@ fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
     let mut date = None;
     let mut lang = Lang::En;
     let mut dims = true;
+    let mut view = PhaseView::All;
     let mut rest = rest;
     while let Some((&flag, after)) = rest.split_first() {
         if flag == "--no-dims" {
@@ -444,6 +448,14 @@ fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
                     _ => return None,
                 }
             }
+            "--phase" => {
+                view = match value {
+                    "all" => PhaseView::All,
+                    "before" => PhaseView::Before,
+                    "after" => PhaseView::After,
+                    _ => return None,
+                }
+            }
             _ => return None,
         }
     }
@@ -456,6 +468,7 @@ fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
         date,
         lang,
         dims,
+        view,
     })
 }
 
@@ -484,18 +497,23 @@ fn pdf_command(words: &[&str]) -> Result<ExitCode, String> {
     let Some(resolved) = &loaded.resolved else {
         return Ok(print_unresolved(&loaded.diagnostics));
     };
+    let resolved = phase_view(resolved, args.view);
     let opts = SheetOptions {
         paper: args.paper,
         scale: args.scale,
-        title: args
-            .title
-            .map_or_else(|| loaded.plan.name.clone(), str::to_string),
+        title: sheet_title(
+            &args
+                .title
+                .map_or_else(|| loaded.plan.name.clone(), str::to_string),
+            args.view,
+            args.lang,
+        ),
         date: args.date.map(str::to_string),
         lang: args.lang,
         block: loaded.plan.title.clone(),
         dims: args.dims,
     };
-    let sheet = match plan_render::sheet(resolved, &opts) {
+    let sheet = match plan_render::sheet(&resolved, &opts) {
         Ok(sheet) => sheet,
         Err(diagnostic) => {
             out(&describe(&diagnostic));
@@ -627,6 +645,41 @@ room Förråd 800 x 2000 source laser
             review_report(FIXTURE_A),
             ("Nothing to report.\n".to_string(), 0)
         );
+    }
+
+    #[test]
+    fn pdf_phase_flag_parses() {
+        let args = pdf_args(&["plan.plan", "-o", "x.pdf", "--phase", "after"]).expect("parses");
+        assert_eq!(args.view, PhaseView::After);
+        let args = pdf_args(&["plan.plan", "-o", "x.pdf"]).expect("parses");
+        assert_eq!(args.view, PhaseView::All);
+        assert!(pdf_args(&["plan.plan", "-o", "x.pdf", "--phase", "sideways"]).is_none());
+    }
+
+    #[test]
+    fn pdf_phase_after_writes_a_pdf_and_exits_0() {
+        let out_path =
+            std::env::temp_dir().join(format!("plan-cli-phase-after-{}.pdf", std::process::id()));
+        let out_str = out_path.to_string_lossy().to_string();
+        let fixture = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/review-1.plan");
+        let code =
+            pdf_command(&[fixture, "-o", out_str.as_str(), "--phase", "after"]).expect("runs");
+        assert_eq!(code, ExitCode::SUCCESS);
+        let bytes = fs::read(&out_path).expect("pdf written");
+        assert!(bytes.starts_with(b"%PDF-"));
+        let _ = fs::remove_file(&out_path);
+    }
+
+    #[test]
+    fn pdf_phase_sideways_exits_2() {
+        let code = pdf_command(&["plan.plan", "-o", "x.pdf", "--phase", "sideways"]).expect("runs");
+        assert_eq!(code, ExitCode::from(2));
+    }
+
+    #[test]
+    fn sheet_title_before_sv_ends_with_fore() {
+        let title = sheet_title("Lgh 154", PhaseView::Before, Lang::Sv);
+        assert!(title.ends_with(" – före"), "{title}");
     }
 
     #[test]

@@ -9,8 +9,10 @@ pub use store::Store;
 
 use base64::Engine;
 use plan_core::{Code, Diagnostic, Severity, message};
+use plan_render::phase::sheet_title;
 use plan_render::{
-    Lang as SheetLang, Paper as SheetPaper, Region, RenderOptions, SheetOptions, View as PlanView,
+    Lang as SheetLang, Paper as SheetPaper, PhaseView, Region, RenderOptions, SheetOptions,
+    View as PlanView, phase_view,
 };
 use rmcp::{
     ErrorData as McpError, ServerHandler,
@@ -144,6 +146,19 @@ pub enum ExportPaper {
     A3,
 }
 
+/// Which state of the works the sheet draws (spec §15 D43).
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportPhase {
+    /// The plan as it is.
+    #[default]
+    All,
+    /// The building today: new walls and openings left out.
+    Before,
+    /// The finished building: demolished walls and openings left out.
+    After,
+}
+
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct ExportArgs {
     /// The plan: a file name under the server's root, without `.plan`.
@@ -168,6 +183,11 @@ pub struct ExportArgs {
     /// Set false to leave them out and reserve no paper for them.
     #[serde(default = "default_dims")]
     pub dims: bool,
+    /// "all" (default), "before" (the building today, new things left out) or
+    /// "after" (the finished building, demolished things left out). The file is
+    /// `<plan_id>.pdf`, `<plan_id>-before.pdf` or `<plan_id>-after.pdf`.
+    #[serde(default)]
+    pub phase: ExportPhase,
 }
 
 /// The default of `ExportArgs::dims`: the chains are drawn.
@@ -253,15 +273,22 @@ impl PlanServer {
             ExportPaper::A4 => SheetPaper::A4,
             ExportPaper::A3 => SheetPaper::A3,
         };
+        let (view, file_stem) = match args.phase {
+            ExportPhase::All => (PhaseView::All, args.plan_id.clone()),
+            ExportPhase::Before => (PhaseView::Before, format!("{}-before", args.plan_id)),
+            ExportPhase::After => (PhaseView::After, format!("{}-after", args.plan_id)),
+        };
+        let lang = match args.lang {
+            ExportLang::En => SheetLang::En,
+            ExportLang::Sv => SheetLang::Sv,
+        };
+        let resolved = phase_view(&resolved, view);
         let opts = SheetOptions {
             paper,
             scale: args.scale,
-            title: loaded.plan.name.clone(),
+            title: sheet_title(&loaded.plan.name, view, lang),
             date: args.date.clone(),
-            lang: match args.lang {
-                ExportLang::En => SheetLang::En,
-                ExportLang::Sv => SheetLang::Sv,
-            },
+            lang,
             block: loaded.plan.title.clone(),
             dims: args.dims,
         };
@@ -269,7 +296,7 @@ impl PlanServer {
         let bytes = plan_render::pdf(&sheet).map_err(|d| vec![d])?;
         let path = self
             .store
-            .write_export(&args.plan_id, ext, &bytes)
+            .write_export(&file_stem, ext, &bytes)
             .map_err(|d| vec![d])?;
 
         Ok(json!({
@@ -1018,7 +1045,36 @@ mod tests {
             date: None,
             lang: ExportLang::En,
             dims: true,
+            phase: ExportPhase::All,
         })
+    }
+
+    #[tokio::test]
+    async fn export_before_and_after_use_suffixed_names() {
+        let root = fixture_root("export_phase", &[("review-1", REVIEW_1)]);
+        for (phase, name) in [
+            (ExportPhase::Before, "review-1-before.pdf"),
+            (ExportPhase::After, "review-1-after.pdf"),
+        ] {
+            let mut args = export_args("review-1", ExportPaper::A3, None).0;
+            args.phase = phase;
+            let result = PlanServer::new(Store::new(&root))
+                .export(Parameters(args))
+                .await
+                .expect("protocol ok");
+            assert_eq!(result.is_error, Some(false));
+            let s = result.structured_content.expect("structured content");
+            let path = PathBuf::from(s["path"].as_str().expect("path string"));
+            assert!(path.ends_with(name), "{path:?}");
+            assert!(fs::read(&path).expect("pdf written").starts_with(b"%PDF-"));
+        }
+    }
+
+    #[tokio::test]
+    async fn export_bad_phase_is_a_parse_error() {
+        let parsed: Result<ExportArgs, _> =
+            serde_json::from_value(json!({"plan_id": "x", "phase": "sideways"}));
+        assert!(parsed.is_err());
     }
 
     #[tokio::test]
