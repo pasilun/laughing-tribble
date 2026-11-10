@@ -46,7 +46,7 @@ pub(crate) const PLAN_ROOM_FONTS: RoomFonts = RoomFonts {
 
 /// The SVG drawing of a resolved plan, in mm.
 ///
-/// The viewBox is the extent of the rooms and walls plus [`PAD`] on each side.
+/// The viewBox is the extent of the rooms, walls, stubs and fixtures plus [`PAD`] on each side.
 /// A model with no rooms and no walls gets a 1 m square.
 pub fn plan_svg(resolved: &Resolved) -> String {
     let view = view_box(resolved);
@@ -91,7 +91,8 @@ struct View {
 }
 
 fn view_box(resolved: &Resolved) -> View {
-    // (west, north, east, south) of every room and wall.
+    // (west, north, east, south) of every room, wall, stub and fixture. A fixture
+    // or stub can stand outside the rooms (a balcony, §15 D44), so it counts too.
     let boxes: Vec<(Mm, Mm, Mm, Mm)> = resolved
         .rooms
         .values()
@@ -101,6 +102,18 @@ fn view_box(resolved: &Resolved) -> View {
                 .walls
                 .values()
                 .map(|wall| (wall.x.0, wall.y.0, wall.x.1, wall.y.1)),
+        )
+        .chain(
+            resolved
+                .stubs
+                .values()
+                .map(|stub| (stub.x.0, stub.y.0, stub.x.1, stub.y.1)),
+        )
+        .chain(
+            resolved
+                .fixtures
+                .values()
+                .map(|fixture| (fixture.x.0, fixture.y.0, fixture.x.1, fixture.y.1)),
         )
         .collect();
     let (min_x, min_y, max_x, max_y) = if boxes.is_empty() {
@@ -996,6 +1009,32 @@ room B 2000 x 2000 source laser apartment \"2\"
         };
         let rendered = render(&resolved, &opts).expect("renders");
         assert!(rendered.labels.iter().all(|l| l.id != "F:Kok.north:1"));
+    }
+
+    /// The `(x, y, w, h)` of the viewBox of an SVG text.
+    fn view_box_of(svg: &str) -> (i64, i64, i64, i64) {
+        let start = svg.find(r##"viewBox=""##).expect("viewBox") + r##"viewBox=""##.len();
+        let rest = &svg[start..];
+        let values: Vec<i64> = rest[..rest.find('"').expect("closing quote")]
+            .split(' ')
+            .map(|v| v.parse().expect("integer"))
+            .collect();
+        (values[0], values[1], values[2], values[3])
+    }
+
+    #[test]
+    fn view_box_includes_a_balcony_outside_the_room() {
+        let resolved = kok_with("fixture balcony Kok.south at 300 width 1500 depth 1300");
+        let balcony = resolved
+            .fixtures
+            .get("F:Kok.south:1")
+            .expect("the balcony is placed");
+        let svg = plan_svg(&resolved);
+        let (_, y, _, h) = view_box_of(&svg);
+        assert!(
+            y + h >= balcony.y.1,
+            "viewBox ends above the balcony: {svg}"
+        );
     }
 
     #[test]
