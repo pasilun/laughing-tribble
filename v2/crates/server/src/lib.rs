@@ -117,6 +117,9 @@ pub struct RenderArgs {
     /// Image token budget, at most 4784. Default 1600.
     #[serde(default = "default_tokens")]
     pub max_tokens: u32,
+    /// Only for view "diff": DSL statements as for apply. The picture shows what applying them would change. Nothing is saved.
+    #[serde(default)]
+    pub patch: Option<String>,
 }
 
 fn default_tokens() -> u32 {
@@ -307,27 +310,16 @@ impl PlanServer {
         }))
     }
 
-    /// Tool errors (`Err`) are E022 (view not yet drawn), the plan errors of
-    /// `check` (E020, E021, E006, E003 and so on, when the plan does not resolve)
-    /// and render errors (E011, E012).
+    /// Tool errors (`Err`) are E022 (view "overlay", or "diff" without a patch),
+    /// the plan errors of `check` (E020, E021, E006, E003 and so on, when the plan
+    /// does not resolve), a diff patch that does not apply (its errors), and render
+    /// errors (E011, E012). Nothing is saved.
     fn render_value(&self, args: &RenderArgs) -> Result<CallToolResult, Vec<Diagnostic>> {
-        let view = match args.view {
-            RenderView::Plan => PlanView::Plan,
-            RenderView::Labels => PlanView::Labels,
-            _ => return Err(vec![e022(&args.view)]),
-        };
+        if matches!(args.view, RenderView::Overlay) {
+            return Err(vec![e022(&args.view)]);
+        }
         let text = self.store.load(&args.plan_id).map_err(|d| vec![d])?;
-        let loaded = plan_core::load(&text)?;
-        let Some(resolved) = loaded.resolved else {
-            let errors = loaded
-                .diagnostics
-                .into_iter()
-                .filter(|d| matches!(d.severity, Severity::Error))
-                .collect();
-            return Err(errors);
-        };
-
-        let opts = RenderOptions {
+        let options = |view: PlanView| RenderOptions {
             view,
             region: args.region.as_ref().map(|r| match r {
                 RegionArg::Id { id } => Region::Id(id.clone()),
@@ -335,31 +327,65 @@ impl PlanServer {
             }),
             max_tokens: args.max_tokens,
         };
-        let rendered = plan_render::render(&resolved, &opts).map_err(|d| vec![d])?;
-        let bytes = plan_render::png(&rendered).map_err(|d| vec![d])?;
 
-        let vp = rendered.viewport;
-        let labels: Vec<serde_json::Value> = rendered
-            .labels
-            .iter()
-            .map(|l| json!({ "id": l.id, "center_px": l.center_px }))
-            .collect();
-        let meta = json!({
-            "plan_id": args.plan_id,
-            "view": args.view.name(),
-            "mm_per_px": vp.mm_per_px,
-            "origin_mm": vp.origin_mm,
-            "size_px": vp.size_px,
-            "tokens": vp.tokens,
-            "labels": labels,
-        });
-        let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        let mut result = CallToolResult::success(vec![
-            ContentBlock::image(data, "image/png"),
-            ContentBlock::text(meta.to_string()),
-        ]);
-        result.structured_content = Some(meta);
-        Ok(result)
+        let (rendered, extra) = match args.view {
+            RenderView::Plan | RenderView::Labels => {
+                let view = if matches!(args.view, RenderView::Plan) {
+                    PlanView::Plan
+                } else {
+                    PlanView::Labels
+                };
+                let resolved = resolved_text(&text)?;
+                let rendered =
+                    plan_render::render(&resolved, &options(view)).map_err(|d| vec![d])?;
+                (rendered, Vec::new())
+            }
+            RenderView::Conflicts => {
+                let resolved = draft_text(&text)?;
+                let marks = plan_render::marks::conflict_marks(&resolved);
+                let rendered =
+                    plan_render::render_marked(&resolved, &options(PlanView::Plan), &marks)
+                        .map_err(|d| vec![d])?;
+                (rendered, vec![("marks", json!(marks.len()))])
+            }
+            RenderView::Missing => {
+                let plan = plan_core::dsl::parse(&text).map_err(|d| vec![d])?;
+                let preview = plan_core::preview::preview_missing(&plan);
+                let (resolved, diagnostics) = plan_core::resolve_draft(&preview.plan);
+                let resolved = resolved.ok_or_else(|| error_diagnostics(&diagnostics))?;
+                let i020 = plan_core::solve::unmeasured(&plan);
+                let marks = plan_render::marks::missing_marks(
+                    &resolved,
+                    &preview.assumed,
+                    &i020,
+                    MISSING_SUGGESTIONS,
+                );
+                let rendered =
+                    plan_render::render_marked(&resolved, &options(PlanView::Plan), &marks)
+                        .map_err(|d| vec![d])?;
+                (rendered, vec![("marks", json!(marks.len()))])
+            }
+            RenderView::Diff => {
+                let Some(patch) = args.patch.as_deref() else {
+                    return Err(vec![no_patch()]);
+                };
+                let before = resolved_text(&text)?;
+                let plan = plan_core::dsl::parse(&text).map_err(|d| vec![d])?;
+                let result = plan_core::apply(&plan, patch, true);
+                if !result.ok {
+                    return Err(error_diagnostics(&result.diagnostics));
+                }
+                let after = result
+                    .resolved
+                    .ok_or_else(|| error_diagnostics(&result.diagnostics))?;
+                let (rendered, counts) =
+                    plan_render::render_diff(&before, &after, &options(PlanView::Plan))
+                        .map_err(|d| vec![d])?;
+                (rendered, vec![("diff", json!(counts))])
+            }
+            RenderView::Overlay => return Err(vec![e022(&args.view)]),
+        };
+        render_result(args, rendered, extra)
     }
 
     /// Tool errors (`Err`) are E021, E023 and E006 (a stored file that does not parse).
@@ -466,6 +492,82 @@ fn e022(view: &RenderView) -> Diagnostic {
     }
 }
 
+/// E022 for view "diff" without a `patch` argument.
+fn no_patch() -> Diagnostic {
+    Diagnostic {
+        code: Code::E022,
+        severity: Severity::Error,
+        message: r#"View "diff" needs a "patch" argument."#.to_string(),
+        span: None,
+        refs: Vec::new(),
+        data: json!({ "view": "diff" }),
+    }
+}
+
+/// How many I020 suggestions the `missing` view draws (as `plan png --view missing`).
+const MISSING_SUGGESTIONS: usize = 3;
+
+/// The error diagnostics of `ds`.
+fn error_diagnostics(ds: &[Diagnostic]) -> Vec<Diagnostic> {
+    ds.iter()
+        .filter(|d| matches!(d.severity, Severity::Error))
+        .cloned()
+        .collect()
+}
+
+/// The stored text as a resolved plan (`plan_core::load`). When it does not
+/// resolve, its error diagnostics are the tool error.
+fn resolved_text(text: &str) -> Result<plan_core::Resolved, Vec<Diagnostic>> {
+    let loaded = plan_core::load(text)?;
+    loaded
+        .resolved
+        .ok_or_else(|| error_diagnostics(&loaded.diagnostics))
+}
+
+/// The stored text as a draft (`resolve_draft`): a plan with E003 still resolves
+/// for drawing (D37). Only the errors that stop a draft are tool errors.
+fn draft_text(text: &str) -> Result<plan_core::Resolved, Vec<Diagnostic>> {
+    let plan = plan_core::dsl::parse(text).map_err(|d| vec![d])?;
+    let (resolved, diagnostics) = plan_core::resolve_draft(&plan);
+    resolved.ok_or_else(|| error_diagnostics(&diagnostics))
+}
+
+/// The structured and image result of a render. `extra` adds keys to the
+/// metadata (`marks` or `diff`).
+fn render_result(
+    args: &RenderArgs,
+    rendered: plan_render::Rendered,
+    extra: Vec<(&str, serde_json::Value)>,
+) -> Result<CallToolResult, Vec<Diagnostic>> {
+    let bytes = plan_render::png(&rendered).map_err(|d| vec![d])?;
+
+    let vp = rendered.viewport;
+    let labels: Vec<serde_json::Value> = rendered
+        .labels
+        .iter()
+        .map(|l| json!({ "id": l.id, "center_px": l.center_px }))
+        .collect();
+    let mut meta = json!({
+        "plan_id": args.plan_id,
+        "view": args.view.name(),
+        "mm_per_px": vp.mm_per_px,
+        "origin_mm": vp.origin_mm,
+        "size_px": vp.size_px,
+        "tokens": vp.tokens,
+        "labels": labels,
+    });
+    for (key, value) in extra {
+        meta[key] = value;
+    }
+    let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let mut result = CallToolResult::success(vec![
+        ContentBlock::image(data, "image/png"),
+        ContentBlock::text(meta.to_string()),
+    ]);
+    result.structured_content = Some(meta);
+    Ok(result)
+}
+
 fn tool_result(v: Result<serde_json::Value, Vec<Diagnostic>>) -> CallToolResult {
     match v {
         Ok(v) => CallToolResult::structured(v),
@@ -489,7 +591,7 @@ pub const CHECK_DESCRIPTION: &str = "Check a plan. Returns every diagnostic (err
 
 pub const GET_DESCRIPTION: &str = "Read a plan: summary (default), dsl (the plan text, to edit with apply) or json (solved faces, walls, openings, diagnostics).";
 
-pub const RENDER_DESCRIPTION: &str = "Draw a plan as a PNG sized for you, with ids on every element. Use it to judge the layout, not to measure: numbers come from get and check. Crop with region (an id or a mm rectangle) to see detail.";
+pub const RENDER_DESCRIPTION: &str = "Draw a plan as a PNG sized for you, with ids on every element. Use it to judge the layout, not to measure: numbers come from get and check. Crop with region (an id or a mm rectangle) to see detail. Views: labels (default) and plan; conflicts: each measurement conflict drawn between its two faces (works when check reports E003); missing: where to measure next; diff (with \"patch\"): what a change would add (green), remove (red) and move (amber). Nothing is saved.";
 
 pub const EXPORT_DESCRIPTION: &str = "Write a print-ready PDF sheet of the plan (A4 or A3, standard scale, title strip). Returns the file path, paper and scale. The plan must be free of errors; run check first.";
 
@@ -937,6 +1039,17 @@ mod tests {
             view,
             region,
             max_tokens: default_tokens(),
+            patch: None,
+        })
+    }
+
+    fn diff_args(plan_id: &str, patch: Option<&str>) -> Parameters<RenderArgs> {
+        Parameters(RenderArgs {
+            plan_id: plan_id.into(),
+            view: RenderView::Diff,
+            region: None,
+            max_tokens: default_tokens(),
+            patch: patch.map(str::to_string),
         })
     }
 
@@ -1002,7 +1115,7 @@ mod tests {
     #[tokio::test]
     async fn render_view_later() {
         let result = server("render_later")
-            .render(render_args("lgh154-a", RenderView::Conflicts, None))
+            .render(render_args("lgh154-a", RenderView::Overlay, None))
             .await
             .expect("protocol ok");
         assert_eq!(result.is_error, Some(true));
@@ -1010,8 +1123,73 @@ mod tests {
         assert_eq!(codes(&s), ["E022"]);
         assert_eq!(
             s["diagnostics"][0]["message"],
-            r#"View "conflicts" is not available yet; use "plan" or "labels"."#
+            r#"View "overlay" is not available yet; use "plan" or "labels"."#
         );
+    }
+
+    #[tokio::test]
+    async fn render_conflicts_fixture_b() {
+        use base64::Engine;
+        let result = server("render_conflicts")
+            .render(render_args("lgh154-b", RenderView::Conflicts, None))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(false));
+        let image = match &result.content[0] {
+            ContentBlock::Image(image) => image,
+            other => panic!("expected an image block, got {other:?}"),
+        };
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&image.data)
+            .expect("base64 image");
+        assert!(bytes.starts_with(b"\x89PNG"));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["view"], "conflicts");
+        assert_eq!(s["marks"], 1, "{s}");
+    }
+
+    #[tokio::test]
+    async fn render_missing_fixture_a() {
+        let result = server("render_missing")
+            .render(render_args("lgh154-a", RenderView::Missing, None))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(false));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["marks"], 3, "{s}");
+    }
+
+    #[tokio::test]
+    async fn render_diff_wc_leaves_file() {
+        let root = fixture_root("render_diff_wc", &[("lgh154-a", FIXTURE_A)]);
+        let before = fs::read(root.join("lgh154-a.plan")).expect("read");
+        let result = PlanServer::new(Store::new(&root))
+            .render(diff_args(
+                "lgh154-a",
+                Some("room WC 2370 x 1200 source laser"),
+            ))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(false));
+        let s = result.structured_content.expect("structured content");
+        assert!(s["diff"]["changed"].as_u64().expect("changed") > 0, "{s}");
+        assert_eq!(fs::read(root.join("lgh154-a.plan")).expect("read"), before);
+    }
+
+    #[tokio::test]
+    async fn render_diff_without_patch() {
+        let result = server("render_diff_nopatch")
+            .render(diff_args("lgh154-a", None))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(true));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(codes(&s), ["E022"]);
+        assert_eq!(
+            s["diagnostics"][0]["message"],
+            r#"View "diff" needs a "patch" argument."#
+        );
+        assert_eq!(s["diagnostics"][0]["data"], json!({ "view": "diff" }));
     }
 
     #[tokio::test]

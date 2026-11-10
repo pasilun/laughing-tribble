@@ -4,6 +4,19 @@
 
 `plan-mcp` is a Planstudio MCP server over stdio. It offers five tools: `check` (diagnostics and next steps for a plan), `get` (read a plan as summary, DSL text or solved JSON), `apply` (change a plan with a DSL patch, all or nothing), `render` (a PNG of the plan with its ids labelled) and `export` (a print-ready PDF sheet, written to `<root>/exports/<plan_id>.pdf`; the result gives the path, paper and scale). Plans are `.plan` files under `--root`, one file per plan, named `<plan_id>.plan`.
 
+`render` takes a `view`:
+
+| view | what the picture shows | extra arguments | result |
+|---|---|---|---|
+| `labels` (default) | every room, wall and opening labelled with its id | none | the image and `labels` |
+| `plan` | room names only | none | the image and `labels` |
+| `conflicts` | each measurement conflict drawn between its two faces (works when `check` reports E003) | none | `marks` (the number of conflicts) |
+| `missing` | where to measure next | none | `marks` (the measurements to take) |
+| `diff` | what a change would add (green), remove (red) and move (amber) | `patch`: DSL statements as for `apply` | `diff`: `{added, removed, changed}` |
+| `overlay` | not available yet | none | E022 |
+
+Nothing is saved by `render`. A `diff` without `patch` is E022, and so is `overlay`.
+
 `check` returns `diagnostics` and `next_steps`, and a `review` list: the permit review (W030–W033, I030; the same entries as `plan review`), empty when the plan does not resolve.
 
 Example `export` call (arguments): `{"plan_id": "lgh154-a", "format": "pdf", "paper": "a3", "scale": 25}`. `paper` and `scale` are optional (a3 and the first standard scale that fits). The plan must have no errors; run `check` first.
