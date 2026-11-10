@@ -11,6 +11,7 @@
 //!   printer writes one clause from `at`.
 
 use plan_core::dsl::canonicalize;
+use plan_core::intent::{Fixture, FixtureKind};
 use plan_core::{
     FaceRef, Gap, Measure, Mm, Opening, OpeningKind, Phase, Plan, Quantity, Relation, Room,
     RoomName, Side, Source, WallOverride,
@@ -43,8 +44,12 @@ const KEYWORDS: &[&str] = &[
     "door",
     "window",
     "passage",
+    "fixture",
     "at",
     "width",
+    "depth",
+    "offset",
+    "label",
     "height",
     "hinge",
     "opens",
@@ -79,6 +84,7 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
                 collection_measures(names.clone()),
                 collection_walls(names.clone()),
                 collection_openings(names.clone()),
+                collection_fixtures(names.clone()),
                 title(),
             )
                 .prop_map(
@@ -91,6 +97,7 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
                         measures,
                         wall_overrides,
                         openings,
+                        fixtures,
                         title,
                     )| {
                         Plan {
@@ -102,6 +109,7 @@ pub fn arb_plan() -> impl Strategy<Value = Plan> {
                             relations,
                             measures,
                             openings,
+                            fixtures,
                             wall_overrides,
                             title,
                         }
@@ -381,4 +389,30 @@ fn opening(names: Vec<RoomName>) -> impl Strategy<Value = Opening> {
 
 fn collection_openings(names: Vec<RoomName>) -> impl Strategy<Value = Vec<Opening>> {
     prop::collection::vec(opening(names), 0..=3)
+}
+
+/// A fixture on a face of a generated room: a stove with the default size, or
+/// a kitchen of 1800 by 600. `at` is 0..2000, no offset, no label, any phase.
+fn fixture(names: Vec<RoomName>) -> impl Strategy<Value = Fixture> {
+    (any::<bool>(), face(names), 0..2000i64, phase()).prop_map(|(kitchen, face, at, phase)| {
+        let (kind, width, depth) = if kitchen {
+            (FixtureKind::Kitchen, 1800, 600)
+        } else {
+            (FixtureKind::Stove, 600, 600)
+        };
+        Fixture {
+            kind,
+            face,
+            at,
+            width,
+            depth,
+            offset: 0,
+            label: None,
+            phase,
+        }
+    })
+}
+
+fn collection_fixtures(names: Vec<RoomName>) -> impl Strategy<Value = Vec<Fixture>> {
+    prop::collection::vec(fixture(names), 0..=2)
 }

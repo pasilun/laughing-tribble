@@ -21,14 +21,17 @@
 //!   width is known, else the depth's. An opening's clause comes from `at`.
 //! - `phase` is written only when it is not `existing`.
 //! - Measures are sorted by their `from` face, then by `to`. Walls are sorted by
-//!   face. Openings are sorted by kind, then face, then `at`. Ties keep their
-//!   order. [`canonicalize`] does the sorting; the printer reads a canonical clone.
+//!   face. Openings are sorted by kind, then face, then `at`. Fixtures are
+//!   sorted by face, then `at`, then kind word. Ties keep their order.
+//!   [`canonicalize`] does the sorting; the printer reads a canonical clone.
+//! - A fixture's sizes are written when its kind has no default size, or when
+//!   either size differs from the default. `offset` is written when not 0.
 //! - Comments are not kept (spec §7.2).
 
 use super::parser::TITLE_KEYS;
 use crate::intent::{
-    FaceRef, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room, RoomName, Side,
-    WallOverride,
+    FaceRef, Fixture, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room, RoomName,
+    Side, WallOverride,
 };
 use crate::units::{Quantity, Source};
 
@@ -77,6 +80,9 @@ pub fn canonicalize(plan: &mut Plan) {
             face_key(&b.face),
             b.at.value,
         ))
+    });
+    plan.fixtures.sort_by(|a, b| {
+        (face_key(&a.face), a.at, a.kind.word()).cmp(&(face_key(&b.face), b.at, b.kind.word()))
     });
 }
 
@@ -150,7 +156,8 @@ fn title_lines(plan: &Plan) -> Vec<String> {
         .collect()
 }
 
-/// The `measure`, `wall`, `door`, `window` and `passage` lines, in that order.
+/// The `measure`, `wall`, `door`, `window` and `passage` lines, in that order,
+/// then the `fixture` lines.
 fn statement_lines(plan: &Plan) -> Vec<String> {
     let mut canon = plan.clone();
     canonicalize(&mut canon);
@@ -166,7 +173,31 @@ fn statement_lines(plan: &Plan) -> Vec<String> {
                 .map(opening_line),
         );
     }
+    lines.extend(canon.fixtures.iter().map(fixture_line));
     lines
+}
+
+/// `fixture KIND FACE at N [width N depth N] [offset N] [label "TEXT"] [phase]`.
+/// The sizes are written when the kind has no default or a size differs from it.
+fn fixture_line(fixture: &Fixture) -> String {
+    let mut line = format!(
+        "fixture {} {} at {}",
+        fixture.kind.word(),
+        face_text(&fixture.face),
+        fixture.at
+    );
+    let differs = fixture.kind.default_size() != Some((fixture.width, fixture.depth));
+    if differs {
+        line.push_str(&format!(" width {} depth {}", fixture.width, fixture.depth));
+    }
+    if fixture.offset != 0 {
+        line.push_str(&format!(" offset {}", fixture.offset));
+    }
+    if let Some(text) = &fixture.label {
+        line.push_str(&format!(" label {}", quoted(text)));
+    }
+    line.push_str(phase_text(fixture.phase));
+    line
 }
 
 /// `room NAME W x D [source ...] [apartment "A"] [demolish|new]`.
@@ -525,11 +556,13 @@ passage Garderob.east at 0 width 680 source estimated
         assert_same_items(&back.measures, &plan.measures);
         assert_same_items(&back.openings, &plan.openings);
         assert_same_items(&back.wall_overrides, &plan.wall_overrides);
+        assert_same_items(&back.fixtures, &plan.fixtures);
         let mut rest = back;
         rest.relations = plan.relations.clone();
         rest.measures = plan.measures.clone();
         rest.openings = plan.openings.clone();
         rest.wall_overrides = plan.wall_overrides.clone();
+        rest.fixtures = plan.fixtures.clone();
         assert_eq!(&rest, plan);
     }
 
@@ -694,6 +727,78 @@ passage Garderob.east at 0 width 680 source estimated
                         room A 1000 x 2000\n";
         assert_eq!(print_of(src), expected);
         assert_round_trip(&parse(src).expect("parses"));
+    }
+
+    /// The statement lines of `src` that start with `fixture`.
+    fn fixture_text(src: &str) -> String {
+        print_of(src)
+            .lines()
+            .filter(|line| line.starts_with("fixture "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn default_size_stove_prints_without_sizes() {
+        let src = "room Kok 3000 x 3000\nfixture stove Kok.north at 200\n";
+        assert_eq!(fixture_text(src), "fixture stove Kok.north at 200");
+        assert_round_trip(&parse(src).expect("parses"));
+    }
+
+    #[test]
+    fn kitchen_with_sizes_round_trips() {
+        let src =
+            "room Kok 3000 x 3000\nfixture kitchen Kok.north at 800 width 1800 depth 600 new\n";
+        assert_eq!(
+            fixture_text(src),
+            "fixture kitchen Kok.north at 800 width 1800 depth 600 new"
+        );
+        assert_round_trip(&parse(src).expect("parses"));
+    }
+
+    #[test]
+    fn wc_with_one_size_prints_both_when_depth_is_filled_in() {
+        let src = "room WC 1500 x 2000\nfixture wc WC.east at 100 width 380\n";
+        assert_eq!(
+            fixture_text(src),
+            "fixture wc WC.east at 100 width 380 depth 700"
+        );
+        assert_round_trip(&parse(src).expect("parses"));
+    }
+
+    #[test]
+    fn fixture_offset_and_label_print_after_sizes() {
+        let src = "room A 1000 x 2000\nfixture sink A.west at 10 offset 50 label \"Diskbänk\"\n";
+        assert_eq!(
+            fixture_text(src),
+            "fixture sink A.west at 10 offset 50 label \"Diskbänk\""
+        );
+        assert_round_trip(&parse(src).expect("parses"));
+    }
+
+    #[test]
+    fn fixtures_are_sorted_by_face_then_at_then_kind() {
+        let src = "room A 1000 x 2000\n\
+                   fixture stove A.north at 500\n\
+                   fixture bath A.north at 100 width 1600 depth 700\n\
+                   fixture plug A.north at 500\n";
+        assert_eq!(
+            fixture_text(src),
+            "fixture bath A.north at 100\n\
+             fixture plug A.north at 500\n\
+             fixture stove A.north at 500"
+        );
+    }
+
+    #[test]
+    fn fixtures_print_after_the_passage_lines() {
+        let src = "room A 1000 x 2000\n\
+                   fixture stove A.north at 500\n\
+                   passage A.east at 0 width 680\n";
+        let text = print_of(src);
+        let passage = text.find("passage ").expect("passage line");
+        let fixture = text.find("fixture ").expect("fixture line");
+        assert!(passage < fixture, "{text}");
     }
 
     #[test]

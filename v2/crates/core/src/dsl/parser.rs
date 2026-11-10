@@ -25,8 +25,8 @@ use serde_json::json;
 
 use crate::diagnostics::{Code, Diagnostic, Severity, Span, message};
 use crate::intent::{
-    FaceRef, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room, RoomName, Side,
-    WallOverride,
+    FaceRef, Fixture, FixtureKind, Gap, Measure, Opening, OpeningKind, Phase, Plan, Relation, Room,
+    RoomName, Side, WallOverride,
 };
 use crate::units::{Mm, Quantity, Source};
 
@@ -53,6 +53,24 @@ pub(crate) const TITLE_KEYS: [&str; 7] = [
 ];
 const TITLE_KEY_LIST: &str =
     "a title key (property, address, applicant, drawing, drawn_by, date, description)";
+/// The fixture kinds of spec §15 D44, in the order E006 lists them.
+const FIXTURE_KINDS: [FixtureKind; 12] = [
+    FixtureKind::Kitchen,
+    FixtureKind::Stove,
+    FixtureKind::Sink,
+    FixtureKind::Wc,
+    FixtureKind::Shower,
+    FixtureKind::Bath,
+    FixtureKind::Radiator,
+    FixtureKind::Exhaust,
+    FixtureKind::Shaft,
+    FixtureKind::Plug,
+    FixtureKind::Box,
+    FixtureKind::Balcony,
+];
+const FIXTURE_KIND_LIST: &str = "a fixture kind (kitchen, stove, sink, wc, shower, bath, radiator, exhaust, shaft, plug, box, balcony)";
+/// A fixture with no default size, missing one of its two sizes.
+const FIXTURE_SIZE_LIST: &str = r#""width" or "depth""#;
 
 /// Parse DSL source into a [`Plan`].
 ///
@@ -137,6 +155,7 @@ impl Builder {
                 relations: Vec::new(),
                 measures: Vec::new(),
                 openings: Vec::new(),
+                fixtures: Vec::new(),
                 wall_overrides: Vec::new(),
                 title: BTreeMap::new(),
             },
@@ -430,6 +449,7 @@ fn statement(cur: &mut Cursor, b: &mut Builder, indented: bool) -> Result<(), Di
         "window" => opening(cur, b, OpeningKind::Window),
         "passage" => opening(cur, b, OpeningKind::Passage),
         "wall" => wall(cur, b),
+        "fixture" => fixture(cur, b),
         _ => Err(cur.fail("a statement")),
     }
 }
@@ -651,6 +671,69 @@ fn wall(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
         phase: phase.unwrap_or(Phase::Existing),
     });
     Ok(())
+}
+
+/// `fixture KIND FACE at N [width N] [depth N] [offset N] [label STRING] [phase]`
+/// (spec §15 D44). KIND is an ordinary word. Missing sizes take the kind's
+/// default; a kind without a default needs both sizes.
+fn fixture(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
+    cur.skip();
+    let kind = fixture_kind(cur)?;
+    let face = face_ref(cur, b)?;
+    cur.expect_kw("at")?;
+    let at = cur.int("a number")?;
+    let width = if cur.opt_kw("width") {
+        Some(cur.int("a number")?)
+    } else {
+        None
+    };
+    let depth = if cur.opt_kw("depth") {
+        Some(cur.int("a number")?)
+    } else {
+        None
+    };
+    let (width, depth) = match (kind.default_size(), width, depth) {
+        (Some((default_width, default_depth)), width, depth) => (
+            width.unwrap_or(default_width),
+            depth.unwrap_or(default_depth),
+        ),
+        (None, Some(width), Some(depth)) => (width, depth),
+        (None, _, _) => return Err(cur.fail(FIXTURE_SIZE_LIST)),
+    };
+    let offset = if cur.opt_kw("offset") {
+        cur.int("a number")?
+    } else {
+        0
+    };
+    let label = if cur.opt_kw("label") {
+        Some(cur.string()?)
+    } else {
+        None
+    };
+    let phase = cur.phase().unwrap_or(Phase::Existing);
+    cur.finish()?;
+    b.plan.fixtures.push(Fixture {
+        kind,
+        face,
+        at,
+        width,
+        depth,
+        offset,
+        label,
+        phase,
+    });
+    Ok(())
+}
+
+/// The fixture kind word after `fixture`: one of [`FIXTURE_KINDS`].
+fn fixture_kind(cur: &mut Cursor) -> Result<FixtureKind, Diagnostic> {
+    if let Some(TokenKind::Name(text)) = cur.kind()
+        && let Some(kind) = FIXTURE_KINDS.into_iter().find(|k| k.word() == text)
+    {
+        cur.skip();
+        return Ok(kind);
+    }
+    Err(cur.fail(FIXTURE_KIND_LIST))
 }
 
 /// Replace the gap of a placement relation. `align` has no gap and is left as is.
@@ -1117,6 +1200,79 @@ mod tests {
         );
         assert_eq!(plan.title.get("drawing").map(String::as_str), Some("A-01"));
         assert_eq!(plan.title.len(), 2);
+    }
+
+    #[test]
+    fn fixture_with_default_size_fills_in_width_and_depth() {
+        let plan = parse("room Kok 3000 x 3000\nfixture stove Kok.north at 200\n").expect("parse");
+        assert_eq!(
+            plan.fixtures,
+            vec![Fixture {
+                kind: FixtureKind::Stove,
+                face: face("Kok", Side::North),
+                at: 200,
+                width: 600,
+                depth: 600,
+                offset: 0,
+                label: None,
+                phase: Phase::Existing,
+            }]
+        );
+    }
+
+    #[test]
+    fn fixture_width_alone_takes_the_default_depth() {
+        let plan =
+            parse("room WC 1500 x 2000\nfixture wc WC.east at 100 width 380\n").expect("parse");
+        let fixture = &plan.fixtures[0];
+        assert_eq!((fixture.width, fixture.depth), (380, 700));
+    }
+
+    #[test]
+    fn fixture_with_all_parts_parses() {
+        let plan = parse(
+            "room Kok 3000 x 3000\nfixture kitchen Kok.north at 800 width 1800 depth 600 offset 20 label \"Bänk\" new\n",
+        )
+        .expect("parse");
+        assert_eq!(
+            plan.fixtures[0],
+            Fixture {
+                kind: FixtureKind::Kitchen,
+                face: face("Kok", Side::North),
+                at: 800,
+                width: 1800,
+                depth: 600,
+                offset: 20,
+                label: Some("Bänk".to_string()),
+                phase: Phase::New,
+            }
+        );
+    }
+
+    #[test]
+    fn fixture_kind_without_default_size_needs_both_sizes() {
+        let d = e006_of("room Rum 3000 x 3000\nfixture balcony Rum.south at 800\n");
+        assert_eq!(d.code, Code::E006);
+        assert_eq!(
+            d.message,
+            r#"Line 2, column 33: expected "width" or "depth", found end of line."#
+        );
+    }
+
+    #[test]
+    fn unknown_fixture_kind_is_e006_with_the_kind_list() {
+        let d = e006_of("room Rum 3000 x 3000\nfixture sofa Rum.south at 0\n");
+        assert_eq!(d.code, Code::E006);
+        assert_eq!(
+            d.message,
+            r#"Line 2, column 9: expected a fixture kind (kitchen, stove, sink, wc, shower, bath, radiator, exhaust, shaft, plug, box, balcony), found "sofa"."#
+        );
+    }
+
+    #[test]
+    fn fixture_face_room_must_be_declared() {
+        let d = parse("room Kok 3000 x 3000\nfixture stove Kkk.north at 200\n").expect_err("E001");
+        assert_eq!(d.code, Code::E001);
     }
 
     #[test]

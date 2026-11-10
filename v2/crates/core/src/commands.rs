@@ -22,7 +22,8 @@ use serde::Serialize;
 use crate::diagnostics::{Code, Diagnostic, Severity, Span, message};
 use crate::dsl::{parse, print};
 use crate::intent::{
-    FaceRef, Measure, Opening, OpeningKind, Plan, Relation, Room, RoomName, Side, WallOverride,
+    FaceRef, Fixture, FixtureKind, Measure, Opening, OpeningKind, Plan, Relation, Room, RoomName,
+    Side, WallOverride,
 };
 use crate::resolved::{Resolved, has_error, resolve};
 use crate::units::Mm;
@@ -40,6 +41,8 @@ pub enum Statement {
     Opening(Opening),
     /// A `wall` line.
     Wall(WallOverride),
+    /// A `fixture` line.
+    Fixture(Fixture),
 }
 
 /// A change to a plan, as read from a patch line.
@@ -69,7 +72,7 @@ pub struct Change {
     /// What happened.
     pub op: ChangeOp,
     /// The kind of statement: `room`, `relation`, `align`, `measure`, `opening`,
-    /// `wall` or `title`.
+    /// `wall`, `fixture` or `title`.
     pub kind: &'static str,
     /// The key of the statement, written as in the DSL, for example `room Hall`
     /// or `measure Garderob.north to Sovrum.south`.
@@ -244,6 +247,7 @@ fn set_statement(plan: &mut Plan, statement: Statement) -> Change {
         Statement::Measure(measure) => upsert(&mut plan.measures, measure, measure_key),
         Statement::Opening(opening) => upsert(&mut plan.openings, opening, opening_key),
         Statement::Wall(wall) => upsert(&mut plan.wall_overrides, wall, wall_key),
+        Statement::Fixture(fixture) => upsert(&mut plan.fixtures, fixture, fixture_key),
     };
     Change { op, kind, target }
 }
@@ -282,6 +286,9 @@ fn remove_statement(
             remove(&mut plan.openings, &opening_key(&opening), opening_key)
         }
         Statement::Wall(wall) => remove(&mut plan.wall_overrides, &wall_key(&wall), wall_key),
+        Statement::Fixture(fixture) => {
+            remove(&mut plan.fixtures, &fixture_key(&fixture), fixture_key)
+        }
     };
     removed.then_some(Change {
         op: ChangeOp::Removed,
@@ -331,6 +338,8 @@ enum Key {
     Opening(FaceRef, Mm),
     /// A wall override, by face.
     Wall(FaceRef),
+    /// A fixture, by (face, at, kind) (spec §10.1, §15 D44).
+    Fixture(FaceRef, Mm, FixtureKind),
 }
 
 fn relation_key(relation: &Relation) -> Key {
@@ -363,6 +372,10 @@ fn wall_key(wall: &WallOverride) -> Key {
     Key::Wall(wall.face.clone())
 }
 
+fn fixture_key(fixture: &Fixture) -> Key {
+    Key::Fixture(fixture.face.clone(), fixture.at, fixture.kind)
+}
+
 /// Parse one patch line (without its `- ` prefix) into one statement, using the
 /// rooms of `working` as the names it may refer to.
 ///
@@ -383,6 +396,7 @@ fn parse_statement(working: &Plan, body: &str, line: u32) -> Result<Statement, D
     context.measures.clear();
     context.openings.clear();
     context.wall_overrides.clear();
+    context.fixtures.clear();
     if let Some(name) = &declared {
         context.rooms.retain(|room, _| room.as_str() != name);
         context.order.retain(|room| room.as_str() != name);
@@ -405,6 +419,7 @@ fn parse_statement(working: &Plan, body: &str, line: u32) -> Result<Statement, D
     found.extend(parsed.measures.into_iter().map(Statement::Measure));
     found.extend(parsed.openings.into_iter().map(Statement::Opening));
     found.extend(parsed.wall_overrides.into_iter().map(Statement::Wall));
+    found.extend(parsed.fixtures.into_iter().map(Statement::Fixture));
 
     if found.len() != 1 {
         return Err(not_a_statement(body, line));
@@ -510,6 +525,7 @@ fn refers_to(plan: &Plan, name: &RoomName) -> bool {
             .iter()
             .any(|o| &o.face.room == name || o.opens_into.as_ref() == Some(name))
         || plan.wall_overrides.iter().any(|w| &w.face.room == name)
+        || plan.fixtures.iter().any(|f| &f.face.room == name)
 }
 
 /// The kind word of a statement, for the diff.
@@ -521,6 +537,7 @@ fn kind_of(statement: &Statement) -> &'static str {
         Statement::Measure(_) => "measure",
         Statement::Opening(_) => "opening",
         Statement::Wall(_) => "wall",
+        Statement::Fixture(_) => "fixture",
     }
 }
 
@@ -550,6 +567,12 @@ fn describe(statement: &Statement) -> String {
             opening.at.value
         ),
         Statement::Wall(wall) => format!("wall {}", face_text(&wall.face)),
+        Statement::Fixture(fixture) => format!(
+            "fixture {} {} at {}",
+            fixture.kind.word(),
+            face_text(&fixture.face),
+            fixture.at
+        ),
     }
 }
 
@@ -790,6 +813,46 @@ mod tests {
         assert_eq!(result.plan.as_ref(), Some(&plan));
         assert_eq!(result.diff.len(), 1);
         assert_eq!(result.diff[0].op, ChangeOp::Removed);
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_line_adds_and_dash_line_removes_by_face_at_kind()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(FIXTURE_A);
+        let added = apply(&plan, "fixture stove Garderob.north at 200", false);
+        assert!(added.ok, "{:?}", added.diagnostics);
+        let with = added.plan.ok_or("ok result has no plan")?;
+        assert_eq!(with.fixtures.len(), 1);
+        assert_eq!(added.diff[0].kind, "fixture");
+        assert_eq!(added.diff[0].op, ChangeOp::Added);
+
+        // Same face and at but another kind is another key, so it is added too.
+        let other = apply(&with, "fixture sink Garderob.north at 200", false);
+        assert_eq!(other.plan.as_ref().map(|p| p.fixtures.len()), Some(2));
+
+        let removed = apply(&with, "- fixture stove Garderob.north at 200", false);
+        assert!(removed.ok, "{:?}", removed.diagnostics);
+        assert_eq!(removed.plan.as_ref(), Some(&plan));
+        assert_eq!(removed.diff[0].op, ChangeOp::Removed);
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_replaces_the_one_with_the_same_key() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(FIXTURE_A);
+        let first = apply(&plan, "fixture stove Garderob.north at 200", false);
+        let base = first.plan.ok_or("ok result has no plan")?;
+        let result = apply(
+            &base,
+            "fixture stove Garderob.north at 200 width 500",
+            false,
+        );
+        assert!(result.ok, "{:?}", result.diagnostics);
+        let new_plan = result.plan.ok_or("ok result has no plan")?;
+        assert_eq!(new_plan.fixtures.len(), 1);
+        assert_eq!(new_plan.fixtures[0].width, 500);
+        assert_eq!(result.diff[0].op, ChangeOp::Replaced);
         Ok(())
     }
 

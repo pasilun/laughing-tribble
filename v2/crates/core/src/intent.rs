@@ -30,6 +30,9 @@ pub struct Plan {
     pub measures: Vec<Measure>,
     /// Doors, windows and passages.
     pub openings: Vec<Opening>,
+    /// Fixtures standing against room faces (spec §15 D44).
+    #[serde(default)]
+    pub fixtures: Vec<Fixture>,
     /// Per-face wall thickness overrides.
     pub wall_overrides: Vec<WallOverride>,
     /// Title block text by key (spec §15 D41): `property`, `address`,
@@ -261,6 +264,94 @@ pub enum OpeningKind {
     Passage,
 }
 
+/// Kind of fixture (spec §15 D44): one of the twelve kinds of v1.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FixtureKind {
+    /// Kitchen unit run.
+    Kitchen,
+    /// Stove.
+    Stove,
+    /// Sink.
+    Sink,
+    /// Toilet (wc).
+    Wc,
+    /// Shower.
+    Shower,
+    /// Bath.
+    Bath,
+    /// Radiator.
+    Radiator,
+    /// Exhaust (ventilation).
+    Exhaust,
+    /// Shaft.
+    Shaft,
+    /// Electrical plug.
+    Plug,
+    /// Box (cupboard or built-in box).
+    Box,
+    /// Balcony; lies outside the room, past the outer side of the wall.
+    Balcony,
+}
+
+impl FixtureKind {
+    /// The lower-case word the DSL uses for this kind.
+    pub fn word(self) -> &'static str {
+        match self {
+            FixtureKind::Kitchen => "kitchen",
+            FixtureKind::Stove => "stove",
+            FixtureKind::Sink => "sink",
+            FixtureKind::Wc => "wc",
+            FixtureKind::Shower => "shower",
+            FixtureKind::Bath => "bath",
+            FixtureKind::Radiator => "radiator",
+            FixtureKind::Exhaust => "exhaust",
+            FixtureKind::Shaft => "shaft",
+            FixtureKind::Plug => "plug",
+            FixtureKind::Box => "box",
+            FixtureKind::Balcony => "balcony",
+        }
+    }
+
+    /// Default `(width, depth)` in mm (spec §15 D44), or `None` when the kind
+    /// has no default and both sizes are required.
+    pub fn default_size(self) -> Option<(Mm, Mm)> {
+        match self {
+            FixtureKind::Stove | FixtureKind::Sink => Some((600, 600)),
+            FixtureKind::Wc => Some((400, 700)),
+            FixtureKind::Shower => Some((900, 900)),
+            FixtureKind::Bath => Some((1600, 700)),
+            FixtureKind::Radiator => Some((1000, 100)),
+            FixtureKind::Exhaust => Some((150, 150)),
+            FixtureKind::Plug => Some((100, 100)),
+            FixtureKind::Kitchen | FixtureKind::Shaft | FixtureKind::Box | FixtureKind::Balcony => {
+                None
+            }
+        }
+    }
+}
+
+/// A fixture: a rectangle standing against a room face (spec §15 D44).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Fixture {
+    /// Kind of fixture.
+    pub kind: FixtureKind,
+    /// The wall it stands against.
+    pub face: FaceRef,
+    /// Offset along the face; origin rule as for openings (spec §9.3).
+    pub at: Mm,
+    /// Size along the face (defaults filled in by the parser).
+    pub width: Mm,
+    /// Size out from the face (defaults filled in by the parser).
+    pub depth: Mm,
+    /// Distance from the face; 0 when left out.
+    pub offset: Mm,
+    /// Free text label, if any.
+    pub label: Option<String>,
+    /// Existing, to be demolished, or new.
+    pub phase: Phase,
+}
+
 /// Attributes of the wall on one face, e.g. an outer wall measured 160 mm, or a
 /// load-bearing wall (spec §15 D34).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -341,6 +432,7 @@ mod tests {
                 opens_into: Some(kitchen.clone()),
                 phase: Phase::New,
             }],
+            fixtures: Vec::new(),
             wall_overrides: vec![WallOverride {
                 face: face(&kitchen, Side::North),
                 thickness: Some(q(160, Source::Tape)),
@@ -551,6 +643,7 @@ mod type_roundtrip_tests {
             relations: Vec::new(),
             measures: Vec::new(),
             openings: Vec::new(),
+            fixtures: Vec::new(),
             wall_overrides: Vec::new(),
             title: BTreeMap::new(),
         })
