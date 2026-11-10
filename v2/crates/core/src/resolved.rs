@@ -9,12 +9,13 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
+use serde_json::json;
 
 use crate::build::{
     BuiltWall, Coords, PlacedOpening, SegmentKind, built_walls, diagnose, place_openings,
     room_areas, spaces,
 };
-use crate::diagnostics::{Diagnostic, Severity};
+use crate::diagnostics::{Code, Diagnostic, Severity, message};
 use crate::intent::{FaceRef, OpeningKind, Plan, RoomName, Side};
 use crate::solve::components::with_suggested_data;
 use crate::solve::{
@@ -173,8 +174,13 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
     let mut coords = Coords::default();
     // Rooms whose two faces on an axis are in different components (D24).
     let mut unplaced: Vec<(RoomName, Axis)> = Vec::new();
+    // Rooms in a loose component (no anchor), on either axis (D27).
+    let mut loose: Vec<RoomName> = Vec::new();
     for axis in [Axis::X, Axis::Y] {
         let (comps, comp_diags) = components(&all_edges, plan, axis);
+        for comp in comps.iter().filter(|comp| !comp.anchored) {
+            loose.extend(comp.rooms.iter().cloned());
+        }
         // The W001s carry the W2-09 keys in `data` (§6.4, D5), as `plan suggest` does.
         diagnostics.extend(
             comp_diags
@@ -213,6 +219,10 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
         for side in sides {
             map.remove(&(room.clone(), side));
         }
+    }
+    diagnostics.extend(overlaps(plan, &coords, &loose));
+    if has_error(&diagnostics) {
+        return (None, diagnostics);
     }
 
     let walls = built_walls(plan, &coords);
@@ -290,6 +300,44 @@ fn unplaced_rooms(plan: &Plan, comps: &[Component], axis: Axis) -> Vec<RoomName>
         .filter(|room| component_of(room, sides[0]) != component_of(room, sides[1]))
         .cloned()
         .collect()
+}
+
+/// E005 for every pair of placed rooms whose rectangles overlap with a positive
+/// width and depth. The pair is `a` before `b` in `plan.order`. Loose rooms are
+/// not compared (D27), and rooms that only touch do not overlap.
+fn overlaps(plan: &Plan, coords: &Coords, loose: &[RoomName]) -> Vec<Diagnostic> {
+    let rects = rooms(plan, coords);
+    let placed: Vec<(&RoomName, &RoomRect)> = plan
+        .order
+        .iter()
+        .filter(|room| !loose.contains(room))
+        .filter_map(|room| rects.get(room).map(|rect| (room, rect)))
+        .collect();
+    let mut out = Vec::new();
+    for (i, (a, ra)) in placed.iter().enumerate() {
+        for (b, rb) in &placed[i + 1..] {
+            let dx = ra.east.min(rb.east) - ra.west.max(rb.west);
+            let dy = ra.south.min(rb.south) - ra.north.max(rb.north);
+            if dx <= 0 || dy <= 0 {
+                continue;
+            }
+            let args = [
+                ("a", a.to_string()),
+                ("b", b.to_string()),
+                ("dx", dx.to_string()),
+                ("dy", dy.to_string()),
+            ];
+            out.push(Diagnostic {
+                code: Code::E005,
+                severity: Severity::Error,
+                message: message(Code::E005, &args),
+                span: None,
+                refs: vec![a.to_string(), b.to_string()],
+                data: json!({ "a": a, "b": b, "dx": dx, "dy": dy }),
+            });
+        }
+    }
+    out
 }
 
 /// Distribute every component of `axis` that has a non-zero within-tolerance
@@ -558,5 +606,68 @@ room B 1500 x 1000 source laser
             .ok_or("Hall has no rectangle")?;
         assert_eq!((hall.north, hall.south), (0, 1113));
         Ok(())
+    }
+
+    /// W3-04: two placed rooms on top of each other give E005 and no model.
+    const OVERLAPPING: &str = "plan \"p\"
+default_wall 90 source assumed
+default_outer_wall 300 source assumed
+
+room A 2000 x 1000 source laser
+room B 1500 x 1000 source laser
+  east_of A gap
+  align north A
+room C 1500 x 1000 source laser
+  east_of A gap
+  align north A
+";
+
+    #[test]
+    fn overlapping_placed_rooms_give_e005_and_no_model() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(OVERLAPPING);
+        let (resolved, diagnostics) = resolve(&plan);
+        assert!(resolved.is_none());
+        let e005: Vec<&Diagnostic> = diagnostics
+            .iter()
+            .filter(|d| d.code == Code::E005)
+            .collect();
+        assert_eq!(e005.len(), 1, "{diagnostics:?}");
+        assert_eq!(e005[0].severity, Severity::Error);
+        assert_eq!(e005[0].message, "B and C overlap by 1500 × 1000 mm.");
+        assert_eq!(e005[0].refs, vec!["B", "C"]);
+        assert_eq!(e005[0].span, None);
+        Ok(())
+    }
+
+    /// W3-04: a loose room is not compared, so only its W001 is given.
+    const LOOSE_BESIDE: &str = "plan \"p\"
+default_wall 90 source assumed
+default_outer_wall 300 source assumed
+
+room A 2000 x 1000 source laser
+room B 1500 x 1000 source laser
+";
+
+    #[test]
+    fn loose_room_is_not_compared_for_overlap() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(LOOSE_BESIDE);
+        let (_, diagnostics) = resolve(&plan);
+        assert!(
+            !diagnostics.iter().any(|d| d.code == Code::E005),
+            "{diagnostics:?}"
+        );
+        let w001 = diagnostics.iter().filter(|d| d.code == Code::W001).count();
+        assert_eq!(w001, 2, "{diagnostics:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_a_has_no_e005() {
+        let plan = fixture(FIXTURE_A);
+        let (_, diagnostics) = resolve(&plan);
+        assert!(
+            !diagnostics.iter().any(|d| d.code == Code::E005),
+            "{diagnostics:?}"
+        );
     }
 }
