@@ -157,3 +157,21 @@ fn labels_view_of_a_conflicting_plan_exits_1_with_e003() {
     let stdout = String::from_utf8(output.stdout).expect("utf8");
     assert!(stdout.contains("E003"), "{stdout}");
 }
+
+#[test]
+fn diff_takes_precedence_over_missing_view() {
+    let out = out_path("png-diff-missing.png");
+    let output = plan(&[
+        "png",
+        &fixture("lgh154-a.plan"),
+        "-o",
+        &out,
+        "--diff",
+        &fixture("lgh154-a.plan"),
+        "--view",
+        "missing",
+    ]);
+    assert_eq!(code(&output), 0);
+    let bytes = std::fs::read(&out).expect("png written");
+    assert!(bytes.starts_with(b"\x89PNG"));
+}

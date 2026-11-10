@@ -269,7 +269,7 @@ struct PngArgs<'a> {
 
 /// Parse `FILE -o OUT [--view V] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]`.
 /// `None` is a usage error: a missing file or `-o`, an unknown option, a bad
-/// value, both `--region` and `--rect`, or `--view conflicts|missing` with `--diff`.
+/// value, or both `--region` and `--rect`. With `--diff`, `--view` is ignored.
 fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
     let (&file, rest) = words.split_first()?;
     let mut out = None;
@@ -303,9 +303,6 @@ fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
         }
     }
     if region.is_some() && rect.is_some() {
-        return None;
-    }
-    if (conflicts || missing) && diff.is_some() {
         return None;
     }
     Some(PngArgs {
@@ -357,11 +354,14 @@ fn png_command(words: &[&str]) -> Result<ExitCode, String> {
         eprintln!("{PNG_USAGE}");
         return Ok(ExitCode::from(2));
     };
-    if args.conflicts {
-        return png_conflicts(args);
-    }
-    if args.missing {
-        return png_missing(args);
+    // `--diff` takes precedence: `--view` is ignored and the plain plan view is drawn.
+    if args.diff.is_none() {
+        if args.conflicts {
+            return png_conflicts(args);
+        }
+        if args.missing {
+            return png_missing(args);
+        }
     }
     let Some(resolved) = png_resolve(args.file)? else {
         return Ok(ExitCode::from(1));
