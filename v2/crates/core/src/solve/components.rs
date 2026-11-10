@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::graph::{Axis, Edge, FaceId};
 use super::tree::assign_coords;
@@ -229,18 +229,38 @@ fn not_tied(axis: Axis, plan: &Plan, room: &RoomName, rooms: &[RoomName]) -> Dia
             ],
         )
     };
-    let refs: Vec<String> = rooms.iter().map(|r| r.as_str().to_string()).collect();
+    let mut refs: Vec<String> = rooms.iter().map(|r| r.as_str().to_string()).collect();
+    refs.sort();
+    let data = if depth_unknown {
+        json!({
+            "axis": "y",
+            "room": room.as_str(),
+            "from": format!("{}.north", room.as_str()),
+            "to": format!("{}.south", room.as_str()),
+            "unknown": "depth",
+        })
+    } else {
+        // The measurement is only known once suggested_w001 ranks the candidates.
+        json!({
+            "axis": axis_key(axis),
+            "room": room.as_str(),
+        })
+    };
     Diagnostic {
         code: Code::W001,
         severity: Severity::Warning,
         message: text,
         span: None,
-        data: json!({
-            "axis": axis_word,
-            "room": room.as_str(),
-            "rooms": refs,
-        }),
+        data,
         refs,
+    }
+}
+
+/// The axis as the §7.7 letter used in W001 `data`.
+fn axis_key(axis: Axis) -> &'static str {
+    match axis {
+        Axis::X => "x",
+        Axis::Y => "y",
     }
 }
 
@@ -337,10 +357,27 @@ pub fn best_candidate(
     best
 }
 
+/// Every candidate of [`candidates`] in the D5 ranking: largest overlap first.
+/// The sort is stable, so ties keep the [`candidates`] order (declaration
+/// order of `a` then `l`, then After before Before). The first entry is the
+/// one [`best_candidate`] returns.
+pub fn ranked_candidates(
+    edges: &[Edge],
+    plan: &Plan,
+    axis: Axis,
+    comps: &[Component],
+    loose: &Component,
+) -> Vec<Candidate> {
+    let mut ranked = candidates(edges, plan, axis, comps, loose);
+    ranked.sort_by_key(|candidate| std::cmp::Reverse(candidate.overlap));
+    ranked
+}
+
 /// The W001 diagnostics of both axes, with the measurement filled in from the
 /// best candidate where there is one. A loose room with no candidate, and a
 /// depth-unknown room (whose wording has no measurement), keep their
-/// [`components`] text. `room` in `data` names the room the suggestion is for.
+/// [`components`] text. In `data`, `room` names the room the suggestion is
+/// for, and `alternatives` holds the next two candidates (D5).
 pub fn suggested_w001(edges: &[Edge], plan: &Plan) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for axis in [Axis::X, Axis::Y] {
@@ -384,13 +421,14 @@ fn suggest_one(
     else {
         return diagnostic;
     };
-    let Some(best) = best_candidate(edges, plan, axis, comps, component) else {
+    let ranked = ranked_candidates(edges, plan, axis, comps, component);
+    let Some(best) = ranked.first() else {
         return diagnostic;
     };
     let (from, to, relation) = best.measure(axis);
     let loose = best.loose.as_str().to_string();
     let of = best.anchor.as_str().to_string();
-    let gap = plan.default_wall.value.to_string();
+    let gap = plan.default_wall.value;
     diagnostic.message = message(
         Code::W001,
         &[
@@ -400,22 +438,33 @@ fn suggest_one(
             ("to", to.clone()),
             ("relation", relation.to_string()),
             ("of", of.clone()),
-            ("gap", gap.clone()),
+            ("gap", gap.to_string()),
         ],
     );
-    if let Some(object) = diagnostic.data.as_object_mut() {
-        object.insert("room".to_string(), json!(loose));
-        object.insert(
-            "suggestion".to_string(),
+    let alternatives: Vec<Value> = ranked
+        .iter()
+        .skip(1)
+        .take(2)
+        .map(|candidate| {
+            let (from, to, relation) = candidate.measure(axis);
             json!({
                 "from": from,
                 "to": to,
                 "relation": relation,
-                "of": of,
-                "gap": gap,
-            }),
-        );
-    }
+                "of": candidate.anchor.as_str(),
+            })
+        })
+        .collect();
+    diagnostic.data = json!({
+        "axis": axis_key(axis),
+        "room": loose,
+        "from": from,
+        "to": to,
+        "relation": relation,
+        "of": of,
+        "gap": gap,
+        "alternatives": alternatives,
+    });
     diagnostic
 }
 
@@ -560,6 +609,82 @@ mod tests {
             got[0].message,
             r#"Not tied east–west: Förråd. Measure from Hall.east to Förråd.west, or add "Förråd east_of Hall gap 90"."#
         );
+    }
+
+    #[test]
+    fn not_tied_w001_data_has_the_measurement_and_one_alternative() {
+        let plan = parse(
+            "room Hall 1000 x 2000 source laser\nroom Förråd 800 x 2000 source laser\n  align north Hall\n",
+        )
+        .expect("parse");
+        let (edge_list, _) = edges(&plan);
+        let got = suggested_w001(&edge_list, &plan);
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert_eq!(
+            got[0].message,
+            r#"Not tied east–west: Förråd. Measure from Hall.east to Förråd.west, or add "Förråd east_of Hall gap 90"."#
+        );
+        assert_eq!(
+            got[0].data,
+            json!({
+                "axis": "x",
+                "room": "Förråd",
+                "from": "Hall.east",
+                "to": "Förråd.west",
+                "relation": "east_of",
+                "of": "Hall",
+                "gap": 90,
+                "alternatives": [
+                    {"from": "Förråd.east", "to": "Hall.west", "relation": "west_of", "of": "Hall"}
+                ],
+            })
+        );
+    }
+
+    #[test]
+    fn not_tied_w001_lists_at_most_two_alternatives_in_d5_order() {
+        let plan = parse(
+            "room A 1000 x 1000 source laser\nroom B 1000 x 1000 source laser\n  south_of A gap\n  align west A\nroom C 500 x 1000 source laser\n  align north B\n",
+        )
+        .expect("parse");
+        let (edge_list, _) = edges(&plan);
+        let got = suggested_w001(&edge_list, &plan);
+        let on_x: Vec<&Diagnostic> = got
+            .iter()
+            .filter(|d| d.data["axis"] == "x" && d.data["room"] == "C")
+            .collect();
+        assert_eq!(on_x.len(), 1, "{got:?}");
+        assert_eq!(on_x[0].data["from"], "B.east", "{:?}", on_x[0].data);
+        assert_eq!(on_x[0].data["to"], "C.west");
+        assert_eq!(on_x[0].data["relation"], "east_of");
+        assert_eq!(on_x[0].data["of"], "B");
+        assert_eq!(
+            on_x[0].data["alternatives"],
+            json!([
+                {"from": "C.east", "to": "B.west", "relation": "west_of", "of": "B"},
+                {"from": "A.east", "to": "C.west", "relation": "east_of", "of": "A"},
+            ])
+        );
+    }
+
+    #[test]
+    fn unknown_depth_w001_data_names_the_depth_faces() {
+        let plan = parse(
+            "room A 1000 x 1000 source laser\nroom B 1000 x ?\n  east_of A gap\n  align north A\n",
+        )
+        .expect("parse");
+        let (edge_list, _) = edges(&plan);
+        let got = suggested_w001(&edge_list, &plan);
+        let depth: Vec<&Diagnostic> = got
+            .iter()
+            .filter(|d| d.data["unknown"] == "depth")
+            .collect();
+        assert_eq!(depth.len(), 1, "{got:?}");
+        assert_eq!(
+            depth[0].data,
+            json!({"axis": "y", "room": "B", "from": "B.north", "to": "B.south", "unknown": "depth"})
+        );
+        assert_eq!(depth[0].refs, vec!["B".to_string()]);
     }
 
     #[test]
