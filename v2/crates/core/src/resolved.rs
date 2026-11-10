@@ -18,8 +18,8 @@ use crate::diagnostics::{Diagnostic, Severity};
 use crate::intent::{FaceRef, OpeningKind, Plan, RoomName, Side};
 use crate::solve::components::with_suggested_data;
 use crate::solve::{
-    AdjustedEdge, Axis, Component, CycleCheck, Edge, FaceKey, adjusted_diagnostic, assign_coords,
-    check_cycles, components, conflict_diagnostic, distribute, edges,
+    AdjustedEdge, Axis, Component, CycleCheck, Edge, FaceId, FaceKey, adjusted_diagnostic,
+    assign_coords, check_cycles, components, conflict_diagnostic, distribute, edges,
 };
 use crate::units::{Mm, Source};
 use crate::validate::validate;
@@ -171,6 +171,8 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
     diagnostics.extend(edge_diags);
 
     let mut coords = Coords::default();
+    // Rooms whose two faces on an axis are in different components (D24).
+    let mut unplaced: Vec<(RoomName, Axis)> = Vec::new();
     for axis in [Axis::X, Axis::Y] {
         let (comps, comp_diags) = components(&all_edges, plan, axis);
         // The W001s carry the W2-09 keys in `data` (§6.4, D5), as `plan suggest` does.
@@ -179,6 +181,9 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
                 .into_iter()
                 .map(|d| with_suggested_data(&all_edges, plan, axis, &comps, d)),
         );
+        for room in unplaced_rooms(plan, &comps, axis) {
+            unplaced.push((room, axis));
+        }
         let (mut axis_coords, tree) = assign_coords(&all_edges, &comps, axis);
         let checks = check_cycles(&all_edges, &axis_coords, &tree, axis);
         for check in &checks {
@@ -197,6 +202,17 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
     }
     if has_error(&diagnostics) {
         return (None, diagnostics);
+    }
+    // D24: an unplaced room gets no coordinates on its axis, so it has no
+    // rectangle, walls, area or openings. Its W001 stays.
+    for (room, axis) in &unplaced {
+        let (map, sides) = match axis {
+            Axis::X => (&mut coords.x, [WEST, EAST]),
+            Axis::Y => (&mut coords.y, [NORTH, SOUTH]),
+        };
+        for side in sides {
+            map.remove(&(room.clone(), side));
+        }
     }
 
     let walls = built_walls(plan, &coords);
@@ -253,6 +269,27 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
         diagnostics: diagnostics.clone(),
     };
     (Some(resolved), diagnostics)
+}
+
+/// The rooms of `plan` whose two faces on `axis` (west and east on x, north and
+/// south on y) are in different components of `comps` (§15 D24), in order.
+fn unplaced_rooms(plan: &Plan, comps: &[Component], axis: Axis) -> Vec<RoomName> {
+    let sides = match axis {
+        Axis::X => [Side::West, Side::East],
+        Axis::Y => [Side::North, Side::South],
+    };
+    let component_of = |room: &RoomName, side: Side| {
+        let face = FaceId {
+            room: room.clone(),
+            side,
+        };
+        comps.iter().position(|comp| comp.faces.contains(&face))
+    };
+    plan.order
+        .iter()
+        .filter(|room| component_of(room, sides[0]) != component_of(room, sides[1]))
+        .cloned()
+        .collect()
 }
 
 /// Distribute every component of `axis` that has a non-zero within-tolerance
@@ -459,6 +496,67 @@ room Förråd 800 x 2000 source laser
         assert!(resolved.is_none());
         let e003 = diagnostics.iter().filter(|d| d.code == Code::E003).count();
         assert_eq!(e003, 1);
+        Ok(())
+    }
+
+    /// W3-03: a room with an unknown size that nothing ties is left out.
+    const UNKNOWN_SIZE_NOT_TIED: &str = "plan \"p\"
+default_wall 90 source assumed
+default_outer_wall 300 source assumed
+
+room A 2000 x ? source laser
+room B 1500 x 1000 source laser
+  east_of A gap
+  align north A
+";
+
+    #[test]
+    fn unknown_size_not_tied_room_is_left_out() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(UNKNOWN_SIZE_NOT_TIED);
+        let (resolved, diagnostics) = resolve(&plan);
+        assert!(!has_error(&diagnostics), "{diagnostics:?}");
+        let w001: Vec<&Diagnostic> = diagnostics
+            .iter()
+            .filter(|d| d.code == Code::W001)
+            .collect();
+        assert_eq!(w001.len(), 1, "{diagnostics:?}");
+        assert_eq!(
+            w001[0].message,
+            "A depth unknown; measure A.north to A.south"
+        );
+        assert!(
+            !diagnostics.iter().any(|d| d.message.contains("is 0 mm")),
+            "{diagnostics:?}"
+        );
+        let resolved = resolved.ok_or("the plan should resolve")?;
+        let names: Vec<&RoomName> = resolved.rooms.keys().collect();
+        assert_eq!(names, vec![&RoomName::new("B")?]);
+        assert!(
+            !resolved
+                .walls
+                .keys()
+                .any(|id| id.contains("A.north") || id.contains("A.south")),
+            "{:?}",
+            resolved.walls.keys().collect::<Vec<_>>()
+        );
+        let b = resolved
+            .rooms
+            .get(&RoomName::new("B")?)
+            .ok_or("B has no rectangle")?;
+        assert_eq!((b.west, b.east, b.north, b.south), (2090, 3590, 0, 1000));
+        Ok(())
+    }
+
+    #[test]
+    fn unknown_depth_tied_through_other_rooms_is_kept() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(FIXTURE_A);
+        let (resolved, _) = resolve(&plan);
+        let resolved = resolved.ok_or("fixture A should resolve")?;
+        let hall = resolved
+            .rooms
+            .get(&RoomName::new("Hall")?)
+            .ok_or("Hall has no rectangle")?;
+        assert_eq!((hall.north, hall.south), (0, 1113));
         Ok(())
     }
 }
