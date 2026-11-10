@@ -16,6 +16,7 @@ use crate::build::{
 };
 use crate::diagnostics::{Diagnostic, Severity};
 use crate::intent::{FaceRef, OpeningKind, Plan, RoomName, Side};
+use crate::solve::components::with_suggested_data;
 use crate::solve::{
     AdjustedEdge, Axis, Component, CycleCheck, Edge, FaceKey, adjusted_diagnostic, assign_coords,
     check_cycles, components, conflict_diagnostic, distribute, edges,
@@ -166,7 +167,12 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
     let mut coords = Coords::default();
     for axis in [Axis::X, Axis::Y] {
         let (comps, comp_diags) = components(&all_edges, plan, axis);
-        diagnostics.extend(comp_diags);
+        // The W001s carry the W2-09 keys in `data` (§6.4, D5), as `plan suggest` does.
+        diagnostics.extend(
+            comp_diags
+                .into_iter()
+                .map(|d| with_suggested_data(&all_edges, plan, axis, &comps, d)),
+        );
         let (mut axis_coords, tree) = assign_coords(&all_edges, &comps, axis);
         let checks = check_cycles(&all_edges, &axis_coords, &tree, axis);
         for check in &checks {
@@ -407,6 +413,37 @@ mod tests {
             assert!(resolved.nodes.contains_key(&wall.to), "to of {}", wall.id);
         }
         Ok(())
+    }
+
+    /// Test plan 1 of W2-09: a loose room with two laser rooms.
+    const LOOSE_ROOM: &str = "room Hall 1000 x 2000 source laser
+room Förråd 800 x 2000 source laser
+  align north Hall
+";
+
+    #[test]
+    fn loose_room_w001_from_resolve_carries_the_suggested_data() {
+        use crate::solve::components::suggested_w001;
+        let plan = fixture(LOOSE_ROOM);
+        let (_, diagnostics) = resolve(&plan);
+        let (edge_list, _) = edges(&plan);
+        let suggested = suggested_w001(&edge_list, &plan);
+
+        let resolved_w001: Vec<&Diagnostic> = diagnostics
+            .iter()
+            .filter(|d| d.code == Code::W001)
+            .collect();
+        assert_eq!(resolved_w001.len(), 1, "{diagnostics:?}");
+        let got = resolved_w001[0];
+        let want = suggested
+            .iter()
+            .find(|d| d.data["axis"] == got.data["axis"] && d.data["room"] == got.data["room"])
+            .expect("suggested_w001 has the same W001");
+        for key in ["from", "to", "relation", "of", "gap", "alternatives"] {
+            assert_eq!(got.data[key], want.data[key], "data.{key}: {:?}", got.data);
+        }
+        assert_eq!(got.data["from"], "Hall.east");
+        assert_eq!(got.data["to"], "Förråd.west");
     }
 
     #[test]

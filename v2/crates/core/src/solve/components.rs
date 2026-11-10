@@ -389,6 +389,24 @@ pub fn suggested_w001(edges: &[Edge], plan: &Plan) -> Vec<Diagnostic> {
     out
 }
 
+/// The W001 of [`components`] with its `data` filled in as [`suggested_w001`]
+/// does (the W2-09 keys). The message is left as [`components`] wrote it, so
+/// the text of `resolve`'s W001 does not change. `comps` are the components of
+/// `axis` and `diagnostic` is one of their W001s.
+pub fn with_suggested_data(
+    edges: &[Edge],
+    plan: &Plan,
+    axis: Axis,
+    comps: &[Component],
+    diagnostic: Diagnostic,
+) -> Diagnostic {
+    let suggested = suggest_one(edges, plan, axis, comps, diagnostic.clone());
+    Diagnostic {
+        data: suggested.data,
+        ..diagnostic
+    }
+}
+
 /// Fill in one W001 from `comps` (the components of `axis`).
 fn suggest_one(
     edges: &[Edge],
