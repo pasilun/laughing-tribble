@@ -13,6 +13,7 @@ use serde_json::json;
 use strsim::jaro_winkler;
 
 use crate::labels::{LabelReq, PlacedLabel, place};
+use crate::marks::{Mark, mark_colour, marks_group, point_px};
 use crate::svg::{FONT_FAMILY, GRID, PAD, RoomFonts, drawn_elements, multiples, text};
 use crate::viewport::{Viewport, fit, within_limits};
 
@@ -59,7 +60,20 @@ const CROP_PAD: i64 = 600;
 /// square. A region replaces that content rectangle (see [`Region`]). An
 /// unknown element id gives E011.
 pub fn render(resolved: &Resolved, opts: &RenderOptions) -> Result<Rendered, Diagnostic> {
-    let content = content_rect(resolved, opts.region.as_ref())?;
+    render_marked(resolved, opts, &[])
+}
+
+/// [`render`], plus the `marks` drawn on top (spec §15 D38).
+///
+/// Without a region the content also holds each mark's two points. The marks
+/// are drawn after the scale bar and labelled after the rooms. With no marks
+/// the output is the same as [`render`].
+pub fn render_marked(
+    resolved: &Resolved,
+    opts: &RenderOptions,
+    marks: &[Mark],
+) -> Result<Rendered, Diagnostic> {
+    let content = content_rect(resolved, opts.region.as_ref(), marks)?;
     let viewport = fit(
         [content.x0, content.y0, content.width(), content.height()],
         opts.max_tokens,
@@ -70,10 +84,10 @@ pub fn render(resolved: &Resolved, opts: &RenderOptions) -> Result<Rendered, Dia
         ));
     }
     let labels = place(
-        &label_requests(resolved, opts.view, &viewport),
+        &label_requests(resolved, opts.view, &viewport, marks),
         viewport.size_px,
     );
-    let svg = svg_text(resolved, &viewport, &labels);
+    let svg = svg_text(resolved, &viewport, &labels, marks);
     Ok(Rendered {
         svg,
         viewport,
@@ -83,10 +97,11 @@ pub fn render(resolved: &Resolved, opts: &RenderOptions) -> Result<Rendered, Dia
 
 /// The label requests of `view`, anchored at the centre of each element in px.
 ///
-/// Rooms are always labelled (`name area`, priority 0). Walls (1) and openings
-/// (2) carry their id, and only in [`View::Labels`]. Elements whose anchor lies
-/// outside the image get no request.
-fn label_requests(resolved: &Resolved, view: View, vp: &Viewport) -> Vec<LabelReq> {
+/// Rooms are always labelled (`name area`, priority 0), then each mark at the
+/// midpoint of its line (priority 0). Walls (1) and openings (2) carry their
+/// id, and only in [`View::Labels`]. Elements whose anchor lies outside the
+/// image get no request.
+fn label_requests(resolved: &Resolved, view: View, vp: &Viewport, marks: &[Mark]) -> Vec<LabelReq> {
     let mut reqs = Vec::new();
     for name in resolved.rooms.keys() {
         let id = name.as_str();
@@ -95,6 +110,20 @@ fn label_requests(resolved: &Resolved, view: View, vp: &Viewport) -> Vec<LabelRe
         };
         let area = format_m2(rect.width().saturating_mul(rect.height()));
         reqs.extend(request(resolved, vp, id, format!("{id} {area} m²"), 0));
+    }
+    for mark in marks {
+        let mid = [
+            (mark.from[0] + mark.to[0]) as f64 / 2.0,
+            (mark.from[1] + mark.to[1]) as f64 / 2.0,
+        ];
+        if let Some(anchor_px) = point_px(mid, vp) {
+            reqs.push(LabelReq {
+                id: mark.id.clone(),
+                text: mark.text.clone(),
+                anchor_px,
+                priority: 0,
+            });
+        }
     }
     if view == View::Labels {
         for id in resolved.walls.keys() {
@@ -140,11 +169,21 @@ fn anchor_px(rect: &RectMm, vp: &Viewport) -> Option<[f64; 2]> {
 
 /// The rectangle to draw, in mm: the padded union of every element's
 /// rectangle, or the region when one is given.
-fn content_rect(resolved: &Resolved, region: Option<&Region>) -> Result<RectMm, Diagnostic> {
+fn content_rect(
+    resolved: &Resolved,
+    region: Option<&Region>,
+    marks: &[Mark],
+) -> Result<RectMm, Diagnostic> {
     match region {
         None => Ok(element_ids(resolved)
             .iter()
             .filter_map(|id| element_rect(resolved, id))
+            .chain(marks.iter().map(|m| RectMm {
+                x0: m.from[0].min(m.to[0]),
+                y0: m.from[1].min(m.to[1]),
+                x1: m.from[0].max(m.to[0]),
+                y1: m.from[1].max(m.to[1]),
+            }))
             .reduce(|a, b| a.union(&b))
             .unwrap_or(RectMm {
                 x0: 0,
@@ -195,7 +234,7 @@ fn unknown_element(resolved: &Resolved, id: &str) -> Diagnostic {
 }
 
 /// The full SVG document for `vp`.
-fn svg_text(resolved: &Resolved, vp: &Viewport, labels: &[PlacedLabel]) -> String {
+fn svg_text(resolved: &Resolved, vp: &Viewport, labels: &[PlacedLabel], marks: &[Mark]) -> String {
     let mpp = vp.mm_per_px;
     let [ox, oy] = vp.origin_mm;
     let [w, h] = vp.size_px;
@@ -240,7 +279,11 @@ fn svg_text(resolved: &Resolved, vp: &Viewport, labels: &[PlacedLabel]) -> Strin
 
     out.push_str(&scale_bar(vp, vh));
     out.push('\n');
-    out.push_str(&labels_group(labels, vp));
+    if !marks.is_empty() {
+        out.push_str(&marks_group(marks, vp));
+        out.push('\n');
+    }
+    out.push_str(&labels_group_marked(labels, vp, marks));
     out.push('\n');
     out.push_str("</svg>\n");
     out
@@ -263,8 +306,16 @@ pub(crate) fn without_text(element: &str) -> String {
 }
 
 /// The `<g id="labels">` group: for each label, its leader line (if any) and
-/// its text, centred in the box. Converted from px back to mm.
+/// its text, centred in the box. Converted from px back to mm. Without marks
+/// (only the tests call this form).
+#[cfg(test)]
 fn labels_group(labels: &[PlacedLabel], vp: &Viewport) -> String {
+    labels_group_marked(labels, vp, &[])
+}
+
+/// [`labels_group`], where a label whose id is a mark id is drawn in that
+/// mark's colour.
+fn labels_group_marked(labels: &[PlacedLabel], vp: &Viewport, marks: &[Mark]) -> String {
     let mpp = vp.mm_per_px;
     let [ox, oy] = vp.origin_mm;
     let to_mm = |p: [f64; 2]| [ox as f64 + p[0] * mpp, oy as f64 + p[1] * mpp];
@@ -281,8 +332,9 @@ fn labels_group(labels: &[PlacedLabel], vp: &Viewport) -> String {
                 y2 = centre[1],
             ));
         }
+        let fill = mark_colour(marks, &label.id).unwrap_or("#000");
         let extra = format!(
-            r##" fill="#000" stroke="#fff" stroke-width="{}" paint-order="stroke""##,
+            r##" fill="{fill}" stroke="#fff" stroke-width="{}" paint-order="stroke""##,
             3.0 * mpp
         );
         body.push_str(&text(centre[0], centre[1], 12.0 * mpp, &extra, &label.text));
