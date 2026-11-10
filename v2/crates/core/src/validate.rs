@@ -78,10 +78,12 @@ pub fn validate(plan: &Plan) -> Vec<Diagnostic> {
     }
 
     for override_ in &plan.wall_overrides {
-        if override_.thickness.value < MIN_SIZE {
+        if let Some(thickness) = &override_.thickness
+            && thickness.value < MIN_SIZE
+        {
             let face = format!("{}.{}", override_.face.room, side_name(override_.face.side));
             let what = format!("Wall {face} thickness");
-            out.push(e014(&what, override_.thickness.value, vec![face]));
+            out.push(e014(&what, thickness.value, vec![face]));
         }
     }
 

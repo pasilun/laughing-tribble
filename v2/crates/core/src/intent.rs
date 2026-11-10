@@ -257,13 +257,20 @@ pub enum OpeningKind {
     Passage,
 }
 
-/// Overrides the thickness of the wall on one face, e.g. an outer wall measured 160 mm.
+/// Attributes of the wall on one face, e.g. an outer wall measured 160 mm, or a
+/// load-bearing wall (spec §15 D34).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WallOverride {
     /// The face whose wall is overridden.
     pub face: FaceRef,
-    /// Measured wall thickness in mm.
-    pub thickness: Quantity,
+    /// Measured wall thickness in mm. `None`: keep the default or the gap.
+    pub thickness: Option<Quantity>,
+    /// Load-bearing wall.
+    pub bearing: bool,
+    /// Fire rating text, e.g. "EI60".
+    pub fire: Option<String>,
+    /// Existing, demolished or new.
+    pub phase: Phase,
 }
 
 #[cfg(test)]
@@ -332,7 +339,10 @@ mod tests {
             }],
             wall_overrides: vec![WallOverride {
                 face: face(&kitchen, Side::North),
-                thickness: q(160, Source::Tape),
+                thickness: Some(q(160, Source::Tape)),
+                bearing: false,
+                fire: None,
+                phase: Phase::Existing,
             }],
         };
 
@@ -518,7 +528,10 @@ mod type_roundtrip_tests {
                 room: RoomName::new("A")?,
                 side: Side::North,
             },
-            thickness: q(160, Source::Tape),
+            thickness: Some(q(160, Source::Tape)),
+            bearing: false,
+            fire: None,
+            phase: Phase::Existing,
         })
     }
 

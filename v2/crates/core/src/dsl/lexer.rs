@@ -54,6 +54,8 @@ const KEYWORDS: &[&str] = &[
     "opens",
     "wall",
     "thickness",
+    "bearing",
+    "fire",
     "north",
     "east",
     "south",

@@ -51,6 +51,8 @@ const KEYWORDS: &[&str] = &[
     "tol",
     "wall",
     "thickness",
+    "bearing",
+    "fire",
     "north",
     "east",
     "south",
@@ -294,7 +296,20 @@ fn collection_measures(names: Vec<RoomName>) -> impl Strategy<Value = Vec<Measur
 }
 
 fn wall_override(names: Vec<RoomName>) -> impl Strategy<Value = WallOverride> {
-    (face(names), qty()).prop_map(|(face, thickness)| WallOverride { face, thickness })
+    (
+        face(names),
+        qty(),
+        any::<bool>(),
+        prop::option::of(Just("EI60".to_string())),
+        phase(),
+    )
+        .prop_map(|(face, thickness, bearing, fire, phase)| WallOverride {
+            face,
+            thickness: Some(thickness),
+            bearing,
+            fire,
+            phase,
+        })
 }
 
 fn collection_walls(names: Vec<RoomName>) -> impl Strategy<Value = Vec<WallOverride>> {

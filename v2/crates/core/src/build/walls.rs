@@ -170,11 +170,16 @@ fn classify(
     }
 }
 
-/// Thickness and source of the outer wall on `face`: a `WallOverride` on that
-/// face if there is one, else `default_outer_wall`.
+/// Thickness and source of the outer wall on `face`: the thickness of a
+/// `WallOverride` on that face if it states one, else `default_outer_wall`.
 fn outer_thickness(plan: &Plan, face: &FaceRef) -> (Mm, Source) {
-    match plan.wall_overrides.iter().find(|o| o.face == *face) {
-        Some(o) => (o.thickness.value, o.thickness.source),
+    match plan
+        .wall_overrides
+        .iter()
+        .find(|o| o.face == *face)
+        .and_then(|o| o.thickness.as_ref())
+    {
+        Some(q) => (q.value, q.source),
         None => (
             plan.default_outer_wall.value,
             plan.default_outer_wall.source,

@@ -39,6 +39,7 @@ const GAP_LIST: &str = r#""open" or "gap""#;
 const SIDE_LIST: &str = r#""north", "east", "south" or "west""#;
 const SOURCE_LIST: &str = r#""laser", "tape", "printed", "drawing", "estimated" or "assumed""#;
 const SIZE: &str = r#"a number or "?""#;
+const WALL_PART_LIST: &str = r#""thickness", "bearing", "fire" or a phase"#;
 
 /// Parse DSL source into a [`Plan`].
 ///
@@ -578,16 +579,36 @@ fn opening(cur: &mut Cursor, b: &mut Builder, kind: OpeningKind) -> Result<(), D
     Ok(())
 }
 
+/// `wall FACE [thickness N [src]] [bearing] [fire STRING] [phase]`, with at
+/// least one of the four parts (spec §7.1, §15 D34).
 fn wall(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
     cur.skip();
     let face = face_ref(cur, b)?;
-    cur.expect_kw("thickness")?;
-    let value = cur.int("a number")?;
-    let src = cur.src()?;
+    let thickness = if cur.opt_kw("thickness") {
+        let value = cur.int("a number")?;
+        let src = cur.src()?;
+        Some(quantity(value, src.as_ref()))
+    } else {
+        None
+    };
+    let bearing = cur.opt_kw("bearing");
+    let fire = if cur.opt_kw("fire") {
+        Some(cur.string()?)
+    } else {
+        None
+    };
+    let phase = cur.phase();
+    if thickness.is_none() && !bearing && fire.is_none() && phase.is_none() {
+        // Nothing was consumed after the face, so this points at the position after it.
+        return Err(cur.fail(WALL_PART_LIST));
+    }
     cur.finish()?;
     b.plan.wall_overrides.push(WallOverride {
         face,
-        thickness: quantity(value, src.as_ref()),
+        thickness,
+        bearing,
+        fire,
+        phase: phase.unwrap_or(Phase::Existing),
     });
     Ok(())
 }
@@ -975,6 +996,74 @@ mod tests {
         assert_eq!(
             d.message,
             r#"Line 1, column 6: expected a quoted string, found "Villa"."#
+        );
+    }
+
+    fn wall_of(plan: &Plan, room_name: &str, side: Side) -> WallOverride {
+        plan.wall_overrides
+            .iter()
+            .find(|w| w.face == face(room_name, side))
+            .cloned()
+            .expect("wall exists")
+    }
+
+    #[test]
+    fn wall_thickness_with_source_parses_as_before() {
+        let plan =
+            parse("room A 1000 x 2000\nwall A.north thickness 160 source laser\n").expect("parse");
+        assert_eq!(
+            plan.wall_overrides,
+            vec![WallOverride {
+                face: face("A", Side::North),
+                thickness: Some(q(160, Source::Laser)),
+                bearing: false,
+                fire: None,
+                phase: Phase::Existing,
+            }]
+        );
+    }
+
+    #[test]
+    fn wall_bearing_fire_and_phase_parse() {
+        let plan = parse("room A 1000 x 2000\nwall A.east bearing fire \"EI60\" demolish\n")
+            .expect("parse");
+        assert_eq!(
+            wall_of(&plan, "A", Side::East),
+            WallOverride {
+                face: face("A", Side::East),
+                thickness: None,
+                bearing: true,
+                fire: Some("EI60".to_string()),
+                phase: Phase::Demolish,
+            }
+        );
+    }
+
+    #[test]
+    fn wall_bearing_alone_parses() {
+        let plan = parse("room A 1000 x 2000\nwall A.north bearing\n").expect("parse");
+        let wall = wall_of(&plan, "A", Side::North);
+        assert_eq!(wall.thickness, None);
+        assert!(wall.bearing);
+    }
+
+    #[test]
+    fn wall_with_no_part_is_e006() {
+        let d = e006_of("room A 1000 x 2000\nwall A.north\n");
+        assert_eq!(d.code, Code::E006);
+        assert_eq!(
+            d.message,
+            r#"Line 2, column 13: expected "thickness", "bearing", "fire" or a phase, found end of line."#
+        );
+    }
+
+    #[test]
+    fn room_named_bearing_is_rejected() {
+        let d = e006_of("room bearing 1000 x 2000\n");
+        assert_eq!(d.code, Code::E006);
+        assert_eq!(
+            d.message,
+            r#"Line 1, column 6: expected a room name, found "bearing"."#
         );
     }
 }

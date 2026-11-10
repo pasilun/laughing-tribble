@@ -258,15 +258,20 @@ fn measure_line(measure: &Measure) -> String {
     line
 }
 
-/// `wall FACE thickness N [source ...]`.
+/// `wall FACE [thickness N [source ...]] [bearing] [fire "TEXT"] [demolish|new]`.
 fn wall_line(wall: &WallOverride) -> String {
-    let q = &wall.thickness;
-    format!(
-        "wall {} thickness {}{}",
-        face_text(&wall.face),
-        q.value,
-        source_clause(q)
-    )
+    let mut line = format!("wall {}", face_text(&wall.face));
+    if let Some(q) = &wall.thickness {
+        line.push_str(&format!(" thickness {}{}", q.value, source_clause(q)));
+    }
+    if wall.bearing {
+        line.push_str(" bearing");
+    }
+    if let Some(text) = &wall.fire {
+        line.push_str(&format!(" fire {}", quoted(text)));
+    }
+    line.push_str(phase_text(wall.phase));
+    line
 }
 
 /// `door|window|passage FACE at N width N [height N] [hinge S] [opens R]
@@ -612,6 +617,51 @@ passage Garderob.east at 0 width 680 source estimated
                 (OpeningKind::Door, "A.north".to_string(), 5),
                 (OpeningKind::Window, "B.south".to_string(), 10),
             ]
+        );
+    }
+
+    /// The statement lines of `src`, printed: everything after the room block.
+    fn statement_text(src: &str) -> String {
+        print_of(src)
+            .lines()
+            .filter(|line| line.starts_with("wall "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn wall_thickness_line_prints_as_before() {
+        let src = "room A 1000 x 2000\nwall A.north thickness 160 source laser\n";
+        assert_eq!(
+            statement_text(src),
+            "wall A.north thickness 160 source laser"
+        );
+    }
+
+    #[test]
+    fn wall_bearing_fire_demolish_line_prints_same() {
+        let src = "room A 1000 x 2000\nwall A.east bearing fire \"EI60\" demolish\n";
+        assert_eq!(
+            statement_text(src),
+            "wall A.east bearing fire \"EI60\" demolish"
+        );
+    }
+
+    #[test]
+    fn wall_bearing_only_prints_bearing() {
+        let src = "room A 1000 x 2000\nwall A.north bearing\n";
+        assert_eq!(statement_text(src), "wall A.north bearing");
+    }
+
+    #[test]
+    fn wall_all_parts_round_trip() {
+        let src = "room A 1000 x 2000\n\
+                   wall A.west thickness 120 source tape bearing fire \"EI60\" new\n";
+        let plan = parse(src).expect("parse");
+        assert_round_trip(&plan);
+        assert_eq!(
+            statement_text(src),
+            "wall A.west thickness 120 source tape bearing fire \"EI60\" new"
         );
     }
 }
