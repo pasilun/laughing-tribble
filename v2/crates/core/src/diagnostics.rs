@@ -87,6 +87,9 @@ pub enum Code {
     /// I010: wall thickness derived, not stated.
     #[serde(rename = "I010")]
     I010,
+    /// I020: measurement suggested for a size or gap that is only estimated, assumed or drawn.
+    #[serde(rename = "I020")]
+    I020,
 }
 
 impl Code {
@@ -106,6 +109,7 @@ impl Code {
             Code::W003 => "W003",
             Code::W004 => "W004",
             Code::I010 => "I010",
+            Code::I020 => "I020",
         }
     }
 }
@@ -193,6 +197,10 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
         Code::W004 => fill("Adjusted to fit within tolerance: {list}.", args),
         Code::I010 => fill(
             "Wall {id} is {t} mm, derived from the room positions.",
+            args,
+        ),
+        Code::I020 => fill(
+            "{what} {value} mm has source {source} (±{tol} mm); measure {from} to {to} with the laser.",
             args,
         ),
     }
@@ -500,6 +508,25 @@ mod tests {
     }
 
     #[test]
+    fn i020_exact_wording() {
+        let text = message(
+            Code::I020,
+            &[
+                arg("what", "Gap Hall east_of Garderob"),
+                arg("value", "121"),
+                arg("source", "drawing"),
+                arg("tol", "30"),
+                arg("from", "Garderob.west"),
+                arg("to", "Hall.east"),
+            ],
+        );
+        assert_eq!(
+            text,
+            "Gap Hall east_of Garderob 121 mm has source drawing (±30 mm); measure Garderob.west to Hall.east with the laser."
+        );
+    }
+
+    #[test]
     fn missing_args_stay_visible_and_do_not_panic() {
         let text = message(Code::E002, &[arg("a", "2")]);
         assert_eq!(
@@ -518,6 +545,7 @@ mod tests {
         assert_eq!(Code::E001.to_string(), "E001");
         assert_eq!(Code::W004.to_string(), "W004");
         assert_eq!(Code::I010.to_string(), "I010");
+        assert_eq!(Code::I020.to_string(), "I020");
         assert_eq!(format!("{}", Code::E010), "E010");
     }
 
