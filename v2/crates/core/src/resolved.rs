@@ -22,6 +22,7 @@ use crate::solve::{
     check_cycles, components, conflict_diagnostic, distribute, edges,
 };
 use crate::units::{Mm, Source};
+use crate::validate::validate;
 
 /// Id of a wall, as in §5.3 (`W:<A>.<side>|<B>.<side>` or `W:<Room>.<side>:outer`).
 pub type WallId = String;
@@ -162,7 +163,12 @@ pub struct Space {
 /// when any Error diagnostic exists (for example E003 for a conflicting cycle,
 /// E010, E004, E007 or E013); the diagnostics are then still returned.
 pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
-    let (all_edges, mut diagnostics) = edges(plan);
+    let mut diagnostics = validate(plan);
+    if has_error(&diagnostics) {
+        return (None, diagnostics);
+    }
+    let (all_edges, edge_diags) = edges(plan);
+    diagnostics.extend(edge_diags);
 
     let mut coords = Coords::default();
     for axis in [Axis::X, Axis::Y] {

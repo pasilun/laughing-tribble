@@ -15,6 +15,7 @@ pub mod report;
 pub mod resolved;
 pub mod solve;
 pub mod units;
+pub mod validate;
 
 pub use api::{RectMm, Resolve, element_ids, element_rect, load, resolve_plan};
 pub use commands::{ApplyResult, Change, apply};
