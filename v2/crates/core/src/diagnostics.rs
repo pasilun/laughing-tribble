@@ -75,6 +75,9 @@ pub enum Code {
     /// E011: unknown element id in a render region (spec §8, D10).
     #[serde(rename = "E011")]
     E011,
+    /// E012: render failed (spec §8).
+    #[serde(rename = "E012")]
+    E012,
     /// E013: door hinge not along its face (spec §9.3, D19).
     #[serde(rename = "E013")]
     E013,
@@ -108,6 +111,7 @@ impl Code {
             Code::E007 => "E007",
             Code::E010 => "E010",
             Code::E011 => "E011",
+            Code::E012 => "E012",
             Code::E013 => "E013",
             Code::W001 => "W001",
             Code::W003 => "W003",
@@ -183,6 +187,7 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             };
             format!("{suggested} Use a room name, or a wall or opening id from get.")
         }
+        Code::E012 => fill("Render failed: {reason}.", args),
         Code::E013 => fill(r#"Hinge "{found}" on {face} must be {a} or {b}."#, args),
         Code::W001 => {
             if lookup(args, "unknown_depth").is_some() {
@@ -433,6 +438,12 @@ mod tests {
             text,
             r#"Unknown element "Zzz". Use a room name, or a wall or opening id from get."#
         );
+    }
+
+    #[test]
+    fn e012_wording() {
+        let text = message(Code::E012, &[arg("reason", "bad svg")]);
+        assert_eq!(text, "Render failed: bad svg.");
     }
 
     #[test]

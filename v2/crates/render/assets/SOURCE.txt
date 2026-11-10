@@ -1,0 +1,1 @@
+DejaVu Sans 2.37 from the Debian/Ubuntu fonts-dejavu-core package; Bitstream Vera licence (see DejaVuSans-LICENSE.txt).
