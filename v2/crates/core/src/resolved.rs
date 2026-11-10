@@ -233,6 +233,7 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
         return (None, diagnostics);
     }
 
+    diagnostics.extend(reference_checks(plan, &coords));
     let areas = room_areas(plan, &coords);
     let mut nodes: BTreeMap<NodeId, Pt> = BTreeMap::new();
     let mut wall_models: BTreeMap<WallId, Wall> = BTreeMap::new();
@@ -417,6 +418,79 @@ fn node_id(pt: Pt) -> NodeId {
 /// True when any diagnostic has the Error severity.
 pub(crate) fn has_error(diagnostics: &[Diagnostic]) -> bool {
     diagnostics.iter().any(|d| d.severity == Severity::Error)
+}
+
+/// W020 for every reference measure (§8, §15 D25) whose drawn distance differs
+/// from the measured value by more than the measure's tolerance. Measures are
+/// checked in plan order. A measure is skipped when a coordinate is missing or
+/// when its two faces are on different axes.
+fn reference_checks(plan: &Plan, coords: &Coords) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for measure in plan.measures.iter().filter(|m| m.reference) {
+        let (from, to) = (&measure.from, &measure.to);
+        let map = match (from.side, to.side) {
+            (Side::East | Side::West, Side::East | Side::West) => &coords.x,
+            (Side::North | Side::South, Side::North | Side::South) => &coords.y,
+            _ => continue,
+        };
+        let (Some(start), Some(end)) = (
+            coord(map, &from.room, side_index(from.side)),
+            coord(map, &to.room, side_index(to.side)),
+        ) else {
+            continue;
+        };
+        let drawn = (end - start).abs();
+        let value = &measure.value;
+        let diff = (drawn - value.value).abs();
+        if diff <= value.tolerance {
+            continue;
+        }
+        let from_label = face_text(from);
+        let to_label = face_text(to);
+        let args = [
+            ("from", from_label.clone()),
+            ("to", to_label.clone()),
+            ("drawn", drawn.to_string()),
+            ("value", value.value.to_string()),
+            ("diff", diff.to_string()),
+        ];
+        out.push(Diagnostic {
+            code: Code::W020,
+            severity: Severity::Warning,
+            message: message(Code::W020, &args),
+            span: None,
+            refs: vec![from_label.clone(), to_label.clone()],
+            data: json!({
+                "from": from_label,
+                "to": to_label,
+                "drawn": drawn,
+                "measured": value,
+                "diff": diff,
+            }),
+        });
+    }
+    out
+}
+
+/// The side index used by the solver's map keys (see [`NORTH`]).
+fn side_index(side: Side) -> u8 {
+    match side {
+        Side::North => NORTH,
+        Side::East => EAST,
+        Side::South => SOUTH,
+        Side::West => WEST,
+    }
+}
+
+/// `Room.side` with the side in lower case, as in the W020 message.
+fn face_text(face: &FaceRef) -> String {
+    let side = match face.side {
+        Side::North => "north",
+        Side::East => "east",
+        Side::South => "south",
+        Side::West => "west",
+    };
+    format!("{}.{}", face.room, side)
 }
 
 /// The solved inner rectangle of every room whose four faces have coordinates.
@@ -669,5 +743,43 @@ room B 1500 x 1000 source laser
             !diagnostics.iter().any(|d| d.code == Code::E005),
             "{diagnostics:?}"
         );
+    }
+
+    /// W020 (§8, D25): dist-1 with its measure made a laser reference.
+    fn dist_1_reference(value: &str) -> String {
+        const DIST_1: &str = include_str!("../../../fixtures/dist-1.plan");
+        DIST_1.replace(
+            "measure B.east to A.east = 520 source estimated",
+            &format!("measure B.east to A.east = {value} source laser reference"),
+        )
+    }
+
+    #[test]
+    fn reference_measure_off_by_more_than_tolerance_gives_w020() {
+        let plan = fixture(&dist_1_reference("520"));
+        let (resolved, diagnostics) = resolve(&plan);
+        assert!(resolved.is_some(), "{diagnostics:?}");
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        let d = &diagnostics[0];
+        assert_eq!(d.code, Code::W020);
+        assert_eq!(d.severity, Severity::Warning);
+        assert_eq!(
+            d.message,
+            "Reference measure B.east→A.east: drawn 500, measured 520 (20 mm)."
+        );
+        assert_eq!(d.refs, vec!["B.east", "A.east"]);
+        assert_eq!(d.data["from"], "B.east");
+        assert_eq!(d.data["to"], "A.east");
+        assert_eq!(d.data["drawn"], 500);
+        assert_eq!(d.data["diff"], 20);
+        assert_eq!(d.data["measured"]["value"], 520);
+    }
+
+    #[test]
+    fn reference_measure_within_tolerance_gives_no_diagnostic() {
+        let plan = fixture(&dist_1_reference("502"));
+        let (resolved, diagnostics) = resolve(&plan);
+        assert!(resolved.is_some(), "{diagnostics:?}");
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 }
