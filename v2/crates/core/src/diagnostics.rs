@@ -96,6 +96,9 @@ pub enum Code {
     /// E018: the plan does not fit the sheet at any offered scale (spec §8, D31).
     #[serde(rename = "E018")]
     E018,
+    /// E019: a fixture or stub runs outside its room (spec §8, D44).
+    #[serde(rename = "E019")]
+    E019,
     /// E020: unknown plan (MCP).
     #[serde(rename = "E020")]
     E020,
@@ -135,6 +138,9 @@ pub enum Code {
     /// W033: a new opening sits in a fire-cell boundary (spec §8, D35).
     #[serde(rename = "W033")]
     W033,
+    /// W034: kitchen fixtures demolished with no capped connection marked (spec §8, D48).
+    #[serde(rename = "W034")]
+    W034,
     /// I010: wall thickness derived, not stated.
     #[serde(rename = "I010")]
     I010,
@@ -147,6 +153,9 @@ pub enum Code {
     /// I031: a title block key is missing or blank (spec §8, D41).
     #[serde(rename = "I031")]
     I031,
+    /// I032: ventilation changes; flows must be re-balanced (spec §8, D48).
+    #[serde(rename = "I032")]
+    I032,
 }
 
 impl Code {
@@ -169,6 +178,7 @@ impl Code {
             Code::E016 => "E016",
             Code::E017 => "E017",
             Code::E018 => "E018",
+            Code::E019 => "E019",
             Code::E020 => "E020",
             Code::E021 => "E021",
             Code::E022 => "E022",
@@ -182,10 +192,12 @@ impl Code {
             Code::W031 => "W031",
             Code::W032 => "W032",
             Code::W033 => "W033",
+            Code::W034 => "W034",
             Code::I010 => "I010",
             Code::I020 => "I020",
             Code::I030 => "I030",
             Code::I031 => "I031",
+            Code::I032 => "I032",
         }
     }
 }
@@ -278,6 +290,7 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
                 None => base,
             }
         }
+        Code::E019 => fill("{what} on {face} at {at} runs outside {room}.", args),
         Code::E020 => fill(r#"Unknown plan "{id}". Create it with apply."#, args),
         Code::E021 => fill(
             r#"Invalid plan_id "{id}": use 1 to 64 letters, digits, "-" or "_"."#,
@@ -335,6 +348,10 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             "{kind} {id} is new and sits in fire-cell boundary {wall} ({fire}); a fire protection description is required.",
             args,
         ),
+        Code::W034 => fill(
+            r#"Kitchen fixtures are demolished but no capped connection is marked; add a "plug" fixture where the pipes are capped."#,
+            args,
+        ),
         Code::I010 => fill(
             "Wall {id} is {t} mm, derived from the room positions.",
             args,
@@ -348,6 +365,10 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             args,
         ),
         Code::I031 => fill(r#"Title block has no {key}; add: title {key} "…""#, args),
+        Code::I032 => fill(
+            "Ventilation changes: the flows must be re-balanced against the latest OVK and a new OVK made.",
+            args,
+        ),
     }
 }
 
@@ -882,6 +903,41 @@ mod tests {
         assert_eq!(
             text,
             r#"Window F1 is new and has no height; add "height <mm>" if the engineer needs it."#
+        );
+    }
+
+    #[test]
+    fn e019_exact_wording() {
+        let text = message(
+            Code::E019,
+            &[
+                arg("what", "Fixture stove"),
+                arg("face", "Kok1.north"),
+                arg("at", "2000"),
+                arg("room", "Kok1"),
+            ],
+        );
+        assert_eq!(
+            text,
+            "Fixture stove on Kok1.north at 2000 runs outside Kok1."
+        );
+    }
+
+    #[test]
+    fn w034_exact_wording() {
+        let text = message(Code::W034, &[]);
+        assert_eq!(
+            text,
+            r#"Kitchen fixtures are demolished but no capped connection is marked; add a "plug" fixture where the pipes are capped."#
+        );
+    }
+
+    #[test]
+    fn i032_exact_wording() {
+        let text = message(Code::I032, &[]);
+        assert_eq!(
+            text,
+            "Ventilation changes: the flows must be re-balanced against the latest OVK and a new OVK made."
         );
     }
 
