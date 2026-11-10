@@ -113,8 +113,8 @@ pub(crate) fn render_with(
 ///
 /// Rooms are always labelled (`name area`, priority 0), then each mark at the
 /// midpoint of its line (priority 0), moved 20 px to the side when the line is
-/// shorter than 40 px (spec §15 D38, second amendment). Walls (1) and openings (2) carry their
-/// id, and only in [`View::Labels`]. Elements whose anchor lies outside the
+/// shorter than 40 px (spec §15 D38, second amendment). Walls (1), openings and
+/// fixtures (2) carry their id, and only in [`View::Labels`]. Elements whose anchor lies outside the
 /// image get no request.
 fn label_requests(resolved: &Resolved, view: View, vp: &Viewport, marks: &[Mark]) -> Vec<LabelReq> {
     let mut reqs = Vec::new();
@@ -156,6 +156,9 @@ fn label_requests(resolved: &Resolved, view: View, vp: &Viewport, marks: &[Mark]
             reqs.extend(request(resolved, vp, id, id.to_string(), 1));
         }
         for id in resolved.openings.keys() {
+            reqs.extend(request(resolved, vp, id, id.to_string(), 2));
+        }
+        for id in resolved.fixtures.keys() {
             reqs.extend(request(resolved, vp, id, id.to_string(), 2));
         }
     }

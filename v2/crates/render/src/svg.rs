@@ -1,14 +1,14 @@
 //! SVG drawing of a resolved plan (W1-23).
 //!
 //! The viewBox is in mm, with x east and y south like the core coordinates.
-//! Elements are written in a fixed order: grid, rooms, walls, openings. Every
+//! Elements are written in a fixed order: grid, rooms, walls, fixtures, openings. Every
 //! collection is a `BTreeMap`, so the same model always gives the same text.
 //! Each element carries its id in `data-id` and as a label on the drawing.
 
 use plan_core::Resolved;
 use plan_core::build::format_m2;
-use plan_core::intent::{OpeningKind, Phase, Side};
-use plan_core::resolved::{ResolvedOpening, RoomRect, Wall, WallKind};
+use plan_core::intent::{FixtureKind, OpeningKind, Phase, Side};
+use plan_core::resolved::{ResolvedFixture, ResolvedOpening, RoomRect, Wall, WallKind};
 use plan_core::units::Mm;
 
 use crate::corners::corner_rect;
@@ -139,9 +139,9 @@ fn grid(view: &View) -> String {
     format!(r##"<g class="grid" stroke="#d0d0d0" stroke-width="8">{lines}</g>"##)
 }
 
-/// The rooms, walls and openings, in that order, each as one SVG element.
-/// `fonts` sets the room label sizes and `opening_stroke` the width of the
-/// opening lines, both in viewBox units; everything else is in mm.
+/// The rooms, walls, fixtures and openings, in that order, each as one SVG
+/// element. `fonts` sets the room and label sizes and `opening_stroke` the width
+/// of the opening lines, both in viewBox units; everything else is in mm.
 pub(crate) fn drawn_elements(
     resolved: &Resolved,
     fonts: RoomFonts,
@@ -153,6 +153,9 @@ pub(crate) fn drawn_elements(
     }
     for wall in resolved.walls.values() {
         elements.push(wall_element(wall, resolved, opening_stroke));
+    }
+    for fixture in resolved.fixtures.values() {
+        elements.push(fixture_element(fixture, fonts, opening_stroke));
     }
     for opening in resolved.openings.values() {
         elements.push(opening_element(opening, resolved, opening_stroke));
@@ -230,6 +233,126 @@ fn wall_element(wall: &Wall, resolved: &Resolved, s: f64) -> String {
 /// The dash pattern of a demolished element: 4 strokes on, 3 off.
 fn dash_attr(s: f64) -> String {
     format!(r##" stroke-dasharray="{} {}""##, 4.0 * s, 3.0 * s)
+}
+
+/// A fixture: its rectangle and the symbol of its kind, as one group (spec §15
+/// D44). `s` is the opening stroke width. Strokes are `#333333` at `s/2`; a
+/// demolished fixture has red dashed strokes, a new one near-black strokes at
+/// `s`. A label, or `P` for a plug, is centred in the rectangle.
+fn fixture_element(fixture: &ResolvedFixture, fonts: RoomFonts, s: f64) -> String {
+    let kind = fixture.kind;
+    let (x0, y0) = (fixture.x.0 as f64, fixture.y.0 as f64);
+    let (w, h) = (
+        (fixture.x.1 - fixture.x.0) as f64,
+        (fixture.y.1 - fixture.y.0) as f64,
+    );
+    let m = w.min(h);
+    let (cx, cy) = (x0 + w / 2.0, y0 + h / 2.0);
+    let demolish = fixture.phase == Phase::Demolish;
+    let (colour, width) = match fixture.phase {
+        Phase::Demolish => ("#c62828", s / 2.0),
+        Phase::New => ("#1a1a1a", s),
+        Phase::Existing => ("#333333", s / 2.0),
+    };
+    // Every stroke of a demolished fixture is dashed.
+    let dash = if demolish {
+        dash_attr(s)
+    } else {
+        String::new()
+    };
+    let style = |fill: &str, dash: &str| {
+        format!(r##" fill="{fill}" stroke="{colour}" stroke-width="{width}"{dash}"##)
+    };
+    // A shower's rectangle is dashed even when it is not demolished.
+    let rect_dash = if kind == FixtureKind::Shower && !demolish {
+        format!(r##" stroke-dasharray="{} {}""##, 2.0 * s, 2.0 * s)
+    } else {
+        dash.clone()
+    };
+    let rect_fill = match kind {
+        FixtureKind::Radiator => "#333333",
+        FixtureKind::Balcony => "none",
+        _ => "#ffffff",
+    };
+    let mut shapes = vec![format!(
+        r##"<rect x="{x0}" y="{y0}" width="{w}" height="{h}"{attrs}/>"##,
+        attrs = style(rect_fill, &rect_dash),
+    )];
+    let inset = |i: f64, rx: Option<f64>| {
+        let rx = rx.map_or_else(String::new, |rx| format!(r##" rx="{rx}""##));
+        format!(
+            r##"<rect x="{}" y="{}" width="{}" height="{}"{rx}{}/>"##,
+            x0 + i,
+            y0 + i,
+            w - 2.0 * i,
+            h - 2.0 * i,
+            style("none", &dash),
+        )
+    };
+    let diagonals = || {
+        format!(
+            r##"<line x1="{x0}" y1="{y0}" x2="{x2}" y2="{y2}"{a}/><line x1="{x2}" y1="{y0}" x2="{x0}" y2="{y2}"{a}/>"##,
+            x2 = x0 + w,
+            y2 = y0 + h,
+            a = style("none", &dash),
+        )
+    };
+    match kind {
+        FixtureKind::Stove => {
+            let r = m / 8.0;
+            for (px, py) in [
+                (x0 + w / 4.0, y0 + h / 4.0),
+                (x0 + 3.0 * w / 4.0, y0 + h / 4.0),
+                (x0 + w / 4.0, y0 + 3.0 * h / 4.0),
+                (x0 + 3.0 * w / 4.0, y0 + 3.0 * h / 4.0),
+            ] {
+                shapes.push(format!(
+                    r##"<circle cx="{px}" cy="{py}" r="{r}"{}/>"##,
+                    style("none", &dash),
+                ));
+            }
+        }
+        FixtureKind::Sink => shapes.push(inset(m / 6.0, None)),
+        FixtureKind::Wc => shapes.push(format!(
+            r##"<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}"{}/>"##,
+            style("none", &dash),
+            rx = w * 35.0 / 100.0,
+            ry = h * 35.0 / 100.0,
+        )),
+        FixtureKind::Shower => shapes.push(format!(
+            r##"<circle cx="{cx}" cy="{cy}" r="{r}"{}/>"##,
+            style("#ffffff", &dash),
+            r = m / 10.0,
+        )),
+        FixtureKind::Bath => shapes.push(inset(m / 8.0, Some(m / 4.0))),
+        FixtureKind::Exhaust | FixtureKind::Shaft => shapes.push(diagonals()),
+        FixtureKind::Kitchen
+        | FixtureKind::Radiator
+        | FixtureKind::Plug
+        | FixtureKind::Box
+        | FixtureKind::Balcony => {}
+    }
+    // The label, or `P` for a plug, centred in the rectangle.
+    let caption = match (&fixture.label, kind) {
+        (Some(label), _) => Some((label.as_str(), fonts.area)),
+        (None, FixtureKind::Plug) => Some(("P", 0.8 * m)),
+        (None, _) => None,
+    };
+    if let Some((content, size)) = caption {
+        shapes.push(text(
+            cx,
+            cy,
+            size,
+            &format!(r##" fill="{colour}""##),
+            content,
+        ));
+    }
+    format!(
+        r##"<g class="fixture" data-id="{id}" data-kind="{word}">{body}</g>"##,
+        id = escape(&fixture.id),
+        word = kind.word(),
+        body = shapes.concat(),
+    )
 }
 
 /// An opening: a white gap across its wall, a coloured line in the gap, and its id.
@@ -388,6 +511,7 @@ pub(crate) fn escape(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::{RenderOptions, View, render};
     use plan_core::dsl::parse;
     use plan_core::resolve;
 
@@ -573,5 +697,113 @@ mod tests {
             svg.contains(r##"<path d="M 500 0 L 500 900 A 900 900 0 0 0 1400 0""##),
             "{svg}"
         );
+    }
+
+    /// The resolved model of room `Kok 2400 x 4000` with one fixture `line`.
+    fn kok_with(line: &str) -> Resolved {
+        let text = format!("plan \"Kok\"\nroom Kok 2400 x 4000 source laser\n{line}\n");
+        let plan = parse(&text).expect("parses");
+        let (resolved, diagnostics) = resolve(&plan);
+        assert!(resolved.is_some(), "{diagnostics:?}");
+        resolved.expect("resolves")
+    }
+
+    /// The `<g class="fixture">` group of `data_id`, up to its closing tag.
+    fn fixture_group<'a>(svg: &'a str, data_id: &str) -> &'a str {
+        let needle = format!(r##"<g class="fixture" data-id="{data_id}""##);
+        let start = svg
+            .find(&needle)
+            .unwrap_or_else(|| panic!("no fixture {data_id}"));
+        let rest = &svg[start..];
+        &rest[..rest.find("</g>").expect("closing tag") + "</g>".len()]
+    }
+
+    #[test]
+    fn fixture_stove_has_four_burner_circles() {
+        let svg = plan_svg(&kok_with("fixture stove Kok.north at 200"));
+        let group = fixture_group(&svg, "F:Kok.north:1");
+        assert!(group.contains(r##"data-kind="stove""##), "{group}");
+        assert!(
+            group.contains(r##"<rect x="200" y="0" width="600" height="600""##),
+            "{group}"
+        );
+        assert_eq!(group.matches("<circle").count(), 4, "{group}");
+        assert!(
+            group.contains(r##"<circle cx="350" cy="150" r="75""##),
+            "{group}"
+        );
+    }
+
+    #[test]
+    fn fixture_wc_is_an_ellipse_in_its_rectangle() {
+        let svg = plan_svg(&kok_with("fixture wc Kok.east at 100"));
+        let group = fixture_group(&svg, "F:Kok.east:1");
+        assert_eq!(group.matches("<ellipse").count(), 1, "{group}");
+        assert!(group.contains(r##"rx="245""##), "{group}");
+        assert!(group.contains(r##"ry="140""##), "{group}");
+    }
+
+    #[test]
+    fn demolished_fixture_is_red_and_dashed() {
+        let svg = plan_svg(&kok_with("fixture sink Kok.north at 100 demolish"));
+        let group = fixture_group(&svg, "F:Kok.north:1");
+        assert!(group.contains("#c62828"), "{group}");
+        assert!(group.contains(r##"stroke-dasharray="120 90""##), "{group}");
+        assert!(!group.contains("#333333"), "{group}");
+    }
+
+    #[test]
+    fn new_fixture_is_near_black_at_full_stroke() {
+        let svg = plan_svg(&kok_with(
+            "fixture box Kok.north at 100 width 500 depth 300 new",
+        ));
+        let group = fixture_group(&svg, "F:Kok.north:1");
+        assert!(
+            group.contains(r##"stroke="#1a1a1a" stroke-width="30""##),
+            "{group}"
+        );
+    }
+
+    #[test]
+    fn plug_shows_p_and_label_replaces_it() {
+        let svg = plan_svg(&kok_with("fixture plug Kok.north at 100"));
+        assert!(fixture_group(&svg, "F:Kok.north:1").contains(">P</text>"));
+        let svg = plan_svg(&kok_with("fixture plug Kok.north at 100 label \"X\""));
+        let group = fixture_group(&svg, "F:Kok.north:1");
+        assert!(group.contains(">X</text>"), "{group}");
+        assert!(!group.contains(">P</text>"), "{group}");
+    }
+
+    #[test]
+    fn fixture_labels_view_has_its_id() {
+        let resolved = kok_with("fixture stove Kok.north at 200");
+        let opts = RenderOptions {
+            view: View::Labels,
+            region: None,
+            max_tokens: 1600,
+        };
+        let rendered = render(&resolved, &opts).expect("renders");
+        assert!(
+            rendered.labels.iter().any(|l| l.id == "F:Kok.north:1"),
+            "{:?}",
+            rendered.labels
+        );
+    }
+
+    #[test]
+    fn fixtures_are_not_labelled_in_the_plan_view() {
+        let resolved = kok_with("fixture stove Kok.north at 200");
+        let opts = RenderOptions {
+            view: View::Plan,
+            region: None,
+            max_tokens: 1600,
+        };
+        let rendered = render(&resolved, &opts).expect("renders");
+        assert!(rendered.labels.iter().all(|l| l.id != "F:Kok.north:1"));
+    }
+
+    #[test]
+    fn fixture_a_has_no_fixture_group() {
+        assert!(!fixture_a_svg().contains(r##"class="fixture""##));
     }
 }
