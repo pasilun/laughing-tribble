@@ -2,6 +2,8 @@
 //!
 //! Commands (arguments are read by hand, no argument crate):
 //! - `plan check <file>`: print the diagnostics, one per line; exit 1 if any is an Error.
+//! - `plan review <file>`: print the permit review (W030–W033, I030), one per line,
+//!   or `Nothing to report.`; exit 1 if the plan does not load.
 //! - `plan solve --json <file>`: print the §7.7 solve value as pretty JSON.
 //! - `plan fmt <file> [--write]`: print the canonical DSL, or rewrite the file.
 //! - `plan svg <file> [--out path]`: print the SVG drawing (or write it to `path`);
@@ -31,6 +33,7 @@ use plan_render::{Paper, Region, RenderOptions, SheetOptions, View};
 
 const USAGE: &str = "usage:
   plan check <file>
+  plan review <file>
   plan suggest <file>
   plan solve --json <file>
   plan fmt <file> [--write]
@@ -82,6 +85,7 @@ fn main() -> ExitCode {
 fn run(words: &[&str]) -> Result<ExitCode, String> {
     match words {
         ["check", file] => check(file),
+        ["review", file] => review(file),
         ["suggest", file] => suggest(file),
         ["solve", "--json", file] => solve(file),
         ["fmt", file] => fmt(file, false),
@@ -106,6 +110,47 @@ fn check(file: &str) -> Result<ExitCode, String> {
         out(&describe(diagnostic));
     }
     Ok(exit_for(&diagnostics))
+}
+
+/// `plan review`: print the permit review of the plan, one finding per line, or
+/// `Nothing to report.`. A plan that does not load prints its diagnostics as `check`
+/// does and exits 1. Findings are advice, so they do not change the exit status.
+fn review(file: &str) -> Result<ExitCode, String> {
+    let (_, src) = read_source(file)?;
+    let (text, code) = review_report(&src);
+    out_text(&text);
+    Ok(ExitCode::from(code))
+}
+
+/// The text `plan review` prints for `src`, and its exit status (0 or 1).
+fn review_report(src: &str) -> (String, u8) {
+    let loaded = match load(src) {
+        Ok(loaded) => loaded,
+        Err(diagnostics) => return (diagnostics_text(&diagnostics), 1),
+    };
+    let Some(resolved) = &loaded.resolved else {
+        return (diagnostics_text(&loaded.diagnostics), 1);
+    };
+    if loaded
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.severity == Severity::Error)
+    {
+        return (diagnostics_text(&loaded.diagnostics), 1);
+    }
+    let findings = plan_core::review(resolved);
+    if findings.is_empty() {
+        return ("Nothing to report.\n".to_string(), 0);
+    }
+    (diagnostics_text(&findings), 0)
+}
+
+/// Each diagnostic as `check` prints it, one per line, each ending in a newline.
+fn diagnostics_text(diagnostics: &[Diagnostic]) -> String {
+    diagnostics
+        .iter()
+        .map(|diagnostic| format!("{}\n", describe(diagnostic)))
+        .collect()
 }
 
 /// `plan suggest`: print the numbered list of suggested measurements (every W001,
@@ -510,5 +555,30 @@ room Förråd 800 x 2000 source laser
     #[test]
     fn suggest_unparseable_plan_exits_1() {
         assert_eq!(suggest_report("room A 3000 * 2000").1, 1);
+    }
+
+    const REVIEW_1: &str = include_str!("../../../fixtures/review-1.plan");
+
+    #[test]
+    fn review_review_1() {
+        insta::assert_snapshot!("review_review_1", review_report(REVIEW_1).0);
+    }
+
+    #[test]
+    fn review_fixture_a_nothing_to_report() {
+        assert_eq!(
+            review_report(FIXTURE_A),
+            ("Nothing to report.\n".to_string(), 0)
+        );
+    }
+
+    #[test]
+    fn review_fixture_b_prints_e003_and_exits_1() {
+        let (text, code) = review_report(FIXTURE_B);
+        assert_eq!(code, 1);
+        assert!(
+            text.starts_with("E003 error Conflict on the north–south axis"),
+            "{text}"
+        );
     }
 }
