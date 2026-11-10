@@ -369,6 +369,7 @@ name = "plan-render"
 version = "0.1.0"
 dependencies = [
  "plan-core",
+ "serde",
 ]
 
 [[package]]

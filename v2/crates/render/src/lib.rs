@@ -6,5 +6,6 @@
 #![forbid(unsafe_code)]
 
 pub mod svg;
+pub mod viewport;
 
 pub use svg::plan_svg;
