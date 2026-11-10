@@ -81,6 +81,21 @@ pub enum Code {
     /// E013: door hinge not along its face (spec §9.3, D19).
     #[serde(rename = "E013")]
     E013,
+    /// E014: a size is below 1 mm (spec §8, D26).
+    #[serde(rename = "E014")]
+    E014,
+    /// E015: a placement relation relates a room to itself (spec §8, D26).
+    #[serde(rename = "E015")]
+    E015,
+    /// E016: two openings overlap in one wall (spec §8, D26).
+    #[serde(rename = "E016")]
+    E016,
+    /// E017: a door opens into a room that is not at its wall (spec §8, D26).
+    #[serde(rename = "E017")]
+    E017,
+    /// E018: the plan does not fit the sheet at any offered scale (spec §8, D31).
+    #[serde(rename = "E018")]
+    E018,
     /// E020: unknown plan (MCP).
     #[serde(rename = "E020")]
     E020,
@@ -102,12 +117,33 @@ pub enum Code {
     /// W004: values adjusted to close a cycle.
     #[serde(rename = "W004")]
     W004,
+    /// W005: wall thinner than 70 mm or thicker than 600 mm.
+    #[serde(rename = "W005")]
+    W005,
+    /// W020: a reference measure differs from the drawn distance (spec §15 D25).
+    #[serde(rename = "W020")]
+    W020,
+    /// W030: a load-bearing wall is demolished (spec §8, D35).
+    #[serde(rename = "W030")]
+    W030,
+    /// W031: a fire-cell boundary is demolished (spec §8, D35).
+    #[serde(rename = "W031")]
+    W031,
+    /// W032: a new opening sits in a load-bearing wall (spec §8, D35).
+    #[serde(rename = "W032")]
+    W032,
+    /// W033: a new opening sits in a fire-cell boundary (spec §8, D35).
+    #[serde(rename = "W033")]
+    W033,
     /// I010: wall thickness derived, not stated.
     #[serde(rename = "I010")]
     I010,
     /// I020: measurement suggested for a size or gap that is only estimated, assumed or drawn.
     #[serde(rename = "I020")]
     I020,
+    /// I030: a new opening has no height (spec §8, D35).
+    #[serde(rename = "I030")]
+    I030,
 }
 
 impl Code {
@@ -125,6 +161,11 @@ impl Code {
             Code::E011 => "E011",
             Code::E012 => "E012",
             Code::E013 => "E013",
+            Code::E014 => "E014",
+            Code::E015 => "E015",
+            Code::E016 => "E016",
+            Code::E017 => "E017",
+            Code::E018 => "E018",
             Code::E020 => "E020",
             Code::E021 => "E021",
             Code::E022 => "E022",
@@ -132,8 +173,15 @@ impl Code {
             Code::W001 => "W001",
             Code::W003 => "W003",
             Code::W004 => "W004",
+            Code::W005 => "W005",
+            Code::W020 => "W020",
+            Code::W030 => "W030",
+            Code::W031 => "W031",
+            Code::W032 => "W032",
+            Code::W033 => "W033",
             Code::I010 => "I010",
             Code::I020 => "I020",
+            Code::I030 => "I030",
         }
     }
 }
@@ -205,6 +253,27 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
         }
         Code::E012 => fill("Render failed: {reason}.", args),
         Code::E013 => fill(r#"Hinge "{found}" on {face} must be {a} or {b}."#, args),
+        Code::E014 => fill("{what} is {value} mm; it must be at least 1 mm.", args),
+        Code::E015 => fill(
+            r#""{subject} {relation} {of}" relates a room to itself."#,
+            args,
+        ),
+        Code::E016 => fill(
+            "Openings {a} and {b} overlap by {d} mm on wall {wall}.",
+            args,
+        ),
+        Code::E017 => fill(
+            r#"Door on {face} cannot open into "{room}"; use {options}."#,
+            args,
+        ),
+        Code::E018 => {
+            let base = fill("Plan does not fit on {paper} at 1:{scale}.", args);
+            // The larger scale is only suggested when the caller gives one (same as E001).
+            match lookup(args, "fit") {
+                Some(fit) => format!("{base} Use 1:{fit}."),
+                None => base,
+            }
+        }
         Code::E020 => fill(r#"Unknown plan "{id}". Create it with apply."#, args),
         Code::E021 => fill(
             r#"Invalid plan_id "{id}": use 1 to 64 letters, digits, "-" or "_"."#,
@@ -238,12 +307,40 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             args,
         ),
         Code::W004 => fill("Adjusted to fit within tolerance: {list}.", args),
+        Code::W005 => fill(
+            "Wall {id} is {t} mm thick; check the measurements around it.",
+            args,
+        ),
+        Code::W020 => fill(
+            "Reference measure {from}→{to}: drawn {drawn}, measured {value} ({diff} mm).",
+            args,
+        ),
+        Code::W030 => fill(
+            "Wall {id} is load-bearing and is demolished; this needs a structural engineer's drawings and calculation.",
+            args,
+        ),
+        Code::W031 => fill(
+            "Wall {id} is a fire-cell boundary ({fire}) and is demolished; a fire protection description is required.",
+            args,
+        ),
+        Code::W032 => fill(
+            "{kind} {id} is new and sits in load-bearing wall {wall}; this needs a structural engineer's statement.",
+            args,
+        ),
+        Code::W033 => fill(
+            "{kind} {id} is new and sits in fire-cell boundary {wall} ({fire}); a fire protection description is required.",
+            args,
+        ),
         Code::I010 => fill(
             "Wall {id} is {t} mm, derived from the room positions.",
             args,
         ),
         Code::I020 => fill(
             "{what} {value} mm has source {source} (±{tol} mm); measure {from} to {to} with the laser.",
+            args,
+        ),
+        Code::I030 => fill(
+            r#"{kind} {id} is new and has no height; add "height <mm>" if the engineer needs it."#,
             args,
         ),
     }
@@ -630,6 +727,165 @@ mod tests {
         assert_eq!(
             text,
             "Gap Hall east_of Garderob 121 mm has source drawing (±30 mm); measure Garderob.west to Hall.east with the laser."
+        );
+    }
+
+    #[test]
+    fn e014_exact_wording() {
+        let text = message(
+            Code::E014,
+            &[arg("what", "Room A width"), arg("value", "0")],
+        );
+        assert_eq!(text, "Room A width is 0 mm; it must be at least 1 mm.");
+    }
+
+    #[test]
+    fn e015_exact_wording() {
+        let text = message(
+            Code::E015,
+            &[
+                arg("subject", "Hall"),
+                arg("relation", "east of"),
+                arg("of", "Hall"),
+            ],
+        );
+        assert_eq!(text, r#""Hall east of Hall" relates a room to itself."#);
+    }
+
+    #[test]
+    fn e016_exact_wording() {
+        let text = message(
+            Code::E016,
+            &[
+                arg("a", "D1"),
+                arg("b", "W2"),
+                arg("d", "150"),
+                arg("wall", "north"),
+            ],
+        );
+        assert_eq!(text, "Openings D1 and W2 overlap by 150 mm on wall north.");
+    }
+
+    #[test]
+    fn e017_exact_wording() {
+        let text = message(
+            Code::E017,
+            &[
+                arg("face", "north"),
+                arg("room", "Hall"),
+                arg("options", "a wall to the Hall or a different hinge side"),
+            ],
+        );
+        assert_eq!(
+            text,
+            r#"Door on north cannot open into "Hall"; use a wall to the Hall or a different hinge side."#
+        );
+    }
+
+    #[test]
+    fn e018_with_fit_appends_suggestion() {
+        let text = message(
+            Code::E018,
+            &[arg("paper", "A4"), arg("scale", "20"), arg("fit", "50")],
+        );
+        assert_eq!(text, "Plan does not fit on A4 at 1:20. Use 1:50.");
+    }
+
+    #[test]
+    fn e018_without_fit_omits_sentence() {
+        let text = message(Code::E018, &[arg("paper", "A4"), arg("scale", "20")]);
+        assert_eq!(text, "Plan does not fit on A4 at 1:20.");
+    }
+
+    #[test]
+    fn w005_exact_wording() {
+        let text = message(Code::W005, &[arg("id", "W3"), arg("t", "45")]);
+        assert_eq!(
+            text,
+            "Wall W3 is 45 mm thick; check the measurements around it."
+        );
+    }
+
+    #[test]
+    fn w020_exact_wording() {
+        let text = message(
+            Code::W020,
+            &[
+                arg("from", "B.east"),
+                arg("to", "A.east"),
+                arg("drawn", "500"),
+                arg("value", "520"),
+                arg("diff", "20"),
+            ],
+        );
+        assert_eq!(
+            text,
+            "Reference measure B.east→A.east: drawn 500, measured 520 (20 mm)."
+        );
+    }
+
+    #[test]
+    fn w030_exact_wording() {
+        let text = message(Code::W030, &[arg("id", "W2")]);
+        assert_eq!(
+            text,
+            "Wall W2 is load-bearing and is demolished; this needs a structural engineer's drawings and calculation."
+        );
+    }
+
+    #[test]
+    fn w031_exact_wording() {
+        let text = message(Code::W031, &[arg("id", "W2"), arg("fire", "EI 60")]);
+        assert_eq!(
+            text,
+            "Wall W2 is a fire-cell boundary (EI 60) and is demolished; a fire protection description is required."
+        );
+    }
+
+    #[test]
+    fn w032_exact_wording() {
+        let text = message(
+            Code::W032,
+            &[arg("kind", "Opening"), arg("id", "O1"), arg("wall", "W2")],
+        );
+        assert_eq!(
+            text,
+            "Opening O1 is new and sits in load-bearing wall W2; this needs a structural engineer's statement."
+        );
+    }
+
+    #[test]
+    fn w033_exact_wording() {
+        let text = message(
+            Code::W033,
+            &[
+                arg("kind", "Door"),
+                arg("id", "D1"),
+                arg("wall", "W5"),
+                arg("fire", "EI 30"),
+            ],
+        );
+        assert_eq!(
+            text,
+            "Door D1 is new and sits in fire-cell boundary W5 (EI 30); a fire protection description is required."
+        );
+    }
+
+    #[test]
+    fn i030_exact_wording() {
+        let text = message(Code::I030, &[arg("kind", "Window"), arg("id", "F1")]);
+        assert_eq!(
+            text,
+            r#"Window F1 is new and has no height; add "height <mm>" if the engineer needs it."#
+        );
+    }
+
+    #[test]
+    fn w030_code_string_and_serde() {
+        assert_eq!(Code::W030.as_str(), "W030");
+        assert_eq!(
+            serde_json::to_string(&Code::W030).expect("serialize code"),
+            r#""W030""#
         );
     }
 
