@@ -48,9 +48,25 @@ pub struct Quantity {
     pub tolerance: Mm,
 }
 
+/// Rounds to the nearest whole millimetre, ties to the even integer (§6.2
+/// step 6). Used whenever a solver value is stored. Values are in mm.
+#[must_use]
+pub fn round_half_even(f: f64) -> Mm {
+    f.round_ties_even() as Mm
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn round_half_even_breaks_ties_to_even() {
+        assert_eq!(round_half_even(2.5), 2);
+        assert_eq!(round_half_even(3.5), 4);
+        assert_eq!(round_half_even(-2.5), -2);
+        assert_eq!(round_half_even(2.4), 2);
+        assert_eq!(round_half_even(-2.6), -3);
+    }
 
     #[test]
     fn default_tolerances_match_spec() {
