@@ -147,7 +147,39 @@ pub fn place_openings(
         }
     }
     placed.sort_by(|a, b| a.id.cmp(&b.id));
+    for (i, a) in placed.iter().enumerate() {
+        for b in &placed[i + 1..] {
+            if a.wall != b.wall {
+                continue;
+            }
+            let d = a.end.min(b.end) - a.start.max(b.start);
+            if d > 0 {
+                diagnostics.push(overlap_error(a, b, d));
+            }
+        }
+    }
     (placed, diagnostics)
+}
+
+/// An E016 diagnostic: openings `a` and `b` overlap by `d` mm in one wall.
+fn overlap_error(a: &PlacedOpening, b: &PlacedOpening, d: Mm) -> Diagnostic {
+    let code = Code::E016;
+    Diagnostic {
+        code,
+        severity: Severity::Error,
+        message: message(
+            code,
+            &[
+                ("a", a.id.clone()),
+                ("b", b.id.clone()),
+                ("d", d.to_string()),
+                ("wall", a.wall.clone()),
+            ],
+        ),
+        span: None,
+        refs: vec![a.id.clone(), b.id.clone()],
+        data: json!({ "a": a.id, "b": b.id, "overlap": d, "wall": a.wall }),
+    }
 }
 
 /// `(index into plan.openings, id)` for every opening. Ids are numbered per
@@ -426,6 +458,45 @@ mod tests {
             r#"Hinge "north" on A.north must be west or east."#
         );
         assert_eq!(d.refs, ["O:A.north:1"]);
+    }
+
+    #[test]
+    fn overlapping_openings_in_one_wall_are_e016() {
+        let (placed, diagnostics) = place(
+            "room A 3000 x 2000 source laser\n\
+             door A.north at 500 width 900 hinge west opens A\n\
+             door A.north at 900 width 900 hinge west opens A\n",
+        );
+        assert_eq!(placed.len(), 2, "both openings stay placed");
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        let d = &diagnostics[0];
+        assert_eq!(d.code, Code::E016);
+        assert_eq!(d.severity, Severity::Error);
+        assert_eq!(
+            d.message,
+            "Openings O:A.north:1 and O:A.north:2 overlap by 500 mm on wall W:A.north:outer."
+        );
+        assert_eq!(d.refs, ["O:A.north:1", "O:A.north:2"]);
+        assert_eq!(
+            d.data,
+            json!({
+                "a": "O:A.north:1",
+                "b": "O:A.north:2",
+                "overlap": 500,
+                "wall": "W:A.north:outer",
+            })
+        );
+    }
+
+    #[test]
+    fn touching_openings_in_one_wall_are_not_e016() {
+        let (placed, diagnostics) = place(
+            "room A 3000 x 2000 source laser\n\
+             door A.north at 500 width 900 hinge west opens A\n\
+             door A.north at 1400 width 900 hinge west opens A\n",
+        );
+        assert_eq!(placed.len(), 2);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
