@@ -164,7 +164,7 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
         x2 = w / 2.0 + 500.0 / nf,
         y = h - 12.0,
     ));
-    out.push(text(w / 2.0, h - 12.8, 2.5, "", "1 m"));
+    out.push(text(w / 2.0, h - 14.5, 2.5, "", "1 m"));
     out.push("</svg>".to_string());
 
     Ok(Sheet {
@@ -332,5 +332,29 @@ mod tests {
             clear_top > area_bottom,
             "clear size starts at {clear_top}, area line ends at {area_bottom}"
         );
+    }
+
+    #[test]
+    fn scale_bar_label_sits_above_its_bar() {
+        for paper in [Paper::A4, Paper::A3] {
+            let svg = sheet(&fixture_a(), &opts(paper, None)).expect("fits").svg;
+            // The scale bar: the 0.5 mm line of the title strip rule, below the plan.
+            let stroke = svg
+                .find(r#"stroke-width="0.5""#)
+                .expect("scale bar is drawn");
+            let start = svg[..stroke].rfind("<line").expect("a line start");
+            let bar = &svg[start..stroke + svg[stroke..].find("/>").expect("line end")];
+            let bar_y = attr_value(bar, "y1");
+
+            let label = text_element(&svg, "1 m");
+            let label_y = attr_value(&label, "y");
+            let font_size = attr_value(&label, "font-size");
+
+            assert!(
+                label_y <= bar_y - font_size,
+                "{}: label centre at {label_y}, bar at {bar_y}, font size {font_size}",
+                paper.name()
+            );
+        }
     }
 }
