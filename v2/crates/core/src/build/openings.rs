@@ -105,7 +105,28 @@ pub fn place_openings(
             continue;
         }
 
-        match on_face.iter().find(|(_, (a, b))| *a <= start && end <= *b) {
+        let found = on_face.iter().find(|(_, (a, b))| *a <= start && end <= *b);
+        if let (Some((wall, _)), Some(room)) = (found, &opening.opens_into) {
+            let allowed = wall_rooms(wall);
+            if !allowed.contains(&room.as_str()) {
+                let options = allowed
+                    .iter()
+                    .map(|name| format!("\"{name}\""))
+                    .collect::<Vec<_>>()
+                    .join(" or ");
+                diagnostics.push(error(
+                    Code::E017,
+                    &id,
+                    &[
+                        ("face", label.clone()),
+                        ("room", room.as_str().to_string()),
+                        ("options", options),
+                    ],
+                    json!({ "opening": id, "room": room.as_str(), "allowed": allowed }),
+                ));
+            }
+        }
+        match found {
             Some((wall, _)) => match opening.hinge {
                 Some(hinge) if !hinge_along_face(face.side, hinge) => {
                     let (a, b) = hinge_choices(face.side);
@@ -220,6 +241,18 @@ fn face_span(face: &FaceRef, coords: &Coords) -> Option<(Mm, Mm)> {
             Some((lo, hi))
         }
     }
+}
+
+/// The rooms a door in `wall` may open into, sorted by name without repeats:
+/// the room of its own face and, for an interior wall, the room of the facing
+/// face (§9.3, E017).
+fn wall_rooms(wall: &BuiltWall) -> Vec<&str> {
+    let mut names: Vec<&str> = std::iter::once(wall.face.room.as_str())
+        .chain(wall.other.as_ref().map(|f| f.room.as_str()))
+        .collect();
+    names.sort_unstable();
+    names.dedup();
+    names
 }
 
 /// The extent of `wall` along a face on `side`: its x for north and south
@@ -496,6 +529,67 @@ mod tests {
              door A.north at 1400 width 900 hinge west opens A\n",
         );
         assert_eq!(placed.len(), 2);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    /// Three rooms in a row: A and B share an interior wall, C sits east of B.
+    const ROW_OF_THREE: &str = "room A 3000 x 2000 source laser\n\
+         room B 3000 x 2000 source laser\n  east_of A gap\n  align north A\n\
+         room C 1000 x 1000 source laser\n  east_of B gap\n  align north B\n";
+
+    #[test]
+    fn door_opening_into_a_room_not_at_its_wall_is_e017() {
+        let src = format!("{ROW_OF_THREE}door A.east at 500 width 900 hinge north opens C\n");
+        let (placed, diagnostics) = place(&src);
+        assert_eq!(placed.len(), 1, "the door stays placed");
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        let d = &diagnostics[0];
+        assert_eq!(d.code, Code::E017);
+        assert_eq!(d.severity, Severity::Error);
+        assert_eq!(
+            d.message,
+            r#"Door on A.east cannot open into "C"; use "A" or "B"."#
+        );
+        assert_eq!(d.refs, ["O:A.east:1"]);
+        assert_eq!(
+            d.data,
+            json!({
+                "opening": "O:A.east:1",
+                "room": "C",
+                "allowed": ["A", "B"],
+            })
+        );
+    }
+
+    #[test]
+    fn door_opening_into_the_facing_room_is_not_e017() {
+        let src = format!("{ROW_OF_THREE}door A.east at 500 width 900 hinge north opens B\n");
+        let (placed, diagnostics) = place(&src);
+        assert_eq!(placed.len(), 1);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn door_opening_into_a_room_on_an_outer_wall_is_checked_too() {
+        let src = "room A 3000 x 2000\n\
+                   room C 1000 x 1000\n  east_of A gap\n  align north A\n\
+                   door A.north at 500 width 900 hinge west opens C\n";
+        let (_, diagnostics) = place(src);
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].code, Code::E017);
+        assert_eq!(
+            diagnostics[0].message,
+            r#"Door on A.north cannot open into "C"; use "A"."#
+        );
+    }
+
+    #[test]
+    fn door_opening_into_its_own_room_on_an_outer_wall_is_not_e017() {
+        let (placed, diagnostics) = place(
+            "room A 3000 x 2000 source laser\n\
+             door A.north at 500 width 900 hinge west opens A\n",
+        );
+        assert_eq!(placed.len(), 1);
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
