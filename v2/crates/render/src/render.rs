@@ -7,7 +7,10 @@
 //! id labels of the other drawings are removed, so each text appears once.
 
 use plan_core::build::format_m2;
-use plan_core::{Diagnostic, RectMm, Resolved, element_ids, element_rect};
+use plan_core::dsl::resolve::SUGGEST_MIN;
+use plan_core::{Code, Diagnostic, RectMm, Resolved, Severity, element_ids, element_rect, message};
+use serde_json::json;
+use strsim::jaro_winkler;
 
 use crate::labels::{LabelReq, PlacedLabel, place};
 use crate::svg::{FONT_FAMILY, GRID, PAD, RoomFonts, drawn_elements, multiples, text};
@@ -20,7 +23,10 @@ pub enum View {
     Labels,
 }
 
-/// A part of the plan to zoom to (W2-16). Not used yet: every region is `None`.
+/// A part of the plan to zoom to (W2-16).
+///
+/// `Id` is padded by [`CROP_PAD`] around the element. `RectMm` is `[x, y, w, h]`
+/// in mm, used as it is (a side under 1 mm counts as 1 mm).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Region {
     Id(String),
@@ -43,12 +49,17 @@ pub struct Rendered {
     pub labels: Vec<PlacedLabel>,
 }
 
+/// Padding around a cropped element, in mm (spec §15 D9).
+const CROP_PAD: i64 = 600;
+
 /// Draw a resolved plan. Lengths in mm, x east, y south.
 ///
-/// The content is the union of every element's rectangle, padded by 500 mm
-/// and fitted to `max_tokens`. An empty plan uses a 1 m square.
+/// Without a region the content is the union of every element's rectangle,
+/// padded by 500 mm, and fitted to `max_tokens`. An empty plan uses a 1 m
+/// square. A region replaces that content rectangle (see [`Region`]). An
+/// unknown element id gives E011.
 pub fn render(resolved: &Resolved, opts: &RenderOptions) -> Result<Rendered, Diagnostic> {
-    let content = content_rect(resolved);
+    let content = content_rect(resolved, opts.region.as_ref())?;
     let viewport = fit(
         [content.x0, content.y0, content.width(), content.height()],
         opts.max_tokens,
@@ -122,19 +133,60 @@ fn anchor_px(rect: &RectMm, vp: &Viewport) -> Option<[f64; 2]> {
     inside.then_some(px)
 }
 
-/// The padded union of every element's rectangle, in mm.
-fn content_rect(resolved: &Resolved) -> RectMm {
-    element_ids(resolved)
-        .iter()
-        .filter_map(|id| element_rect(resolved, id))
-        .reduce(|a, b| a.union(&b))
-        .unwrap_or(RectMm {
-            x0: 0,
-            y0: 0,
-            x1: GRID,
-            y1: GRID,
-        })
-        .pad(PAD)
+/// The rectangle to draw, in mm: the padded union of every element's
+/// rectangle, or the region when one is given.
+fn content_rect(resolved: &Resolved, region: Option<&Region>) -> Result<RectMm, Diagnostic> {
+    match region {
+        None => Ok(element_ids(resolved)
+            .iter()
+            .filter_map(|id| element_rect(resolved, id))
+            .reduce(|a, b| a.union(&b))
+            .unwrap_or(RectMm {
+                x0: 0,
+                y0: 0,
+                x1: GRID,
+                y1: GRID,
+            })
+            .pad(PAD)),
+        Some(Region::Id(id)) => match element_rect(resolved, id) {
+            Some(rect) => Ok(rect.pad(CROP_PAD)),
+            None => Err(unknown_element(resolved, id)),
+        },
+        Some(Region::RectMm([x, y, w, h])) => Ok(RectMm {
+            x0: *x,
+            y0: *y,
+            x1: x.saturating_add((*w).max(1)),
+            y1: y.saturating_add((*h).max(1)),
+        }),
+    }
+}
+
+/// E011 for an id that names no room, wall or opening. The suggestion is the
+/// id with the highest Jaro–Winkler score, given when that score is at least
+/// [`SUGGEST_MIN`] (same rule as E001).
+fn unknown_element(resolved: &Resolved, id: &str) -> Diagnostic {
+    let mut best: Option<(f64, String)> = None;
+    for candidate in element_ids(resolved) {
+        let score = jaro_winkler(id, &candidate);
+        if best.as_ref().is_none_or(|(top, _)| score > *top) {
+            best = Some((score, candidate));
+        }
+    }
+    let suggestion = best
+        .filter(|(score, _)| *score >= SUGGEST_MIN)
+        .map(|(_, candidate)| candidate);
+    let mut args = vec![("id", id.to_string())];
+    if let Some(found) = &suggestion {
+        args.push(("suggestion", found.clone()));
+    }
+    Diagnostic {
+        code: Code::E011,
+        severity: Severity::Error,
+        message: message(Code::E011, &args),
+        span: None,
+        refs: vec![id.to_string()],
+        data: json!({ "id": id, "suggestion": suggestion }),
+    }
 }
 
 /// The full SVG document for `vp`.
@@ -386,6 +438,75 @@ mod tests {
             .map(|l| l.id.as_str())
             .collect();
         eprintln!("{} labels overlap: {crowded:?}", crowded.len());
+    }
+
+    fn crop(region: Region) -> Rendered {
+        let opts = RenderOptions {
+            view: View::Labels,
+            region: Some(region),
+            max_tokens: 1600,
+        };
+        render(&fixture_a(), &opts).expect("fixture A crops")
+    }
+
+    #[test]
+    fn crop_hall() {
+        let rendered = crop(Region::Id("Hall".to_string()));
+        let vp = rendered.viewport;
+        assert_eq!(vp.origin_mm, [1381, -600]);
+        assert_eq!(vp.mm_per_px, 2.5);
+        assert_eq!(vp.size_px, [920, 926]);
+        assert!(rendered.labels.iter().any(|l| l.id == "Hall"));
+        // WC's centre (x 4356) is outside the crop (x 1381..3681).
+        assert!(!rendered.labels.iter().any(|l| l.id == "WC"));
+    }
+
+    #[test]
+    fn crop_rect() {
+        let vp = crop(Region::RectMm([0, 0, 1000, 500])).viewport;
+        assert_eq!(vp.origin_mm, [0, 0]);
+        assert_eq!(vp.mm_per_px, 1.0);
+        assert_eq!(vp.size_px, [1000, 500]);
+    }
+
+    #[test]
+    fn crop_rect_small_sides_count_as_one_mm() {
+        let vp = crop(Region::RectMm([10, 20, 0, -5])).viewport;
+        assert_eq!(vp.origin_mm, [10, 20]);
+        assert_eq!(vp.size_px, [1, 1]);
+    }
+
+    fn crop_error(region: Region) -> Diagnostic {
+        let opts = RenderOptions {
+            view: View::Labels,
+            region: Some(region),
+            max_tokens: 1600,
+        };
+        render(&fixture_a(), &opts).expect_err("unknown id")
+    }
+
+    #[test]
+    fn unknown_id_suggests() {
+        let d = crop_error(Region::Id("Hal".to_string()));
+        assert_eq!(d.code, Code::E011);
+        assert_eq!(d.severity, Severity::Error);
+        assert_eq!(
+            d.message,
+            r#"Unknown element "Hal". Did you mean "Hall"? Use a room name, or a wall or opening id from get."#
+        );
+        assert_eq!(d.span, None);
+        assert_eq!(d.refs, vec!["Hal".to_string()]);
+        assert_eq!(d.data["suggestion"], "Hall");
+    }
+
+    #[test]
+    fn unknown_id_no_suggestion() {
+        let d = crop_error(Region::Id("Zzz".to_string()));
+        assert_eq!(
+            d.message,
+            r#"Unknown element "Zzz". Use a room name, or a wall or opening id from get."#
+        );
+        assert!(d.data["suggestion"].is_null());
     }
 
     #[test]

@@ -72,6 +72,9 @@ pub enum Code {
     /// E010: measure between non-parallel faces.
     #[serde(rename = "E010")]
     E010,
+    /// E011: unknown element id in a render region (spec §8, D10).
+    #[serde(rename = "E011")]
+    E011,
     /// E013: door hinge not along its face (spec §9.3, D19).
     #[serde(rename = "E013")]
     E013,
@@ -104,6 +107,7 @@ impl Code {
             Code::E006 => "E006",
             Code::E007 => "E007",
             Code::E010 => "E010",
+            Code::E011 => "E011",
             Code::E013 => "E013",
             Code::W001 => "W001",
             Code::W003 => "W003",
@@ -171,6 +175,14 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             "{from} and {to} are not parallel; measure between two north/south or two east/west faces.",
             args,
         ),
+        Code::E011 => {
+            let base = fill(r#"Unknown element "{id}"."#, args);
+            let suggested = match lookup(args, "suggestion") {
+                Some(s) => format!("{base} Did you mean \"{s}\"?"),
+                None => base,
+            };
+            format!("{suggested} Use a room name, or a wall or opening id from get.")
+        }
         Code::E013 => fill(r#"Hinge "{found}" on {face} must be {a} or {b}."#, args),
         Code::W001 => {
             if lookup(args, "unknown_depth").is_some() {
@@ -402,6 +414,24 @@ mod tests {
         assert_eq!(
             text,
             "Kitchen north and Hall east are not parallel; measure between two north/south or two east/west faces."
+        );
+    }
+
+    #[test]
+    fn e011_with_suggestion() {
+        let text = message(Code::E011, &[arg("id", "Hal"), arg("suggestion", "Hall")]);
+        assert_eq!(
+            text,
+            r#"Unknown element "Hal". Did you mean "Hall"? Use a room name, or a wall or opening id from get."#
+        );
+    }
+
+    #[test]
+    fn e011_without_suggestion_omits_sentence() {
+        let text = message(Code::E011, &[arg("id", "Zzz")]);
+        assert_eq!(
+            text,
+            r#"Unknown element "Zzz". Use a room name, or a wall or opening id from get."#
         );
     }
 

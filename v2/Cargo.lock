@@ -370,6 +370,8 @@ version = "0.1.0"
 dependencies = [
  "plan-core",
  "serde",
+ "serde_json",
+ "strsim",
 ]
 
 [[package]]
