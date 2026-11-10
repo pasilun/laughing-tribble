@@ -21,6 +21,18 @@ const NOTHING_TO_DO: &str = "Nothing to do: the plan resolves with no errors or 
 /// The next steps for a checked plan. `plan` is `None` when the text did not
 /// parse or a name was unknown, so there is no plan to suggest measurements for.
 pub fn next_steps(plan: Option<&Plan>, diagnostics: &[Diagnostic]) -> Vec<String> {
+    next_steps_with_review(plan, diagnostics, &[])
+}
+
+/// The next steps for a checked plan, with the permit `review` findings
+/// (spec §15 D14, D35). After the other steps come one `Tell the user` line per
+/// W030–W033 finding; I030 adds nothing. The fixed "Nothing to do" line is not
+/// used when the review is not empty.
+pub fn next_steps_with_review(
+    plan: Option<&Plan>,
+    diagnostics: &[Diagnostic],
+    review: &[Diagnostic],
+) -> Vec<String> {
     let mut steps = Vec::new();
     let has_error = diagnostics.iter().any(|d| d.severity == Severity::Error);
 
@@ -77,8 +89,13 @@ pub fn next_steps(plan: Option<&Plan>, diagnostics: &[Diagnostic]) -> Vec<String
         }
     }
 
-    // 6. Nothing to say.
-    if steps.is_empty() {
+    // 6. The permit review, for the user to tell the permit applicant.
+    for d in review.iter().filter(|d| d.code != Code::I030) {
+        push(&mut steps, format!("Tell the user: {}", d.message));
+    }
+
+    // 7. Nothing to say.
+    if steps.is_empty() && review.is_empty() {
         steps.push(NOTHING_TO_DO.to_string());
     }
     steps
@@ -222,6 +239,18 @@ room Förråd 800 x 2000 source laser
             )
         };
         assert_eq!(next_steps(None, &[info]), [NOTHING_TO_DO]);
+    }
+
+    #[test]
+    fn review_adds_tell_lines_and_drops_nothing_to_do() {
+        let review = [warning(
+            Code::W030,
+            "Wall A.north is load-bearing and demolished.",
+        )];
+        assert_eq!(
+            next_steps_with_review(None, &[], &review),
+            ["Tell the user: Wall A.north is load-bearing and demolished."]
+        );
     }
 
     #[test]

@@ -365,15 +365,24 @@ impl PlanServer {
                     "plan_id": plan_id,
                     "resolved": false,
                     "diagnostics": ds,
+                    "review": [],
                     "next_steps": steps,
                 }))
             }
             Ok(r) => {
-                let steps = next_steps::next_steps(Some(&r.plan), &r.diagnostics);
+                // The permit review needs a resolved plan (D35); otherwise it is empty.
+                let review = r
+                    .resolved
+                    .as_ref()
+                    .map(plan_core::review)
+                    .unwrap_or_default();
+                let steps =
+                    next_steps::next_steps_with_review(Some(&r.plan), &r.diagnostics, &review);
                 Ok(json!({
                     "plan_id": plan_id,
                     "resolved": r.resolved.is_some(),
                     "diagnostics": r.diagnostics,
+                    "review": review,
                     "next_steps": steps,
                 }))
             }
@@ -413,8 +422,7 @@ impl ServerHandler for PlanServer {
 
 pub const INSTRUCTIONS: &str = "Planstudio keeps floor plans as text (a small DSL of rooms, relations, measurements and openings). Every number comes from the kernel or a laser reading, never from pixels. Working order: check, then get (view dsl) to read the plan, then apply a DSL patch (dry_run first if unsure), then check again. Use render only when you need to see the layout; refer to elements by the ids printed on the render.";
 
-pub const CHECK_DESCRIPTION: &str =
-    "Check a plan. Returns every diagnostic (errors, warnings, info) and what to do next.";
+pub const CHECK_DESCRIPTION: &str = "Check a plan. Returns every diagnostic (errors, warnings, info) and what to do next. \"review\" lists what a permit application will need (load-bearing or fire-rated walls that are demolished or opened).";
 
 pub const GET_DESCRIPTION: &str = "Read a plan: summary (default), dsl (the plan text, to edit with apply) or json (solved faces, walls, openings, diagnostics).";
 
@@ -433,6 +441,7 @@ mod tests {
 
     const FIXTURE_A: &str = include_str!("../../../fixtures/lgh154-a.plan");
     const FIXTURE_B: &str = include_str!("../../../fixtures/lgh154-b.plan");
+    const REVIEW_1: &str = include_str!("../../../fixtures/review-1.plan");
 
     /// A fresh directory holding the given plans as `<id>.plan`.
     fn fixture_root(name: &str, plans: &[(&str, &str)]) -> PathBuf {
@@ -507,6 +516,70 @@ mod tests {
         assert_eq!(steps.len(), 4, "{steps:?}");
         assert!(steps[0].starts_with("Ask the user: Facade not straight:"));
         assert!(steps[1].starts_with("Optional: Gap Hall east_of Garderob 121 mm"));
+    }
+
+    /// A server whose store also holds `review-1` (permit review findings).
+    fn review_server(name: &str) -> PlanServer {
+        let root = fixture_root(
+            name,
+            &[
+                ("lgh154-a", FIXTURE_A),
+                ("lgh154-b", FIXTURE_B),
+                ("review-1", REVIEW_1),
+            ],
+        );
+        PlanServer::new(Store::new(root))
+    }
+
+    fn structured_steps(s: &serde_json::Value) -> Vec<String> {
+        s["next_steps"]
+            .as_array()
+            .expect("next_steps array")
+            .iter()
+            .map(|v| v.as_str().expect("step string").to_string())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn check_review_1_review_and_steps() {
+        let result = review_server("check_review_1")
+            .check(check_args("review-1"))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(false));
+        let s = result.structured_content.expect("structured content");
+        let review = s["review"].as_array().expect("review array");
+        let review_codes: Vec<&str> = review
+            .iter()
+            .map(|d| d["code"].as_str().expect("code string"))
+            .collect();
+        assert_eq!(review_codes, ["W030", "W031", "W032", "I030"]);
+        let tell: Vec<String> = structured_steps(&s)
+            .into_iter()
+            .filter(|step| step.starts_with("Tell the user: "))
+            .collect();
+        assert_eq!(tell.len(), 3, "{tell:?}");
+    }
+
+    #[tokio::test]
+    async fn check_fixture_a_review_is_empty() {
+        let result = server("check_a_review")
+            .check(check_args("lgh154-a"))
+            .await
+            .expect("protocol ok");
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["review"], json!([]));
+        assert_eq!(structured_steps(&s).len(), 4);
+    }
+
+    #[tokio::test]
+    async fn check_fixture_b_review_is_empty() {
+        let result = server("check_b_review")
+            .check(check_args("lgh154-b"))
+            .await
+            .expect("protocol ok");
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["review"], json!([]));
     }
 
     #[tokio::test]
