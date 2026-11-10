@@ -73,7 +73,21 @@ pub fn render_marked(
     opts: &RenderOptions,
     marks: &[Mark],
 ) -> Result<Rendered, Diagnostic> {
-    let content = content_rect(resolved, opts.region.as_ref(), marks)?;
+    render_with(resolved, opts, marks, None, "")
+}
+
+/// [`render_marked`], plus two extras (spec §15 D40, the diff view). `extra_rect`
+/// joins the content rectangle when there is no region. `extra_svg` is drawn
+/// after the marks and before the labels. With neither, the output is the same
+/// as [`render_marked`].
+pub(crate) fn render_with(
+    resolved: &Resolved,
+    opts: &RenderOptions,
+    marks: &[Mark],
+    extra_rect: Option<RectMm>,
+    extra_svg: &str,
+) -> Result<Rendered, Diagnostic> {
+    let content = content_rect(resolved, opts.region.as_ref(), marks, extra_rect)?;
     let viewport = fit(
         [content.x0, content.y0, content.width(), content.height()],
         opts.max_tokens,
@@ -87,7 +101,7 @@ pub fn render_marked(
         &label_requests(resolved, opts.view, &viewport, marks),
         viewport.size_px,
     );
-    let svg = svg_text(resolved, &viewport, &labels, marks);
+    let svg = svg_text(resolved, &viewport, &labels, marks, extra_svg);
     Ok(Rendered {
         svg,
         viewport,
@@ -173,6 +187,7 @@ fn content_rect(
     resolved: &Resolved,
     region: Option<&Region>,
     marks: &[Mark],
+    extra: Option<RectMm>,
 ) -> Result<RectMm, Diagnostic> {
     match region {
         None => Ok(element_ids(resolved)
@@ -184,6 +199,7 @@ fn content_rect(
                 x1: m.from[0].max(m.to[0]),
                 y1: m.from[1].max(m.to[1]),
             }))
+            .chain(extra)
             .reduce(|a, b| a.union(&b))
             .unwrap_or(RectMm {
                 x0: 0,
@@ -234,7 +250,13 @@ fn unknown_element(resolved: &Resolved, id: &str) -> Diagnostic {
 }
 
 /// The full SVG document for `vp`.
-fn svg_text(resolved: &Resolved, vp: &Viewport, labels: &[PlacedLabel], marks: &[Mark]) -> String {
+fn svg_text(
+    resolved: &Resolved,
+    vp: &Viewport,
+    labels: &[PlacedLabel],
+    marks: &[Mark],
+    extra_svg: &str,
+) -> String {
     let mpp = vp.mm_per_px;
     let [ox, oy] = vp.origin_mm;
     let [w, h] = vp.size_px;
@@ -281,6 +303,10 @@ fn svg_text(resolved: &Resolved, vp: &Viewport, labels: &[PlacedLabel], marks: &
     out.push('\n');
     if !marks.is_empty() {
         out.push_str(&marks_group(marks, vp));
+        out.push('\n');
+    }
+    if !extra_svg.is_empty() {
+        out.push_str(extra_svg);
         out.push('\n');
     }
     out.push_str(&labels_group_marked(labels, vp, marks));

@@ -11,7 +11,9 @@
 //! - `plan suggest <file>`: print each W001 (loose room) with its suggested
 //!   measurement, one per line.
 //! - `plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N]
-//!   [--region ID | --rect x,y,w,h]`: write the PNG and print its viewport as JSON.
+//!   [--region ID | --rect x,y,w,h] [--diff BEFORE]`: write the PNG and print its viewport
+//!   as JSON (with `--diff`, the plan view of the file with the differences from BEFORE
+//!   drawn on top, and a `diff` object of counts).
 //! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]`:
 //!   write the sheet as a PDF and print its paper, scale and byte count as JSON.
 //! - `plan --version`.
@@ -38,12 +40,12 @@ const USAGE: &str = "usage:
   plan solve --json <file>
   plan fmt <file> [--write]
   plan svg <file> [--out path]
-  plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h]
+  plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]
   plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]
   plan --version";
 
 /// Usage line of `plan png`, printed on its own to stderr (exit 2).
-const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h]";
+const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]";
 
 /// Usage line of `plan pdf`, printed on its own to stderr (exit 2).
 const PDF_USAGE: &str =
@@ -255,9 +257,10 @@ struct PngArgs<'a> {
     view: View,
     max_tokens: u32,
     region: Option<Region>,
+    diff: Option<&'a str>,
 }
 
-/// Parse `FILE -o OUT [--view V] [--max-tokens N] [--region ID | --rect x,y,w,h]`.
+/// Parse `FILE -o OUT [--view V] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]`.
 /// `None` is a usage error: a missing file or `-o`, an unknown option, a bad
 /// value, or both `--region` and `--rect`.
 fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
@@ -267,6 +270,7 @@ fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
     let mut max_tokens = DEFAULT_TOKENS;
     let mut region = None;
     let mut rect = None;
+    let mut diff = None;
     for pair in rest.chunks(2) {
         let [flag, value] = pair else {
             return None;
@@ -283,6 +287,7 @@ fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
             "--max-tokens" => max_tokens = value.parse().ok()?,
             "--region" => region = Some(Region::Id((*value).to_string())),
             "--rect" => rect = Some(Region::RectMm(parse_rect(value)?)),
+            "--diff" => diff = Some(*value),
             _ => return None,
         }
     }
@@ -295,6 +300,7 @@ fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
         view,
         max_tokens,
         region: region.or(rect),
+        diff,
     })
 }
 
@@ -310,32 +316,57 @@ fn parse_rect(text: &str) -> Option<[i64; 4]> {
     parts.next().is_none().then_some(rect)
 }
 
-/// `plan png`: render the plan to `-o`, and print the viewport as one line of JSON.
-/// A plan that does not resolve prints its Error diagnostics and exits 1; so does a
-/// render that fails (an unknown region id).
-fn png_command(words: &[&str]) -> Result<ExitCode, String> {
-    let Some(args) = png_args(words) else {
-        eprintln!("{PNG_USAGE}");
-        return Ok(ExitCode::from(2));
-    };
-    let (_, src) = read_source(args.file)?;
+/// Resolve the file of `plan png`. Its Error diagnostics are printed when it does
+/// not resolve, and `None` is returned.
+fn png_resolve(file: &str) -> Result<Option<Resolved>, String> {
+    let (_, src) = read_source(file)?;
     let (resolved, diagnostics) = solve_source(&src);
-    let Some(resolved) = resolved else {
+    if resolved.is_none() {
         for diagnostic in diagnostics
             .iter()
             .filter(|diagnostic| diagnostic.severity == Severity::Error)
         {
             out(&describe(diagnostic));
         }
+    }
+    Ok(resolved)
+}
+
+/// `plan png`: render the plan to `-o`, and print the viewport as one line of JSON.
+/// A plan that does not resolve prints its Error diagnostics and exits 1; so does a
+/// render that fails (an unknown region id). With `--diff BEFORE` the plan view is
+/// drawn with the differences from BEFORE, and the JSON gains a `diff` object.
+fn png_command(words: &[&str]) -> Result<ExitCode, String> {
+    let Some(args) = png_args(words) else {
+        eprintln!("{PNG_USAGE}");
+        return Ok(ExitCode::from(2));
+    };
+    let Some(resolved) = png_resolve(args.file)? else {
         return Ok(ExitCode::from(1));
     };
+    let before = match args.diff {
+        Some(file) => match png_resolve(file)? {
+            Some(before) => Some(before),
+            None => return Ok(ExitCode::from(1)),
+        },
+        None => None,
+    };
     let options = RenderOptions {
-        view: args.view,
+        view: if before.is_some() {
+            View::Plan
+        } else {
+            args.view
+        },
         region: args.region,
         max_tokens: args.max_tokens,
     };
-    let rendered = match plan_render::render(&resolved, &options) {
-        Ok(rendered) => rendered,
+    let rendered = match before {
+        Some(before) => plan_render::render_diff(&before, &resolved, &options)
+            .map(|(rendered, counts)| (rendered, Some(counts))),
+        None => plan_render::render(&resolved, &options).map(|rendered| (rendered, None)),
+    };
+    let (rendered, counts) = match rendered {
+        Ok(pair) => pair,
         Err(diagnostic) => {
             out(&describe(&diagnostic));
             return Ok(ExitCode::from(1));
@@ -349,7 +380,13 @@ fn png_command(words: &[&str]) -> Result<ExitCode, String> {
         }
     };
     fs::write(args.out, bytes).map_err(|error| format!("cannot write {}: {error}", args.out))?;
-    let line = serde_json::to_string(&rendered.viewport).map_err(|error| error.to_string())?;
+    // The viewport's own JSON (fields in struct order), with `diff` appended.
+    let mut line = serde_json::to_string(&rendered.viewport).map_err(|error| error.to_string())?;
+    if let Some(counts) = counts {
+        let diff = serde_json::to_string(&counts).map_err(|error| error.to_string())?;
+        line.pop();
+        line.push_str(&format!(r#","diff":{diff}}}"#));
+    }
     out(&line);
     Ok(ExitCode::SUCCESS)
 }

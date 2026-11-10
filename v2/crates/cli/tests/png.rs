@@ -68,6 +68,29 @@ fn plan_that_does_not_resolve_exits_1() {
 }
 
 #[test]
+fn diff_writes_png_and_counts() {
+    let before = out_path("png-diff-before.plan");
+    let after = out_path("png-diff-after.plan");
+    let source = std::fs::read_to_string(fixture("lgh154-a.plan")).expect("fixture A");
+    std::fs::write(&before, &source).expect("write before");
+    let changed = source.replace(
+        "room WC 2370 x 990 source laser",
+        "room WC 2370 x 1200 source laser",
+    );
+    std::fs::write(&after, changed).expect("write after");
+
+    let out = out_path("png-diff.png");
+    let output = plan(&["png", &after, "-o", &out, "--diff", &before]);
+    assert_eq!(code(&output), 0);
+    let bytes = std::fs::read(&out).expect("png written");
+    assert!(bytes.starts_with(b"\x89PNG"));
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("stdout is JSON");
+    let diff = value["diff"].as_object().expect("diff object");
+    assert!(diff["changed"].as_u64().expect("changed") > 0);
+    assert!(value["tokens"].as_u64().expect("tokens") <= 1600);
+}
+
+#[test]
 fn region_and_rect_together_exit_2() {
     let out = out_path("png-both.png");
     let output = plan(&[

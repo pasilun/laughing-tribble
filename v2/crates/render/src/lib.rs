@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 mod corners;
+pub mod diff;
 pub mod labels;
 pub mod marks;
 pub mod pdf;
@@ -15,6 +16,7 @@ pub mod sheet;
 pub mod svg;
 pub mod viewport;
 
+pub use diff::{DiffCounts, render_diff};
 pub use labels::{LabelReq, PlacedLabel, place};
 pub use marks::{Mark, MarkKind};
 pub use pdf::pdf;
