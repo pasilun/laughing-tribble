@@ -83,6 +83,10 @@ pub fn conflict_diagnostic(check: &CycleCheck, edges: &[Edge]) -> Option<Diagnos
             "chain_a": chain_data(&chain_a),
             "chain_b": chain_data(&chain_b),
             "suggestions": suggestions,
+            "from": face_text(&stated.from),
+            "to": face_text(&stated.to),
+            "stated": stated.value,
+            "implied": stated.value - check.residual,
         }),
     })
 }
@@ -325,6 +329,38 @@ mod tests {
                 {"change_wall": {"from": 90, "to": 40}}
             ])
         );
+    }
+
+    #[test]
+    fn fixture_b_e003_names_the_stated_faces_and_values() {
+        let (edge_list, found) = fixture_b_checks();
+        let check = found
+            .iter()
+            .find(|c| c.conflict)
+            .expect("fixture B conflicts");
+        let diagnostic = conflict_diagnostic(check, &edge_list).expect("E003");
+        assert_eq!(diagnostic.data["from"], "Garderob.north");
+        assert_eq!(diagnostic.data["to"], "Sovrum.south");
+        assert_eq!(diagnostic.data["stated"], 4490);
+        assert_eq!(diagnostic.data["implied"], 4540);
+    }
+
+    #[test]
+    fn fixture_c_e003_names_the_stated_faces_and_values() {
+        let plan = parse(FIXTURE_C).expect("fixture C parses");
+        let (edge_list, _) = edges(&plan);
+        let (comps, _) = components(&edge_list, &plan, Axis::Y);
+        let (coords, tree) = assign_coords(&edge_list, &comps, Axis::Y);
+        let found = check_cycles(&edge_list, &coords, &tree, Axis::Y);
+        let check = found
+            .iter()
+            .find(|c| c.conflict)
+            .expect("fixture C conflicts");
+        let diagnostic = conflict_diagnostic(check, &edge_list).expect("E003");
+        assert_eq!(diagnostic.data["from"], "Sovrum.south");
+        assert_eq!(diagnostic.data["to"], "Vardagsrum.south");
+        assert_eq!(diagnostic.data["stated"], 0);
+        assert_eq!(diagnostic.data["implied"], 53);
     }
 
     #[test]
