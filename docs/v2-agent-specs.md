@@ -327,7 +327,7 @@ align       = INDENT? "align" side NAME { NAME } ;     (* indented: last room is
 measure     = "measure" face "to" face "=" INT [ src ] [ "reference" ] ;
 opening     = ("door" | "window" | "passage") face "at" INT "width" INT [ "height" INT ]
               [ "hinge" side ] [ "opens" NAME ] [ src ] [ phase ] ;
-wall        = "wall" face "thickness" INT [ src ] ;
+wall        = "wall" face [ "thickness" INT [ src ] ] [ "bearing" ] [ "fire" STRING ] [ phase ] ;   (* at least one part; §15 D34 *)
 face        = NAME "." side ;
 side        = "north" | "east" | "south" | "west" ;
 qty         = INT [ src ] ;
@@ -519,8 +519,20 @@ pub struct Diagnostic {
 | E022 | Error | Render view not available yet | `View "{view}" is not available yet; use "plan" or "labels".` |
 | E023 | Error | Plan file read or write failed (MCP) | `Could not {action} plan "{id}": {reason}.` |
 | I020 | Info | Measurement suggested (not in `check` output; `plan suggest` and MCP next steps only) | `{what} {value} mm has source {source} (±{tol} mm); measure {from} to {to} with the laser.` |
+| E014 | Error | Size below 1 mm | `{what} is {value} mm; it must be at least 1 mm.` |
+| E015 | Error | Relation of a room to itself | `"{subject} {relation} {of}" relates a room to itself.` |
+| E016 | Error | Openings overlap in one wall | `Openings {a} and {b} overlap by {d} mm on wall {wall}.` |
+| E017 | Error | Door opens into a room not at its wall | `Door on {face} cannot open into "{room}"; use {options}.` |
+| E018 | Error | Plan does not fit the sheet | `Plan does not fit on {paper} at 1:{scale}.{ Use 1:{fit}.}` |
+| W030 | Warning | Review: load-bearing wall demolished | `Wall {id} is load-bearing and is demolished; this needs a structural engineer's drawings and calculation.` |
+| W031 | Warning | Review: fire-cell boundary demolished | `Wall {id} is a fire-cell boundary ({fire}) and is demolished; a fire protection description is required.` |
+| W032 | Warning | Review: new opening in a load-bearing wall | `{kind} {id} is new and sits in load-bearing wall {wall}; this needs a structural engineer's statement.` |
+| W033 | Warning | Review: new opening in a fire-cell boundary | `{kind} {id} is new and sits in fire-cell boundary {wall} ({fire}); a fire protection description is required.` |
+| I030 | Info | Review: new opening without height | `{kind} {id} is new and has no height; add "height <mm>" if the engineer needs it.` |
 
 Codes E011–E023 (E013 added in D19) and I020 were added by the spec run of 2026-11-09 (§15 D10, D13, D17, D8).
+
+Codes E014–E018, W030–W033 and I030 were added by the spec run of 2026-11-10 (§15 D26, D31, D35). W030–W033 and I030 come from `review`, never from `resolve`. W005 and W020 are emitted from week three on (cards W3-06, W3-07).
 
 ---
 
@@ -815,3 +827,18 @@ Decisions taken by the spec runs where the sections above left a choice open. Ea
 - **D22. Refs on diagnostics.** `Diagnostic.refs` holds semantic ids, one meaning per code: I010 has the wall id, `["W:Garderob.east|Vardagsrum.west"]`; W003 has the two faces as `<Room>.<side>` strings, `["Sovrum.south","Vardagsrum.south"]`; E001/E002/E004/E007/E013 have the room, face or opening id they are about; E003 has the faces at the two ends of the cycle. `diagnose.rs` stores the wall id for I010 (not the two room names). `solve --json` writes `refs` only when the list is non-empty.
 - **D23. W004 shows the coordinates actually drawn.** `adjusted` and W004 report `coords_out[to] − coords_out[from]` (the rounded coordinates the solver writes), and an edge is listed only when that differs from its stated value. An edge whose drawn value equals the stated one is not listed even if the unrounded solution moved it. The expected text of the W1-14 test was updated accordingly (card W2-R1-f2 authorises that single edit).
 
+**Spec run 2026-11-10 (week-three cards, after an audit of the kernel by the spec owner):**
+
+- **D24. Unknown size, not tied.** A room whose two faces on an axis are in different components (a `?` size that nothing else fixes) is left out of the build: no rectangle, walls, area or openings. Its W001 stays. Before, it was drawn with zero size and a 0 mm wall. A sized room that is merely not tied is still drawn where it was. Card W3-03.
+- **D25. W020 threshold.** A reference measure is reported only when the drawn distance differs from it by more than the measure's own tolerance. Card W3-06.
+- **D26. Validation before solving.** `validate(plan)` runs first in `resolve`: sizes, opening widths, wall thicknesses and the default walls must be at least 1 mm (E014), and a placement relation may not relate a room to itself (E015). Overlapping openings in one wall are E016 and a door that opens into a room not at its wall is E017, both from `place_openings`. Cards W3-02, W3-08, W3-09.
+- **D27. E005 skips loose rooms.** Overlap is checked for pairs of placed rooms only; a room in a loose component (it has a W001) is not compared, so one missing relation is not reported twice. Card W3-04.
+- **D28. Corners are closed in the drawing, not in the model.** Outer walls on north and south faces are drawn longer by the thickness of the adjoining east or west outer wall of the same room. Wall ids, nodes, extents and the expected JSON do not change. This replaces the "extend both rectangles" wording of §9.4 for now; mitred joints wait for the editor. Card W3-12.
+- **D29. Door swing.** A hinged door is drawn as its leaf (perpendicular to the wall, from the hinge, into the room named by `opens`, default the door's own room) and a quarter circle to the other jamb, on the wall face of that room. Card W3-13.
+- **D30. Very large plans.** A span of 1 000 km fails to rasterise (grid density). Not fixed: no real plan is that large, and E012 is a clear answer.
+- **D31. Sheets.** Landscape A4 or A3, 10 mm margin, a 15 mm title strip, scales 1:20, 25, 50, 100, 200, 500, 1000 (the first that fits, or the one asked for; E018 when it does not fit). Room names, areas and clear sizes are printed; element ids are not. Texts are English for now; Swedish sheet texts and a full title block (property, applicant, drawing number) come with the permit work. Card W3-14.
+- **D32. PDF.** `svg2pdf` 0.13 on the sheet SVG, with DejaVu Sans embedded and `PageOptions { dpi: 96.0 }` so the page is the true paper size. Compiled and run by the spec owner (A3 page, 1190.55 × 841.89 pt, selectable text). Cards W3-15, W3-16.
+- **D33. MCP `export`.** A fifth tool writes `<root>/exports/<plan_id>.pdf` and returns the path, paper and scale. The file is not returned inline: MCP clients handle a path better than a base64 PDF. DXF export is dropped from the plan (maintainer, 2026-11-10). Card W3-17.
+- **D34. Wall attributes.** `wall FACE [thickness N [src]] [bearing] [fire "EI60"] [demolish|new]`. The attributes apply to every wall segment made from that face, and to an interior wall when either of its two faces has them. Thickness still only affects outer walls (interior thickness is the relation's gap). This is the part of §13 "phases on walls" that the permit review needs; free-standing walls stay deferred. Cards W3-18…20.
+- **D35. Permit review.** `review(resolved)` ports the v1 checks the v2 model can express (load-bearing, fire, opening height) as W030–W033 and I030. It is separate from `resolve`: `plan review`, and a `review` list in MCP `check`. The other v1 checks (title block, property name, kitchen plugs, ventilation, room names) need a title block and fixtures, which v2 does not have yet. Cards W3-21…23.
+- **D36. Order of work (maintainer, 2026-11-10).** No DXF. The desktop editor, accounts and sharing, and the mobile viewer (which needs share links) come last. The order is kept in `v2/ROADMAP.md`, which replaces `docs/v2-week1-pro.md` §8 for the spec runs.

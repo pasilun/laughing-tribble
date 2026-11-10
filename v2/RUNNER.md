@@ -61,7 +61,7 @@ Never:
 2. **Unblock.** For every `blocked` card: read its reason and the run logs. Either rewrite the card smaller with pseudo-code, or split it, and set it back to `ready` with `attempts: 0`.
 3. **Refill.** If fewer than 6 cards are ready or will become ready when current cards finish:
    - write the next batch of 15–25 cards, following the format of the existing cards;
-   - follow the order in `docs/v2-week1-pro.md` §8 (week 2: MCP server over the core, PNG renders sized for Claude with labels, weighted least squares from the agent specs P1-08; then week 3, and so on);
+   - follow the order in `v2/ROADMAP.md`, and tick off what is done there;
    - for each card give exact inputs, outputs, files, spec references and a test that proves it done;
    - add pseudo-code for anything a Haiku-class model would otherwise have to design;
    - add a reviewer checkpoint card after every 5–7 cards.
