@@ -21,7 +21,7 @@ use std::process::ExitCode;
 
 use plan_core::solve::components::suggested_w001;
 use plan_core::solve::edges;
-use plan_core::{Diagnostic, Resolved, Severity, dsl, resolve, solve_json};
+use plan_core::{Diagnostic, Resolved, Severity, dsl, load, solve_json};
 
 const USAGE: &str = "usage:
   plan check <file>
@@ -142,9 +142,9 @@ fn svg(file: &str, out: Option<&str>) -> Result<ExitCode, String> {
 
 /// Parse and resolve DSL text. A parse error comes back as the only diagnostic.
 fn solve_source(src: &str) -> (Option<Resolved>, Vec<Diagnostic>) {
-    match dsl::parse(src) {
-        Ok(plan) => resolve(&plan),
-        Err(diagnostic) => (None, vec![diagnostic]),
+    match load(src) {
+        Ok(loaded) => (loaded.resolved, loaded.diagnostics),
+        Err(diagnostics) => (None, diagnostics),
     }
 }
 
