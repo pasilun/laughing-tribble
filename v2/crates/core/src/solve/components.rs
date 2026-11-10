@@ -389,10 +389,11 @@ pub fn suggested_w001(edges: &[Edge], plan: &Plan) -> Vec<Diagnostic> {
     out
 }
 
-/// The W001 of [`components`] with its `data` filled in as [`suggested_w001`]
-/// does (the W2-09 keys). The message is left as [`components`] wrote it, so
-/// the text of `resolve`'s W001 does not change. `comps` are the components of
-/// `axis` and `diagnostic` is one of their W001s.
+/// The W001 of [`components`] filled in as [`suggested_w001`] does: the message
+/// with the measurement (D5) and the `data` with the W2-09 keys. `resolve`
+/// reports this, so its text matches `plan suggest`. `comps` are the components
+/// of `axis` and `diagnostic` is one of their W001s. A depth-unknown W001, or
+/// one with no candidate, comes back unchanged.
 pub fn with_suggested_data(
     edges: &[Edge],
     plan: &Plan,
@@ -400,11 +401,7 @@ pub fn with_suggested_data(
     comps: &[Component],
     diagnostic: Diagnostic,
 ) -> Diagnostic {
-    let suggested = suggest_one(edges, plan, axis, comps, diagnostic.clone());
-    Diagnostic {
-        data: suggested.data,
-        ..diagnostic
-    }
+    suggest_one(edges, plan, axis, comps, diagnostic)
 }
 
 /// Fill in one W001 from `comps` (the components of `axis`).
@@ -567,6 +564,26 @@ mod tests {
         assert_eq!(
             w001.message,
             r#"Not tied east–west: C. Measure from {from} to {to}, or add "C {relation} {of} gap {gap}"."#
+        );
+    }
+
+    #[test]
+    fn resolve_reports_the_filled_w001_text_for_unrelated_rooms() {
+        let plan = parse("room A 2000 x 1000 source laser\nroom B 1500 x 1000 source laser\n")
+            .expect("parse");
+        let (resolved, diagnostics) = crate::resolved::resolve(&plan);
+        assert!(resolved.is_some(), "{diagnostics:?}");
+        let texts: Vec<&str> = diagnostics
+            .iter()
+            .filter(|d| d.code == Code::W001)
+            .map(|d| d.message.as_str())
+            .collect();
+        assert_eq!(
+            texts,
+            vec![
+                r#"Not tied east–west: B. Measure from A.east to B.west, or add "B east_of A gap 90"."#,
+                r#"Not tied north–south: B. Measure from A.south to B.north, or add "B south_of A gap 90"."#,
+            ]
         );
     }
 
