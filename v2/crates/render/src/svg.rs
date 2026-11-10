@@ -256,8 +256,9 @@ fn opening_element(opening: &ResolvedOpening, resolved: &Resolved, stroke: f64) 
         OpeningKind::Passage => "#2a9d4b",
     };
     let label = id_label(&opening.id, cx, cy, !horizontal);
+    let swing = swing_path(opening, (lo, hi), colour, stroke);
     format!(
-        r##"<g class="opening" data-id="{id}"><rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" fill="#ffffff"/><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke}"/>{label}</g>"##,
+        r##"<g class="opening" data-id="{id}"><rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" fill="#ffffff"/><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke}"/>{swing}{label}</g>"##,
         id = escape(&opening.id),
         gx = gap.0,
         gy = gap.1,
@@ -267,6 +268,50 @@ fn opening_element(opening: &ResolvedOpening, resolved: &Resolved, stroke: f64) 
         y1 = line.1,
         x2 = line.2,
         y2 = line.3,
+    )
+}
+
+/// The leaf and swing arc of a hinged door (spec §9.3, D29). Empty for
+/// windows, passages and doors without a hinge.
+///
+/// `wall` is the wall's extent across its thickness, `(lo, hi)`.
+fn swing_path(opening: &ResolvedOpening, wall: (Mm, Mm), colour: &str, stroke: f64) -> String {
+    if !matches!(opening.kind, OpeningKind::Door) {
+        return String::new();
+    }
+    let Some(hinge) = opening.hinge else {
+        return String::new();
+    };
+    let (lo, hi) = wall;
+    let (start, end) = (opening.start, opening.end);
+    let w = end - start;
+    let side = opening.face.side;
+    let room = &opening.face.room;
+    let target = opening.opens_into.as_ref().unwrap_or(room);
+    let inward = target == room;
+    let horizontal = matches!(side, Side::North | Side::South);
+    let positive = matches!(side, Side::South | Side::East);
+    // The face line on the target room's side of the wall.
+    let c = if positive == inward { lo } else { hi };
+    // The leaf direction, away from the wall into the target room.
+    let s = if positive == inward { -1 } else { 1 };
+    // The hinge end of the face, and the other jamb.
+    let hinge_at_end = matches!(hinge, Side::East | Side::South);
+    let (a, b) = if hinge_at_end {
+        (end, start)
+    } else {
+        (start, end)
+    };
+    let ((hx, hy), (lx, ly), (jx, jy)) = if horizontal {
+        ((a, c), (a, c + s * w), (b, c))
+    } else {
+        ((c, a), (c + s * w, a), (c, b))
+    };
+    let cross = (lx - hx) * (jy - hy) - (ly - hy) * (jx - hx);
+    let sweep = u8::from(cross > 0);
+    format!(
+        r##"<path d="M {hx} {hy} L {lx} {ly} A {w} {w} 0 0 {sweep} {jx} {jy}" fill="none" stroke="{colour}" stroke-width="{}"/>"##,
+        stroke / 2.0,
     )
 }
 
@@ -420,5 +465,30 @@ mod tests {
     #[test]
     fn output_is_deterministic() {
         assert_eq!(fixture_a_svg(), fixture_a_svg());
+    }
+
+    #[test]
+    fn hinged_door_has_leaf_and_swing_arc() {
+        let svg = fixture_a_svg();
+        assert!(
+            svg.contains(r##"<path d="M 3081 690 L 2631 690 A 450 450 0 0 1 3081 240""##),
+            "{svg}"
+        );
+        // Fixture A has one hinged door and no other arcs.
+        assert_eq!(svg.matches("<path ").count(), 1);
+    }
+
+    #[test]
+    fn swing_arc_into_its_own_room() {
+        let plan = parse("plan \"A\"\nroom A 3000 x 2000 source laser\ndoor A.north at 500 width 900 hinge west opens A\n")
+            .expect("parses");
+        let (resolved, diagnostics) = resolve(&plan);
+        let resolved = resolved.expect("resolves");
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let svg = plan_svg(&resolved);
+        assert!(
+            svg.contains(r##"<path d="M 500 0 L 500 900 A 900 900 0 0 0 1400 0""##),
+            "{svg}"
+        );
     }
 }
