@@ -19,6 +19,8 @@ workspace = true
 
 [dependencies]
 plan-core = { path = "../core" }
+plan-render = { path = "../render" }
+base64 = "0.23"
 rmcp = { version = "=3.9.0", features = ["server", "transport-io", "macros"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }
 serde = { version = "1", features = ["derive"] }

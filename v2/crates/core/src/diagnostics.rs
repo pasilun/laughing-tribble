@@ -87,6 +87,9 @@ pub enum Code {
     /// E021: invalid plan id (MCP).
     #[serde(rename = "E021")]
     E021,
+    /// E022: render view not available yet (MCP, D17).
+    #[serde(rename = "E022")]
+    E022,
     /// E023: plan file read or write failed (MCP).
     #[serde(rename = "E023")]
     E023,
@@ -124,6 +127,7 @@ impl Code {
             Code::E013 => "E013",
             Code::E020 => "E020",
             Code::E021 => "E021",
+            Code::E022 => "E022",
             Code::E023 => "E023",
             Code::W001 => "W001",
             Code::W003 => "W003",
@@ -204,6 +208,10 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
         Code::E020 => fill(r#"Unknown plan "{id}". Create it with apply."#, args),
         Code::E021 => fill(
             r#"Invalid plan_id "{id}": use 1 to 64 letters, digits, "-" or "_"."#,
+            args,
+        ),
+        Code::E022 => fill(
+            r#"View "{view}" is not available yet; use "plan" or "labels"."#,
             args,
         ),
         Code::E023 => fill(r#"Could not {action} plan "{id}": {reason}."#, args),
@@ -504,6 +512,15 @@ mod tests {
         assert_eq!(
             text,
             r#"Invalid plan_id "../etc": use 1 to 64 letters, digits, "-" or "_"."#
+        );
+    }
+
+    #[test]
+    fn e022_exact_wording() {
+        let text = message(Code::E022, &[arg("view", "conflicts")]);
+        assert_eq!(
+            text,
+            r#"View "conflicts" is not available yet; use "plan" or "labels"."#
         );
     }
 

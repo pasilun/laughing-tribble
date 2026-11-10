@@ -889,7 +889,9 @@ dependencies = [
 name = "plan-server"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "plan-core",
+ "plan-render",
  "rmcp",
  "schemars",
  "serde",

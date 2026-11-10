@@ -7,11 +7,13 @@ mod store;
 
 pub use store::Store;
 
-use plan_core::{Code, Diagnostic, Severity};
+use base64::Engine;
+use plan_core::{Code, Diagnostic, Severity, message};
+use plan_render::{Region, RenderOptions, View as PlanView};
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::{CallToolResult, Implementation, ServerCapabilities, ServerConfig},
+    model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerConfig},
     tool, tool_handler, tool_router,
 };
 use serde_json::json;
@@ -63,6 +65,60 @@ pub struct ApplyArgs {
     pub dry_run: bool,
 }
 
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum RenderView {
+    Plan,
+    #[default]
+    Labels,
+    Conflicts,
+    Missing,
+    Diff,
+    Overlay,
+}
+
+impl RenderView {
+    /// The view's name as the client writes it, for example `"conflicts"`.
+    fn name(&self) -> &'static str {
+        match self {
+            RenderView::Plan => "plan",
+            RenderView::Labels => "labels",
+            RenderView::Conflicts => "conflicts",
+            RenderView::Missing => "missing",
+            RenderView::Diff => "diff",
+            RenderView::Overlay => "overlay",
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(untagged)]
+pub enum RegionArg {
+    /// Crop around one element: a room name, or a wall or opening id.
+    Id { id: String },
+    /// Crop to [x, y, w, h] in mm (x east, y south).
+    Rect { rect_mm: [i64; 4] },
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct RenderArgs {
+    /// The plan: a file name under the server's root, without `.plan`.
+    pub plan_id: String,
+    /// labels (default): every room, wall and opening labelled with its id; plan: room names only.
+    #[serde(default)]
+    pub view: RenderView,
+    /// Optional crop. Leave out for the whole plan.
+    #[serde(default)]
+    pub region: Option<RegionArg>,
+    /// Image token budget, at most 4784. Default 1600.
+    #[serde(default = "default_tokens")]
+    pub max_tokens: u32,
+}
+
+fn default_tokens() -> u32 {
+    plan_render::viewport::DEFAULT_TOKENS
+}
+
 #[derive(Debug, Clone)]
 pub struct PlanServer {
     store: Store,
@@ -100,6 +156,71 @@ impl PlanServer {
         Parameters(args): Parameters<ApplyArgs>,
     ) -> Result<CallToolResult, McpError> {
         Ok(tool_result(self.apply_value(&args)))
+    }
+
+    #[tool(name = "render", description = RENDER_DESCRIPTION, annotations(read_only_hint = true))]
+    pub async fn render(
+        &self,
+        Parameters(args): Parameters<RenderArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        Ok(self
+            .render_value(&args)
+            .unwrap_or_else(|ds| CallToolResult::structured_error(json!({ "diagnostics": ds }))))
+    }
+
+    /// Tool errors (`Err`) are E022 (view not yet drawn), the plan errors of
+    /// `check` (E020, E021, E006, E003 and so on, when the plan does not resolve)
+    /// and render errors (E011, E012).
+    fn render_value(&self, args: &RenderArgs) -> Result<CallToolResult, Vec<Diagnostic>> {
+        let view = match args.view {
+            RenderView::Plan => PlanView::Plan,
+            RenderView::Labels => PlanView::Labels,
+            _ => return Err(vec![e022(&args.view)]),
+        };
+        let text = self.store.load(&args.plan_id).map_err(|d| vec![d])?;
+        let loaded = plan_core::load(&text)?;
+        let Some(resolved) = loaded.resolved else {
+            let errors = loaded
+                .diagnostics
+                .into_iter()
+                .filter(|d| matches!(d.severity, Severity::Error))
+                .collect();
+            return Err(errors);
+        };
+
+        let opts = RenderOptions {
+            view,
+            region: args.region.as_ref().map(|r| match r {
+                RegionArg::Id { id } => Region::Id(id.clone()),
+                RegionArg::Rect { rect_mm } => Region::RectMm(*rect_mm),
+            }),
+            max_tokens: args.max_tokens,
+        };
+        let rendered = plan_render::render(&resolved, &opts).map_err(|d| vec![d])?;
+        let bytes = plan_render::png(&rendered).map_err(|d| vec![d])?;
+
+        let vp = rendered.viewport;
+        let labels: Vec<serde_json::Value> = rendered
+            .labels
+            .iter()
+            .map(|l| json!({ "id": l.id, "center_px": l.center_px }))
+            .collect();
+        let meta = json!({
+            "plan_id": args.plan_id,
+            "view": args.view.name(),
+            "mm_per_px": vp.mm_per_px,
+            "origin_mm": vp.origin_mm,
+            "size_px": vp.size_px,
+            "tokens": vp.tokens,
+            "labels": labels,
+        });
+        let data = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        let mut result = CallToolResult::success(vec![
+            ContentBlock::image(data, "image/png"),
+            ContentBlock::text(meta.to_string()),
+        ]);
+        result.structured_content = Some(meta);
+        Ok(result)
     }
 
     /// Tool errors (`Err`) are E021, E023 and E006 (a stored file that does not parse).
@@ -178,6 +299,19 @@ impl PlanServer {
     }
 }
 
+/// E022 for a view that is accepted by the schema but not drawn yet (D17).
+fn e022(view: &RenderView) -> Diagnostic {
+    let name = view.name();
+    Diagnostic {
+        code: Code::E022,
+        severity: Severity::Error,
+        message: message(Code::E022, &[("view", name.to_string())]),
+        span: None,
+        refs: Vec::new(),
+        data: json!({ "view": name }),
+    }
+}
+
 fn tool_result(v: Result<serde_json::Value, Vec<Diagnostic>>) -> CallToolResult {
     match v {
         Ok(v) => CallToolResult::structured(v),
@@ -201,6 +335,8 @@ pub const CHECK_DESCRIPTION: &str =
     "Check a plan. Returns every diagnostic (errors, warnings, info) and what to do next.";
 
 pub const GET_DESCRIPTION: &str = "Read a plan: summary (default), dsl (the plan text, to edit with apply) or json (solved faces, walls, openings, diagnostics).";
+
+pub const RENDER_DESCRIPTION: &str = "Draw a plan as a PNG sized for you, with ids on every element. Use it to judge the layout, not to measure: numbers come from get and check. Crop with region (an id or a mm rectangle) to see detail.";
 
 pub const APPLY_DESCRIPTION: &str = "Change a plan with a DSL patch. All or nothing: if any error results, nothing changes. Statements replace the statement with the same key (room by name, relation by subject, kind and room, measure by its faces, opening by face and position). Use dry_run to preview.";
 
@@ -560,6 +696,117 @@ mod tests {
         assert_eq!(s["diagnostics"][0]["code"], "E021");
     }
 
+    fn render_args(
+        plan_id: &str,
+        view: RenderView,
+        region: Option<RegionArg>,
+    ) -> Parameters<RenderArgs> {
+        Parameters(RenderArgs {
+            plan_id: plan_id.into(),
+            view,
+            region,
+            max_tokens: default_tokens(),
+        })
+    }
+
+    #[tokio::test]
+    async fn render_fixture_a() {
+        use base64::Engine;
+        let result = server("render_a")
+            .render(render_args("lgh154-a", RenderView::Labels, None))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(false));
+        let image = match &result.content[0] {
+            ContentBlock::Image(image) => image,
+            other => panic!("expected an image block, got {other:?}"),
+        };
+        assert_eq!(image.mime_type, "image/png");
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&image.data)
+            .expect("base64 image");
+        assert!(bytes.starts_with(b"\x89PNG"));
+        let s = result.structured_content.expect("structured content");
+        assert!(s["tokens"].as_u64().expect("tokens") <= 1600, "{s}");
+        let be_u32 = |at: usize| {
+            u32::from_be_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
+        };
+        assert_eq!(s["size_px"][0], be_u32(16));
+        assert_eq!(s["size_px"][1], be_u32(20));
+    }
+
+    #[tokio::test]
+    async fn render_crop_hall() {
+        let result = server("render_hall")
+            .render(render_args(
+                "lgh154-a",
+                RenderView::Labels,
+                Some(RegionArg::Id { id: "Hall".into() }),
+            ))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(false));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["mm_per_px"], 2.5);
+        assert_eq!(s["origin_mm"], json!([1381, -600]));
+    }
+
+    #[tokio::test]
+    async fn render_unknown_id() {
+        let result = server("render_unknown")
+            .render(render_args(
+                "lgh154-a",
+                RenderView::Labels,
+                Some(RegionArg::Id { id: "Hal".into() }),
+            ))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(true));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(codes(&s), ["E011"]);
+        let text = s["diagnostics"][0]["message"].as_str().expect("message");
+        assert!(text.contains(r#"Did you mean "Hall"?"#), "{text}");
+    }
+
+    #[tokio::test]
+    async fn render_view_later() {
+        let result = server("render_later")
+            .render(render_args("lgh154-a", RenderView::Conflicts, None))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(true));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(codes(&s), ["E022"]);
+        assert_eq!(
+            s["diagnostics"][0]["message"],
+            r#"View "conflicts" is not available yet; use "plan" or "labels"."#
+        );
+    }
+
+    #[tokio::test]
+    async fn render_unresolved() {
+        let result = server("render_unresolved")
+            .render(render_args("lgh154-b", RenderView::Labels, None))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(true));
+        let s = result.structured_content.expect("structured content");
+        assert!(codes(&s).contains(&"E003".to_string()), "{s}");
+    }
+
+    #[test]
+    fn region_arg_parses() {
+        let args: RenderArgs =
+            serde_json::from_value(json!({"plan_id": "a", "region": {"rect_mm": [0, 0, 10, 10]}}))
+                .expect("parses");
+        assert!(matches!(
+            args.region,
+            Some(RegionArg::Rect {
+                rect_mm: [0, 0, 10, 10]
+            })
+        ));
+    }
+
     #[test]
     fn tools_listed() {
         let names: Vec<String> = PlanServer::new(Store::new("/nonexistent"))
@@ -568,6 +815,6 @@ mod tests {
             .into_iter()
             .map(|t| t.name.to_string())
             .collect();
-        assert_eq!(names, ["apply", "check", "get"]);
+        assert_eq!(names, ["apply", "check", "get", "render"]);
     }
 }
