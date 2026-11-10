@@ -21,12 +21,40 @@ pub const STEP_MAX: Mm = 100;
 /// Sides in the order used for every listing: north, east, south, west.
 const SIDES: [Side; 4] = [Side::North, Side::East, Side::South, Side::West];
 
-/// The W003 and I010 diagnostics for `walls`: first the facade steps, then the
-/// derived walls, each in the order of `walls` (sorted by id).
+/// The W003, I010 and W005 diagnostics for `walls`: first the facade steps,
+/// then the derived walls, then the thickness warnings, each in the order of
+/// `walls` (sorted by id).
 pub fn diagnose(walls: &[BuiltWall]) -> Vec<Diagnostic> {
     let mut out = facade_steps(walls);
     out.extend(derived_walls(walls));
+    out.extend(thickness_warnings(walls));
     out
+}
+
+/// W005 for every interior or outer wall thinner than 70 mm or thicker than
+/// 600 mm (§8).
+fn thickness_warnings(walls: &[BuiltWall]) -> Vec<Diagnostic> {
+    walls
+        .iter()
+        .filter(|w| {
+            matches!(w.kind, SegmentKind::Interior | SegmentKind::Outer)
+                && (w.thickness < 70 || w.thickness > 600)
+        })
+        .map(|w| {
+            let refs = vec![w.id.clone()];
+            Diagnostic {
+                code: Code::W005,
+                severity: Severity::Warning,
+                message: message(
+                    Code::W005,
+                    &[("id", w.id.clone()), ("t", w.thickness.to_string())],
+                ),
+                span: None,
+                refs,
+                data: json!({ "wall": w.id, "thickness": w.thickness }),
+            }
+        })
+        .collect()
 }
 
 /// W003 for every pair of outer walls on one compass side whose inner faces are
@@ -253,6 +281,46 @@ mod tests {
     fn step_of_150_mm_gives_no_w003() {
         let diags = diagnostics_of(&step_plan(3150));
         assert!(diags.iter().all(|d| d.code != Code::W003), "{diags:?}");
+    }
+
+    fn w005s(diags: &[Diagnostic]) -> Vec<&Diagnostic> {
+        diags.iter().filter(|d| d.code == Code::W005).collect()
+    }
+
+    #[test]
+    fn interior_wall_of_20_mm_gives_w005() {
+        let diags = diagnostics_of(
+            "room A 2000 x 1000\nroom B 1500 x 1000\n  east_of A gap 20 source laser\n  align north A\n",
+        );
+        let w = w005s(&diags);
+        assert_eq!(w.len(), 1, "{diags:?}");
+        assert_eq!(w[0].severity, Severity::Warning);
+        assert_eq!(
+            w[0].message,
+            "Wall W:A.east|B.west is 20 mm thick; check the measurements around it."
+        );
+        assert_eq!(w[0].refs, ["W:A.east|B.west"]);
+        assert_eq!(w[0].data["thickness"], 20);
+        assert!(w[0].span.is_none());
+    }
+
+    #[test]
+    fn outer_wall_of_650_mm_gives_w005() {
+        let diags = diagnostics_of("room A 2000 x 1000\nwall A.north thickness 650 source laser\n");
+        let w = w005s(&diags);
+        assert_eq!(w.len(), 1, "{diags:?}");
+        assert_eq!(
+            w[0].message,
+            "Wall W:A.north:outer is 650 mm thick; check the measurements around it."
+        );
+        assert_eq!(w[0].refs, ["W:A.north:outer"]);
+    }
+
+    #[test]
+    fn fixture_a_has_no_w005() {
+        let plan = parse(FIXTURE_A).expect("fixture A parses");
+        let diags = diagnose(&built_walls(&plan, &solved(&plan)));
+        assert!(w005s(&diags).is_empty(), "{diags:?}");
     }
 
     #[test]
