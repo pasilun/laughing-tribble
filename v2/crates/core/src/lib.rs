@@ -27,6 +27,6 @@ pub use intent::{
     RoomNameError, Side, WallOverride,
 };
 pub use report::solve_json;
-pub use resolved::{Resolved, resolve};
+pub use resolved::{Resolved, resolve, resolve_draft};
 pub use review::review;
 pub use units::{Mm, Quantity, Source};

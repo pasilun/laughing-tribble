@@ -7,7 +7,7 @@
 
 use crate::diagnostics::{Code, Diagnostic, Severity};
 use crate::intent::{Gap, Plan, Relation, RoomName, Side};
-use crate::resolved::resolve;
+use crate::resolved::resolve_draft;
 use crate::units::{Quantity, Source};
 
 /// The plan with the assumed relations added, and the W001s that were used.
@@ -83,7 +83,7 @@ pub fn preview_missing(plan: &Plan) -> Preview {
     let mut current = plan.clone();
     let mut assumed = Vec::new();
     for _ in 0..plan.order.len() {
-        let (_, diags) = resolve(&current);
+        let (_, diags) = resolve_draft(&current);
         let Some(first) = diags.iter().find(|d| is_not_tied(d)) else {
             break;
         };
@@ -123,6 +123,7 @@ pub fn preview_missing(plan: &Plan) -> Preview {
 mod tests {
     use super::*;
     use crate::dsl::parse;
+    use crate::resolved::resolve;
 
     const FIXTURE_A: &str = include_str!("../../../fixtures/lgh154-a.plan");
 

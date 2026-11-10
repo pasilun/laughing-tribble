@@ -176,8 +176,31 @@ pub struct Space {
 /// when any Error diagnostic exists (for example E003 for a conflicting cycle,
 /// E010, E004, E007 or E013); the diagnostics are then still returned.
 pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
+    resolve_with(plan, false)
+}
+
+/// Solve and build `plan` for drawing (§15 D37).
+///
+/// Like [`resolve`], but the model is `None` only for the errors in
+/// [`stops_draft`]. An axis with E003 keeps its first-pass coordinates, and an
+/// opening that cannot be placed is left out. Every diagnostic is returned,
+/// errors included.
+pub fn resolve_draft(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
+    resolve_with(plan, true)
+}
+
+/// The shared body of [`resolve`] and [`resolve_draft`]. `draft` selects the
+/// stop test: [`has_error`] normally, [`stops_draft`] in draft mode.
+fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>) {
+    let stops = |diagnostics: &[Diagnostic]| {
+        if draft {
+            stops_draft(diagnostics)
+        } else {
+            has_error(diagnostics)
+        }
+    };
     let mut diagnostics = validate(plan);
-    if has_error(&diagnostics) {
+    if stops(&diagnostics) {
         return (None, diagnostics);
     }
     let (all_edges, edge_diags) = edges(plan);
@@ -218,7 +241,7 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
             Axis::Y => coords.y = axis_coords,
         }
     }
-    if has_error(&diagnostics) {
+    if stops(&diagnostics) {
         return (None, diagnostics);
     }
     // D24: an unplaced room gets no coordinates on its axis, so it has no
@@ -233,7 +256,7 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
         }
     }
     diagnostics.extend(overlaps(plan, &coords, &loose));
-    if has_error(&diagnostics) {
+    if stops(&diagnostics) {
         return (None, diagnostics);
     }
 
@@ -241,7 +264,7 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
     diagnostics.extend(diagnose(&walls));
     let (openings, opening_diags) = place_openings(plan, &coords, &walls);
     diagnostics.extend(opening_diags);
-    if has_error(&diagnostics) {
+    if stops(&diagnostics) {
         return (None, diagnostics);
     }
 
@@ -448,6 +471,14 @@ fn node_id(pt: Pt) -> NodeId {
 /// True when any diagnostic has the Error severity.
 pub(crate) fn has_error(diagnostics: &[Diagnostic]) -> bool {
     diagnostics.iter().any(|d| d.severity == Severity::Error)
+}
+
+/// In draft mode (§15 D37) only these errors leave nothing to draw: bad sizes,
+/// self relations, non-parallel measures, overlapping rooms.
+fn stops_draft(diagnostics: &[Diagnostic]) -> bool {
+    diagnostics
+        .iter()
+        .any(|d| matches!(d.code, Code::E014 | Code::E015 | Code::E010 | Code::E005))
 }
 
 /// W020 for every reference measure (§8, §15 D25) whose drawn distance differs
@@ -863,6 +894,67 @@ room B 1500 x 1000 source laser
             Some(&Phase::Demolish)
         );
         Ok(())
+    }
+
+    /// W4-02 (§15 D37): the draft keeps the first-pass geometry of a conflict.
+    #[test]
+    fn fixture_b_draft_keeps_first_pass_geometry() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(FIXTURE_B);
+        let (strict, _) = resolve(&plan);
+        assert!(strict.is_none());
+        let (resolved, diagnostics) = resolve_draft(&plan);
+        let e003 = diagnostics.iter().filter(|d| d.code == Code::E003).count();
+        assert_eq!(e003, 1, "{diagnostics:?}");
+        let resolved = resolved.ok_or("fixture B should draft")?;
+        assert_eq!(resolved.diagnostics, diagnostics);
+        let garderob = RoomName::new("Garderob")?;
+        let sovrum = RoomName::new("Sovrum")?;
+        let g = resolved
+            .rooms
+            .get(&garderob)
+            .ok_or("Garderob has no rectangle")?;
+        assert_eq!(g.north, 0);
+        let s = resolved
+            .rooms
+            .get(&sovrum)
+            .ok_or("Sovrum has no rectangle")?;
+        assert_eq!(s.south, 4490);
+        Ok(())
+    }
+
+    /// W4-02 (§15 D37): fixture C's `align south` gives Vardagsrum the same south
+    /// face as Sovrum in the draft.
+    #[test]
+    fn fixture_c_draft_keeps_first_pass_geometry() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(include_str!("../../../fixtures/lgh154-c.plan"));
+        let (resolved, diagnostics) = resolve_draft(&plan);
+        let resolved = resolved.ok_or("fixture C should draft")?;
+        let sovrum = resolved
+            .rooms
+            .get(&RoomName::new("Sovrum")?)
+            .ok_or("Sovrum has no rectangle")?;
+        assert_eq!(sovrum.south, 4540);
+        let vardagsrum = resolved
+            .rooms
+            .get(&RoomName::new("Vardagsrum")?)
+            .ok_or("Vardagsrum has no rectangle")?;
+        assert_eq!(vardagsrum.south, 4540, "{diagnostics:?}");
+        Ok(())
+    }
+
+    /// W4-02 (§15 D37): without errors the draft is the same as `resolve`.
+    #[test]
+    fn fixture_a_draft_equals_resolve() {
+        let plan = fixture(FIXTURE_A);
+        assert_eq!(resolve_draft(&plan), resolve(&plan));
+    }
+
+    /// W4-02 (§15 D37): a room with a zero width leaves nothing to draw.
+    #[test]
+    fn zero_size_room_has_no_draft() {
+        let plan = fixture("room A 0 x 2000 source laser\n");
+        let (resolved, diagnostics) = resolve_draft(&plan);
+        assert!(resolved.is_none(), "{diagnostics:?}");
     }
 
     #[test]
