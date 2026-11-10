@@ -1,6 +1,7 @@
 //! Planstudio MCP server (spec §11 Phase 4, D12, D13). Tool-level failures are
 //! `CallToolResult::structured_error`; protocol errors are never used for them.
 
+mod next_steps;
 mod store;
 
 pub use store::Store;
@@ -47,16 +48,24 @@ impl PlanServer {
         let text = self.store.load(plan_id).map_err(|d| vec![d])?;
         match plan_core::load(&text) {
             // A plan with parse errors is still checkable.
-            Err(ds) => Ok(json!({
-                "plan_id": plan_id,
-                "resolved": false,
-                "diagnostics": ds,
-            })),
-            Ok(r) => Ok(json!({
-                "plan_id": plan_id,
-                "resolved": r.resolved.is_some(),
-                "diagnostics": r.diagnostics,
-            })),
+            Err(ds) => {
+                let steps = next_steps::next_steps(None, &ds);
+                Ok(json!({
+                    "plan_id": plan_id,
+                    "resolved": false,
+                    "diagnostics": ds,
+                    "next_steps": steps,
+                }))
+            }
+            Ok(r) => {
+                let steps = next_steps::next_steps(Some(&r.plan), &r.diagnostics);
+                Ok(json!({
+                    "plan_id": plan_id,
+                    "resolved": r.resolved.is_some(),
+                    "diagnostics": r.diagnostics,
+                    "next_steps": steps,
+                }))
+            }
         }
     }
 }
@@ -148,6 +157,24 @@ mod tests {
         let s = result.structured_content.expect("structured content");
         assert_eq!(s["resolved"], false);
         assert_eq!(codes(&s), ["E003"]);
+    }
+
+    #[tokio::test]
+    async fn check_fixture_a_next_steps() {
+        let result = server("check_a_steps")
+            .check(check_args("lgh154-a"))
+            .await
+            .expect("protocol ok");
+        let s = result.structured_content.expect("structured content");
+        let steps: Vec<&str> = s["next_steps"]
+            .as_array()
+            .expect("next_steps array")
+            .iter()
+            .map(|v| v.as_str().expect("step string"))
+            .collect();
+        assert_eq!(steps.len(), 4, "{steps:?}");
+        assert!(steps[0].starts_with("Ask the user: Facade not straight:"));
+        assert!(steps[1].starts_with("Optional: Gap Hall east_of Garderob 121 mm"));
     }
 
     #[tokio::test]
