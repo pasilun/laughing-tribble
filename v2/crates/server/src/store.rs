@@ -3,6 +3,7 @@
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use plan_core::{Code, Diagnostic, Severity, message};
 
@@ -37,10 +38,14 @@ impl Store {
         })
     }
 
-    /// Write to `<plan_id>.plan.tmp`, then rename over the file. E023 (action "save") on error.
+    /// Write to a temp file `<plan_id>.plan.<pid>-<n>.tmp` (unique per call, so concurrent
+    /// saves of one plan never share a temp file), then rename over the file.
+    /// E023 (action "save") on error.
     pub fn save(&self, plan_id: &str, text: &str) -> Result<(), Diagnostic> {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
         let path = self.path(plan_id)?;
-        let tmp = path.with_extension("plan.tmp");
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let tmp = path.with_extension(format!("plan.{}-{n}.tmp", std::process::id()));
         fs::write(&tmp, text).map_err(|e| io_error("save", plan_id, &e))?;
         fs::rename(&tmp, &path).map_err(|e| {
             let _ = fs::remove_file(&tmp);
@@ -115,6 +120,38 @@ mod tests {
         assert_eq!(text, "room Kitchen 3000 x 2000\n");
         assert!(!dir.join("kitchen.plan.tmp").exists());
         assert!(dir.join("kitchen.plan").exists());
+    }
+
+    #[test]
+    fn concurrent_saves_of_one_plan_never_share_a_temp_file() {
+        let dir = fresh_dir("store_concurrent_saves");
+        let store = Store::new(&dir);
+        let handles: Vec<_> = (0..8)
+            .map(|i| {
+                let store = store.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..20 {
+                        store
+                            .save("p", &format!("plan \"{i}\"\n"))
+                            .expect("save returns Ok");
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().expect("thread join");
+        }
+        let text = store.load("p").expect("load");
+        let written: Vec<String> = (0..8).map(|i| format!("plan \"{i}\"\n")).collect();
+        assert!(
+            written.contains(&text),
+            "loaded text is not one written text: {text:?}"
+        );
+        let tmp_left = fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(|e| e.ok())
+            .any(|e| e.file_name().to_string_lossy().ends_with(".tmp"));
+        assert!(!tmp_left, "a .tmp file was left behind");
     }
 
     #[test]
