@@ -7,7 +7,7 @@
 
 use plan_core::Resolved;
 use plan_core::build::format_m2;
-use plan_core::intent::{OpeningKind, Side};
+use plan_core::intent::{OpeningKind, Phase, Side};
 use plan_core::resolved::{ResolvedOpening, RoomRect, Wall, WallKind};
 use plan_core::units::Mm;
 
@@ -152,7 +152,7 @@ pub(crate) fn drawn_elements(
         elements.push(room(name.as_str(), rect, fonts));
     }
     for wall in resolved.walls.values() {
-        elements.push(wall_element(wall, resolved));
+        elements.push(wall_element(wall, resolved, opening_stroke));
     }
     for opening in resolved.openings.values() {
         elements.push(opening_element(opening, resolved, opening_stroke));
@@ -198,14 +198,21 @@ fn room(name: &str, rect: &RoomRect, fonts: RoomFonts) -> String {
 
 /// A wall: a grey rectangle, labelled with its id. The rectangle is the
 /// [`corner_rect`] of the wall (D28); the label is centred on the wall's own
-/// x and y extents.
-fn wall_element(wall: &Wall, resolved: &Resolved) -> String {
+/// x and y extents. A demolished wall is a white rectangle with a dashed red
+/// outline, a new wall is near-black, and an existing wall is grey. `s` is the
+/// opening stroke width, which also sets the dash pattern.
+fn wall_element(wall: &Wall, resolved: &Resolved, s: f64) -> String {
     let (x0, y0, x1, y1) = corner_rect(wall, resolved);
     let (x, y) = (x0, y0);
     let (w, h) = (x1 - x0, y1 - y0);
-    let fill = match wall.kind {
-        WallKind::Interior => "#a6a6a6",
-        WallKind::Outer => "#6e6e6e",
+    let (fill, outline) = match (wall.phase, wall.kind) {
+        (Phase::Demolish, _) => (
+            "#ffffff",
+            format!(r##" stroke="#c62828" stroke-width="{s}"{}"##, dash_attr(s)),
+        ),
+        (Phase::New, _) => ("#1a1a1a", String::new()),
+        (Phase::Existing, WallKind::Interior) => ("#a6a6a6", String::new()),
+        (Phase::Existing, WallKind::Outer) => ("#6e6e6e", String::new()),
     };
     let (own_w, own_h) = (wall.x.1 - wall.x.0, wall.y.1 - wall.y.0);
     let label = id_label(
@@ -215,9 +222,14 @@ fn wall_element(wall: &Wall, resolved: &Resolved) -> String {
         own_h > own_w,
     );
     format!(
-        r##"<g class="wall" data-id="{id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"/>{label}</g>"##,
+        r##"<g class="wall" data-id="{id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"{outline}/>{label}</g>"##,
         id = escape(&wall.id),
     )
+}
+
+/// The dash pattern of a demolished element: 4 strokes on, 3 off.
+fn dash_attr(s: f64) -> String {
+    format!(r##" stroke-dasharray="{} {}""##, 4.0 * s, 3.0 * s)
 }
 
 /// An opening: a white gap across its wall, a coloured line in the gap, and its id.
@@ -250,15 +262,23 @@ fn opening_element(opening: &ResolvedOpening, resolved: &Resolved, stroke: f64) 
             (start + end) / 2,
         )
     };
-    let colour = match opening.kind {
-        OpeningKind::Door => "#8c4a00",
-        OpeningKind::Window => "#1f77d0",
-        OpeningKind::Passage => "#2a9d4b",
+    // A demolished opening is drawn red and dashed; new and existing ones as usual.
+    let demolish = opening.phase == Phase::Demolish;
+    let colour = match (demolish, opening.kind) {
+        (true, _) => "#c62828",
+        (false, OpeningKind::Door) => "#8c4a00",
+        (false, OpeningKind::Window) => "#1f77d0",
+        (false, OpeningKind::Passage) => "#2a9d4b",
+    };
+    let dash = if demolish {
+        dash_attr(stroke)
+    } else {
+        String::new()
     };
     let label = id_label(&opening.id, cx, cy, !horizontal);
-    let swing = swing_path(opening, (lo, hi), colour, stroke);
+    let swing = swing_path(opening, (lo, hi), colour, stroke, &dash);
     format!(
-        r##"<g class="opening" data-id="{id}"><rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" fill="#ffffff"/><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke}"/>{swing}{label}</g>"##,
+        r##"<g class="opening" data-id="{id}"><rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" fill="#ffffff"/><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke}"{dash}/>{swing}{label}</g>"##,
         id = escape(&opening.id),
         gx = gap.0,
         gy = gap.1,
@@ -274,8 +294,15 @@ fn opening_element(opening: &ResolvedOpening, resolved: &Resolved, stroke: f64) 
 /// The leaf and swing arc of a hinged door (spec §9.3, D29). Empty for
 /// windows, passages and doors without a hinge.
 ///
-/// `wall` is the wall's extent across its thickness, `(lo, hi)`.
-fn swing_path(opening: &ResolvedOpening, wall: (Mm, Mm), colour: &str, stroke: f64) -> String {
+/// `wall` is the wall's extent across its thickness, `(lo, hi)`. `dash` is the
+/// dash attribute of a demolished door, or empty.
+fn swing_path(
+    opening: &ResolvedOpening,
+    wall: (Mm, Mm),
+    colour: &str,
+    stroke: f64,
+    dash: &str,
+) -> String {
     if !matches!(opening.kind, OpeningKind::Door) {
         return String::new();
     }
@@ -310,7 +337,7 @@ fn swing_path(opening: &ResolvedOpening, wall: (Mm, Mm), colour: &str, stroke: f
     let cross = (lx - hx) * (jy - hy) - (ly - hy) * (jx - hx);
     let sweep = u8::from(cross > 0);
     format!(
-        r##"<path d="M {hx} {hy} L {lx} {ly} A {w} {w} 0 0 {sweep} {jx} {jy}" fill="none" stroke="{colour}" stroke-width="{}"/>"##,
+        r##"<path d="M {hx} {hy} L {lx} {ly} A {w} {w} 0 0 {sweep} {jx} {jy}" fill="none" stroke="{colour}" stroke-width="{}"{dash}/>"##,
         stroke / 2.0,
     )
 }
@@ -476,6 +503,62 @@ mod tests {
         );
         // Fixture A has one hinged door and no other arcs.
         assert_eq!(svg.matches("<path ").count(), 1);
+    }
+
+    const REVIEW_1: &str = include_str!("../../../fixtures/review-1.plan");
+
+    fn review_1_svg() -> String {
+        let plan = parse(REVIEW_1).expect("review-1 parses");
+        let (resolved, diagnostics) = resolve(&plan);
+        let resolved = resolved.expect("review-1 resolves");
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        plan_svg(&resolved)
+    }
+
+    fn element_with<'a>(svg: &'a str, data_id: &str) -> &'a str {
+        let needle = format!(r##"data-id="{data_id}""##);
+        svg.lines()
+            .find(|line| line.contains(&needle))
+            .unwrap_or_else(|| panic!("no element {data_id}"))
+    }
+
+    #[test]
+    fn demolished_wall_is_a_dashed_red_outline() {
+        let svg = review_1_svg();
+        let wall = element_with(&svg, "W:A.east|B.west");
+        assert!(
+            wall.contains(
+                r##"fill="#ffffff" stroke="#c62828" stroke-width="30" stroke-dasharray="120 90""##
+            ),
+            "{wall}"
+        );
+    }
+
+    #[test]
+    fn existing_outer_wall_is_unchanged() {
+        let svg = review_1_svg();
+        let wall = element_with(&svg, "W:A.north:outer");
+        assert!(wall.contains(r##"fill="#6e6e6e""##), "{wall}");
+        assert!(!wall.contains("stroke-dasharray"), "{wall}");
+    }
+
+    #[test]
+    fn existing_fixture_has_no_demolish_or_new_wall_drawing() {
+        let svg = fixture_a_svg();
+        assert!(!svg.contains("#c62828"));
+        assert!(!svg.contains(r##"#1a1a1a"/>"##));
+    }
+
+    #[test]
+    fn new_wall_is_near_black() {
+        let plan = parse("plan \"A\"\nroom A 3000 x 2000 source laser\nwall A.south new\n")
+            .expect("parses");
+        let (resolved, diagnostics) = resolve(&plan);
+        let resolved = resolved.expect("resolves");
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        let svg = plan_svg(&resolved);
+        let wall = element_with(&svg, "W:A.south:outer");
+        assert!(wall.contains(r##"fill="#1a1a1a""##), "{wall}");
     }
 
     #[test]
