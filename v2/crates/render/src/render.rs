@@ -247,7 +247,7 @@ fn svg_text(resolved: &Resolved, vp: &Viewport, labels: &[PlacedLabel]) -> Strin
 }
 
 /// `element` with every `<text>` removed: the labels are drawn by [`labels_group`].
-fn without_text(element: &str) -> String {
+pub(crate) fn without_text(element: &str) -> String {
     const END: &str = "</text>";
     let mut out = String::with_capacity(element.len());
     let mut rest = element;

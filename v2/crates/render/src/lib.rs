@@ -9,10 +9,12 @@ mod corners;
 pub mod labels;
 pub mod png;
 pub mod render;
+pub mod sheet;
 pub mod svg;
 pub mod viewport;
 
 pub use labels::{LabelReq, PlacedLabel, place};
 pub use png::png;
 pub use render::{Region, RenderOptions, Rendered, View, render};
+pub use sheet::{Paper, Sheet, SheetOptions, sheet};
 pub use svg::plan_svg;
