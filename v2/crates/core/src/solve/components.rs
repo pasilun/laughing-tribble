@@ -198,46 +198,57 @@ fn union(parent: &mut [usize], a: usize, b: usize) {
 /// The W001 for a loose component, named after `room`. `rooms` lists every
 /// room of the component for the refs.
 ///
-/// A room with an unknown depth on y gets the depth-unknown wording (§6.4).
-/// Any other loose component gets the "not tied" wording with only the room
-/// and the axis word filled in; the measurement and relation arguments are
-/// not known yet, so their placeholders stay visible.
+/// A room with an unknown depth on y gets the depth-unknown wording (§6.4), and
+/// a room with an unknown width on x gets the width-unknown wording. Any other
+/// loose component gets the "not tied" wording with only the room and the axis
+/// word filled in; the measurement and relation arguments are not known yet,
+/// so their placeholders stay visible.
 fn not_tied(axis: Axis, plan: &Plan, room: &RoomName, rooms: &[RoomName]) -> Diagnostic {
     let axis_word = match axis {
         Axis::X => "east–west",
         Axis::Y => "north–south",
     };
-    let depth_unknown = axis == Axis::Y
-        && plan
-            .rooms
-            .get(room)
-            .is_some_and(|declared| declared.depth.is_none());
-    let text = if depth_unknown {
-        message(
+    let unknown = unknown_size(axis, plan, room.as_str());
+    let text = match unknown {
+        Some("depth") => message(
             Code::W001,
             &[
                 ("room", room.as_str().to_string()),
                 ("unknown_depth", "true".to_string()),
             ],
-        )
-    } else {
-        message(
+        ),
+        Some(_) => message(
+            Code::W001,
+            &[
+                ("room", room.as_str().to_string()),
+                ("unknown_width", "true".to_string()),
+            ],
+        ),
+        None => message(
             Code::W001,
             &[
                 ("axis", axis_word.to_string()),
                 ("room", room.as_str().to_string()),
             ],
-        )
+        ),
     };
     let mut refs: Vec<String> = rooms.iter().map(|r| r.as_str().to_string()).collect();
     refs.sort();
-    let data = if depth_unknown {
+    let data = if unknown == Some("depth") {
         json!({
             "axis": "y",
             "room": room.as_str(),
             "from": format!("{}.north", room.as_str()),
             "to": format!("{}.south", room.as_str()),
             "unknown": "depth",
+        })
+    } else if unknown == Some("width") {
+        json!({
+            "axis": "x",
+            "room": room.as_str(),
+            "from": format!("{}.west", room.as_str()),
+            "to": format!("{}.east", room.as_str()),
+            "unknown": "width",
         })
     } else {
         // The measurement is only known once suggested_w001 ranks the candidates.
@@ -253,6 +264,21 @@ fn not_tied(axis: Axis, plan: &Plan, room: &RoomName, rooms: &[RoomName]) -> Dia
         span: None,
         data,
         refs,
+    }
+}
+
+/// The size of `room` that is unknown on `axis` and gets the size-unknown W001:
+/// `"depth"` for an unknown depth on y, `"width"` for an unknown width on x.
+/// `None` when the room's size on this axis is known or the room is not declared.
+fn unknown_size(axis: Axis, plan: &Plan, room: &str) -> Option<&'static str> {
+    let declared = plan
+        .rooms
+        .values()
+        .find(|declared| declared.name.as_str() == room)?;
+    match axis {
+        Axis::Y if declared.depth.is_none() => Some("depth"),
+        Axis::X if declared.width.is_none() => Some("width"),
+        _ => None,
     }
 }
 
@@ -321,6 +347,10 @@ pub fn candidates(
     let mut out = Vec::new();
     for anchor in &anchored.rooms {
         for room in &loose.rooms {
+            // A room is never measured from its own faces (E015).
+            if anchor == room {
+                continue;
+            }
             let overlap = overlap(spans.get(anchor), spans.get(room));
             for direction in [Direction::After, Direction::Before] {
                 out.push(Candidate {
@@ -420,12 +450,8 @@ fn suggest_one(
     else {
         return diagnostic;
     };
-    let depth_unknown = axis == Axis::Y
-        && plan
-            .rooms
-            .values()
-            .any(|declared| declared.name.as_str() == room && declared.depth.is_none());
-    if depth_unknown {
+    // A depth-unknown (on y) or width-unknown (on x) room keeps its wording.
+    if unknown_size(axis, plan, &room).is_some() {
         return diagnostic;
     }
     // components() reports a component's first room not yet reported, so the
@@ -720,6 +746,45 @@ mod tests {
             json!({"axis": "y", "room": "B", "from": "B.north", "to": "B.south", "unknown": "depth"})
         );
         assert_eq!(depth[0].refs, vec!["B".to_string()]);
+    }
+
+    #[test]
+    fn unknown_width_room_gets_width_w001_and_never_its_own_faces() {
+        let plan = parse("room B 1500 x 1000\nroom A ? x 1000\n  south_of B gap\n  align west B\n")
+            .expect("parse");
+        let (edge_list, _) = edges(&plan);
+        let got = suggested_w001(&edge_list, &plan);
+
+        let messages: Vec<&str> = got.iter().map(|d| d.message.as_str()).collect();
+        assert!(
+            messages
+                .iter()
+                .all(|m| !m.contains("A.east to A.west") && !m.contains("A.east_of")),
+            "{messages:?}"
+        );
+        // Only the width W001 may name A's east face, and it names it as the
+        // far face of A's own width.
+        assert!(
+            !got.iter()
+                .filter(|d| d.data["unknown"] != "width")
+                .any(|d| d.message.contains("A.east")),
+            "{messages:?}"
+        );
+
+        let width: Vec<&Diagnostic> = got
+            .iter()
+            .filter(|d| d.data["unknown"] == "width")
+            .collect();
+        assert_eq!(width.len(), 1, "{got:?}");
+        assert_eq!(
+            width[0].message,
+            "A width unknown; measure A.west to A.east"
+        );
+        assert_eq!(width[0].refs, vec!["A".to_string()]);
+        assert_eq!(
+            width[0].data,
+            json!({"axis": "x", "room": "A", "from": "A.west", "to": "A.east", "unknown": "width"})
+        );
     }
 
     #[test]
