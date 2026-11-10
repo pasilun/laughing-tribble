@@ -315,11 +315,13 @@ pub struct AxisGraphSolver;      // §6.2, Phase 1
 file        = { line } ;
 line        = [ statement ] [ comment ] NEWLINE ;
 comment     = "#" { any } ;
-statement   = plan | default | title | room | relation | align | measure | opening | wall ;
+statement   = plan | default | title | room | relation | align | measure | opening | wall | stub | fixture ;
+stub        = "stub" face "at" INT "length" INT [ "thickness" INT ] [ "offset" INT ] [ "bearing" ] [ phase ] ;   (* §15 D45 *)
+fixture     = "fixture" KIND face "at" INT [ "width" INT ] [ "depth" INT ] [ "offset" INT ] [ "label" STRING ] [ phase ] ;   (* §15 D44 *)
 title       = "title" KEY STRING ;   (* KEY: property, address, applicant, drawing, drawn_by, date, description; §15 D41 *)
 plan        = "plan" STRING ;
 default     = ("default_wall" | "default_outer_wall") qty ;
-room        = "room" NAME size "x" size [ src ] [ "apartment" STRING ] [ phase ] ;
+room        = "room" NAME size "x" size [ src ] [ "apartment" STRING ] [ "part" NAME ] [ phase ] ;   (* part: §15 D46 *)
 size        = INT | "?" ;
 relation    = INDENT? NAME? rel_kw NAME gapspec ;      (* indented lines belong to the last room *)
 rel_kw      = "east_of" | "west_of" | "south_of" | "north_of" ;
@@ -531,6 +533,9 @@ pub struct Diagnostic {
 | W033 | Warning | Review: new opening in a fire-cell boundary | `{kind} {id} is new and sits in fire-cell boundary {wall} ({fire}); a fire protection description is required.` |
 | I030 | Info | Review: new opening without height | `{kind} {id} is new and has no height; add "height <mm>" if the engineer needs it.` |
 | I031 | Info | Review: title block entry missing | `Title block has no {key}; add: title {key} "…"` |
+| E019 | Error | Fixture or stub outside its room | `{what} on {face} at {at} runs outside {room}.` |
+| W034 | Warning | Review: kitchen demolished, no capped connection | `Kitchen fixtures are demolished but no capped connection is marked; add a "plug" fixture where the pipes are capped.` |
+| I032 | Info | Review: ventilation changes | `Ventilation changes: the flows must be re-balanced against the latest OVK and a new OVK made.` |
 
 Codes E011–E023 (E013 added in D19) and I020 were added by the spec run of 2026-11-09 (§15 D10, D13, D17, D8).
 
@@ -857,3 +862,13 @@ Decisions taken by the spec runs where the sections above left a choice open. Ea
 - **D37 and D38 amended (same day).** The first-pass tree reaches a face by the shortest path, which is often the stated edge itself (fixture B: Sovrum south is drawn at 4490, through the measure). The draft keeps those coordinates; the tree rule is not changed. A conflict mark therefore takes its numbers from the E003 data: `stated {stated}, chain gives {implied} ({r} mm)`. A mark between two faces at the same coordinate is drawn 1 mm long. Cards W4-02, W4-04.
 - **D38 amended again.** A mark shorter than 40 px gets its label 20 px to the side (east of a vertical mark, north of a horizontal one), so the label does not hide it. Card W4-R1-f2.
 - **D43 amended.** `phase_view` never removes rooms: the floor is the same before and after, and the outer corners need the room rectangles. Only walls and openings are filtered. A demolished room's name still prints on the after sheet; merging rooms across a removed partition comes with non-rectangular rooms (roadmap row 6b). Card W4-R2-f2.
+
+**Spec run 2026-11-10, third (week-five cards: roadmap row 6b, model extensions without angled walls):**
+
+- **D44. Fixtures.** `fixture KIND FACE at N [width N] [depth N] [offset N] [label "…"] [phase]`, with v1's twelve kinds. A fixture is a rectangle standing against a room face, addressed like an opening: `at` along the face, `depth` out from it, `offset` away from it. Common kinds have default sizes. A balcony is the one kind that lies outside: it starts at the outer side of the wall on that face. A fixture outside its room is E019. Ids are `F:<Room>.<side>:<n>`. Cards W5-02…04.
+- **D45. Wall stubs.** `stub FACE at N length N [thickness N] [offset N] [bearing] [phase]`: a piece of wall that runs straight into the room from a face, or stands free with an offset. This covers wall ends and nibs, and partitions that do not close a room. Stubs are kept apart from the generated walls (`Resolved.stubs`, ids `S:…`), so wall generation, ids and expected JSON do not change. Rooms' areas ignore them. Card W5-05.
+- **D46. Rooms in parts.** `room B … part A`: B's rectangle belongs to room A. It prints no name, and A prints the summed area. One level only. The solver and wall generation treat the parts as today (two rectangles, usually joined by `open`). This is how L-shaped rooms are written; rooms with free outlines wait for angled walls. Card W5-06.
+- **D47. Apartments.** A wall between rooms of different apartments (or a flat and a room with none, such as the stairwell) is `separating`; the review treats it as a fire-cell boundary. Each apartment's area is the sum of its rooms. Bearing and separating walls are drawn darker. Card W5-07.
+- **D48. Review with fixtures.** v1's `plug` and `ventilation` checks: W034 when kitchen fixtures are demolished and no plug is marked, I032 when an exhaust is new or demolished. Card W5-08.
+- **D49. Sheet style.** Sheets are black and white (grey walls): rooms untinted, openings black, windows a framed double line. The clear-size text needs 25 × 14 mm of paper, and a room's texts move off door swings to the first free of five positions. Screen renders keep their colours. Cards W5-09, W5-10.
+- **Angled walls** are left for later (maintainer, 2026-11-10); the Gnejsen 48 A/B stairwell has two.
