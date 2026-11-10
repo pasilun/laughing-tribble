@@ -17,8 +17,8 @@ use crate::build::{
 use crate::diagnostics::{Diagnostic, Severity};
 use crate::intent::{FaceRef, OpeningKind, Plan, RoomName, Side};
 use crate::solve::{
-    Axis, FaceKey, assign_coords, check_cycles, components, conflict_diagnostic, edges,
-    within_tolerance_diagnostic,
+    AdjustedEdge, Axis, Component, CycleCheck, Edge, FaceKey, adjusted_diagnostic, assign_coords,
+    check_cycles, components, conflict_diagnostic, distribute, edges,
 };
 use crate::units::{Mm, Source};
 
@@ -167,10 +167,16 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
     for axis in [Axis::X, Axis::Y] {
         let (comps, comp_diags) = components(&all_edges, plan, axis);
         diagnostics.extend(comp_diags);
-        let (axis_coords, tree) = assign_coords(&all_edges, &comps, axis);
-        for check in check_cycles(&all_edges, &axis_coords, &tree, axis) {
-            diagnostics.extend(conflict_diagnostic(&check, &all_edges));
-            diagnostics.extend(within_tolerance_diagnostic(&check, &all_edges));
+        let (mut axis_coords, tree) = assign_coords(&all_edges, &comps, axis);
+        let checks = check_cycles(&all_edges, &axis_coords, &tree, axis);
+        for check in &checks {
+            diagnostics.extend(conflict_diagnostic(check, &all_edges));
+        }
+        // §6.2 step 5: with no conflict on the axis, spread the within-tolerance
+        // residuals over the components that have one.
+        if !checks.iter().any(|check| check.conflict) {
+            let moved = distribute_axis(&all_edges, &comps, axis, &checks, &mut axis_coords);
+            diagnostics.extend(adjusted_diagnostic(axis, &moved));
         }
         match axis {
             Axis::X => coords.x = axis_coords,
@@ -235,6 +241,39 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
         diagnostics: diagnostics.clone(),
     };
     (Some(resolved), diagnostics)
+}
+
+/// Distribute every component of `axis` that has a non-zero within-tolerance
+/// residual (§6.2 step 5). Each distributed component's coordinates replace the
+/// first-pass ones in `coords`; a component that `distribute` cannot solve keeps
+/// them. Returns the edges that moved more than half a millimetre, in edge-index
+/// order.
+fn distribute_axis(
+    edges: &[Edge],
+    comps: &[Component],
+    axis: Axis,
+    checks: &[CycleCheck],
+    coords: &mut BTreeMap<FaceKey, Mm>,
+) -> Vec<AdjustedEdge> {
+    let mut moved = Vec::new();
+    for comp in comps {
+        let has_residual = checks.iter().any(|check| {
+            check.residual != 0
+                && edges
+                    .get(check.stated)
+                    .is_some_and(|stated| comp.faces.contains(&stated.from))
+        });
+        if !has_residual {
+            continue;
+        }
+        let Some(dist) = distribute(edges, comp, axis, &*coords) else {
+            continue;
+        };
+        coords.extend(dist.coords);
+        moved.extend(dist.edges.into_iter().filter(|a| a.shift.abs() > 0.5));
+    }
+    moved.sort_by_key(|a| a.edge);
+    moved
 }
 
 /// The two end points of a wall on its node line, the room face it was made

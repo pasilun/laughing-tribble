@@ -1,0 +1,10 @@
+plan "Distribution test"
+default_wall 90 source assumed
+default_outer_wall 300 source assumed
+
+room A 2000 x 1000 source laser
+room B 1500 x 1000 source laser
+  south_of A gap
+  align west A
+
+measure B.east to A.east = 520 source estimated

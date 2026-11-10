@@ -37,7 +37,24 @@ pub fn solve_json(stem: &str, resolved: Option<&Resolved>, diagnostics: &[Diagno
         "diagnostics".to_string(),
         Value::Array(diagnostics.iter().map(diagnostic).collect()),
     );
+    if let Some(adjusted) = adjusted(diagnostics) {
+        out.insert("adjusted".to_string(), adjusted);
+    }
     Value::Object(out)
+}
+
+/// The `adjusted` edges of every W004 (§7.7, §15 D6): the `data.adjusted` arrays
+/// concatenated in diagnostic order (x first, then y). `None` when there is no W004.
+fn adjusted(diagnostics: &[Diagnostic]) -> Option<Value> {
+    let mut items: Vec<Value> = Vec::new();
+    let mut found = false;
+    for d in diagnostics.iter().filter(|d| d.code == Code::W004) {
+        found = true;
+        if let Some(list) = d.data.get("adjusted").and_then(Value::as_array) {
+            items.extend(list.iter().cloned());
+        }
+    }
+    found.then_some(Value::Array(items))
 }
 
 /// `{ "<Room>": { "west", "east", "north", "south" } }` for every solved room.

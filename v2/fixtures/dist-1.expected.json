@@ -1,0 +1,10 @@
+{
+  "fixture": "dist-1",
+  "resolved": true,
+  "faces": {
+    "A": { "west": 0, "east": 2000, "north": 0, "south": 1000 },
+    "B": { "west": 0, "east": 1500, "north": 1090, "south": 2090 }
+  },
+  "adjusted": [ { "origin": "measure B.east to A.east", "value": 520, "adjusted": 500 } ],
+  "diagnostics": [ { "code": "W004", "severity": "warning" } ]
+}

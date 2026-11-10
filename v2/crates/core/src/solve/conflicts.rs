@@ -8,6 +8,7 @@
 use serde_json::json;
 
 use super::cycles::{ChainEdge, CycleCheck};
+use super::distribute::AdjustedEdge;
 use super::graph::{Axis, Edge, FaceId};
 use crate::diagnostics::{Code, Diagnostic, Severity, message};
 use crate::intent::Side;
@@ -140,6 +141,40 @@ pub fn within_tolerance_diagnostic(check: &CycleCheck, edges: &[Edge]) -> Option
             "residual": check.residual,
             "tolerance": check.tolerance,
             "edges": edge_data,
+        }),
+    })
+}
+
+/// The W004 diagnostic for one axis that distributed its within-tolerance
+/// cycles (§6.2 step 6, §15 D6), or `None` when no edge moved more than half
+/// a millimetre.
+///
+/// `adjusted` holds the edges that moved, in edge-index order. The list
+/// argument gives each as `origin value→adjusted`, joined by `, `; `refs` are
+/// the origins, and `data` has the axis and the same edges as `adjusted`.
+pub fn adjusted_diagnostic(axis: Axis, adjusted: &[AdjustedEdge]) -> Option<Diagnostic> {
+    if adjusted.is_empty() {
+        return None;
+    }
+    let list: Vec<String> = adjusted
+        .iter()
+        .map(|a| format!("{} {}→{}", a.origin, a.value, a.adjusted))
+        .collect();
+    let args: Vec<(&str, String)> = vec![("list", list.join(", "))];
+    let refs: Vec<String> = adjusted.iter().map(|a| a.origin.clone()).collect();
+    let items: Vec<serde_json::Value> = adjusted
+        .iter()
+        .map(|a| json!({"origin": a.origin, "value": a.value, "adjusted": a.adjusted}))
+        .collect();
+    Some(Diagnostic {
+        code: Code::W004,
+        severity: Severity::Warning,
+        message: message(Code::W004, &args),
+        span: None,
+        refs,
+        data: json!({
+            "axis": axis,
+            "adjusted": items,
         }),
     })
 }
