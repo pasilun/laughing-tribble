@@ -23,13 +23,15 @@ pub enum PhaseView {
 ///
 /// - `All`: a plain clone.
 /// - `Before`: walls and openings with phase `New` are removed; walls and
-///   openings with phase `Demolish` stay and become `Existing`. Rooms whose
-///   `room_phases` entry is `New` are removed from `rooms` and `room_phases`.
+///   openings with phase `Demolish` stay and become `Existing`.
 /// - `After`: walls and openings with phase `Demolish` are removed; `New` ones
-///   stay and become `Existing`. Rooms whose phase is `Demolish` are removed.
+///   stay and become `Existing`.
 ///
-/// In both views an opening whose wall was removed is removed too. `nodes`,
-/// `spaces` and `diagnostics` are copied unchanged.
+/// In both views an opening whose wall was removed is removed too. `rooms`,
+/// `room_phases`, `nodes`, `spaces` and `diagnostics` are copied unchanged
+/// (spec §15 D43 amended): a room's floor is there before and after the works,
+/// and the outer corner rectangles (D28, the corners module) read `rooms`, so
+/// dropping a room would leave gaps at its corners.
 pub fn phase_view(resolved: &Resolved, view: PhaseView) -> Resolved {
     let mut out = resolved.clone();
     let (removed, kept_as_existing) = match view {
@@ -54,16 +56,6 @@ pub fn phase_view(resolved: &Resolved, view: PhaseView) -> Resolved {
         }
     }
 
-    let gone: Vec<_> = out
-        .room_phases
-        .iter()
-        .filter(|(_, phase)| **phase == removed)
-        .map(|(name, _)| name.clone())
-        .collect();
-    for name in &gone {
-        out.rooms.remove(name);
-        out.room_phases.remove(name);
-    }
     out
 }
 
@@ -84,6 +76,7 @@ pub fn sheet_title(name: &str, view: PhaseView, lang: Lang) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::corners::corner_rect;
     use plan_core::{RoomName, load};
 
     fn room(name: &str) -> RoomName {
@@ -128,8 +121,20 @@ mod tests {
         assert!(!r.walls.contains_key(WALL));
         assert_eq!(r.openings[DOOR].phase, Phase::Existing);
         assert_eq!(r.openings[WINDOW].phase, Phase::Existing);
-        assert!(!r.rooms.contains_key(&room("B")));
+        assert!(r.rooms.contains_key(&room("B")));
         assert!(r.rooms.contains_key(&room("A")));
+    }
+
+    #[test]
+    fn after_keeps_the_outer_corners_of_a_demolished_room() {
+        let input = review_1();
+        let all = phase_view(&input, PhaseView::All);
+        let after = phase_view(&input, PhaseView::After);
+        let id = "W:B.north:outer";
+        assert_eq!(
+            corner_rect(&after.walls[id], &after),
+            corner_rect(&all.walls[id], &all)
+        );
     }
 
     #[test]
