@@ -7,7 +7,7 @@ mod store;
 
 pub use store::Store;
 
-use plan_core::Diagnostic;
+use plan_core::{Code, Diagnostic, Severity};
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -52,6 +52,17 @@ pub struct GetArgs {
     pub fields: Vec<Field>,
 }
 
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ApplyArgs {
+    /// The plan: a file name under the server's root, without `.plan`. A new id creates the plan.
+    pub plan_id: String,
+    /// DSL statements to add or replace; a line starting with "- " removes the matching statement.
+    pub patch: String,
+    /// Compute everything and change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct PlanServer {
     store: Store,
@@ -81,6 +92,59 @@ impl PlanServer {
         Parameters(args): Parameters<GetArgs>,
     ) -> Result<CallToolResult, McpError> {
         Ok(tool_result(self.get_value(&args)))
+    }
+
+    #[tool(name = "apply", description = APPLY_DESCRIPTION, annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true))]
+    pub async fn apply(
+        &self,
+        Parameters(args): Parameters<ApplyArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        Ok(tool_result(self.apply_value(&args)))
+    }
+
+    /// Tool errors (`Err`) are E021, E023 and E006 (a stored file that does not parse).
+    /// A patch that does not apply is `Ok` with `ok: false`.
+    fn apply_value(&self, args: &ApplyArgs) -> Result<serde_json::Value, Vec<Diagnostic>> {
+        let plan_id = args.plan_id.as_str();
+        self.store.path(plan_id).map_err(|d| vec![d])?;
+        let text = match self.store.load(plan_id) {
+            Ok(text) => text,
+            Err(d) if d.code == Code::E020 => format!("plan \"{plan_id}\"\n"),
+            Err(d) => return Err(vec![d]),
+        };
+        let plan = plan_core::dsl::parse(&text).map_err(|d| vec![d])?;
+        let result = plan_core::apply(&plan, &args.patch, args.dry_run);
+
+        let mut saved = false;
+        if let Some(new_plan) = result.plan.as_ref().filter(|_| result.ok && !args.dry_run) {
+            self.store
+                .save(plan_id, &plan_core::dsl::print(new_plan))
+                .map_err(|d| vec![d])?;
+            saved = true;
+        }
+
+        let n = result.diff.len();
+        let errors = result
+            .diagnostics
+            .iter()
+            .filter(|d| matches!(d.severity, Severity::Error))
+            .count();
+        let summary = if !result.ok {
+            format!("Not applied: {errors} error(s). The plan is unchanged.")
+        } else if args.dry_run {
+            format!("Dry run: {n} change(s) would be applied; nothing saved.")
+        } else {
+            format!("Applied {n} change(s); saved.")
+        };
+        Ok(json!({
+            "plan_id": plan_id,
+            "ok": result.ok,
+            "dry_run": args.dry_run,
+            "saved": saved,
+            "diff": result.diff,
+            "diagnostics": result.diagnostics,
+            "summary": summary,
+        }))
     }
 
     fn get_value(&self, args: &GetArgs) -> Result<serde_json::Value, Vec<Diagnostic>> {
@@ -137,6 +201,8 @@ pub const CHECK_DESCRIPTION: &str =
     "Check a plan. Returns every diagnostic (errors, warnings, info) and what to do next.";
 
 pub const GET_DESCRIPTION: &str = "Read a plan: summary (default), dsl (the plan text, to edit with apply) or json (solved faces, walls, openings, diagnostics).";
+
+pub const APPLY_DESCRIPTION: &str = "Change a plan with a DSL patch. All or nothing: if any error results, nothing changes. Statements replace the statement with the same key (room by name, relation by subject, kind and room, measure by its faces, opening by face and position). Use dry_run to preview.";
 
 #[cfg(test)]
 mod tests {
@@ -388,6 +454,112 @@ mod tests {
         assert_eq!(s["diagnostics"][0]["code"], "E020");
     }
 
+    fn apply_args(plan_id: &str, patch: &str, dry_run: bool) -> Parameters<ApplyArgs> {
+        Parameters(ApplyArgs {
+            plan_id: plan_id.into(),
+            patch: patch.into(),
+            dry_run,
+        })
+    }
+
+    const CONFLICT_PATCH: &str = "measure Garderob.north to Sovrum.south = 4490 source laser";
+    const WINDOW_PATCH: &str = "window Garderob.north at 300 width 800 source laser";
+
+    #[tokio::test]
+    async fn apply_conflict_leaves_file() {
+        let root = fixture_root("apply_conflict", &[("a", FIXTURE_A)]);
+        let before = fs::read(root.join("a.plan")).expect("read");
+        let result = PlanServer::new(Store::new(&root))
+            .apply(apply_args("a", CONFLICT_PATCH, false))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(false));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["ok"], false);
+        assert_eq!(s["saved"], false);
+        assert!(codes(&s).contains(&"E003".to_string()), "{s}");
+        assert_eq!(fs::read(root.join("a.plan")).expect("read"), before);
+    }
+
+    #[tokio::test]
+    async fn apply_dry_run() {
+        let root = fixture_root("apply_dry", &[("a", FIXTURE_A)]);
+        let before = fs::read(root.join("a.plan")).expect("read");
+        let result = PlanServer::new(Store::new(&root))
+            .apply(apply_args("a", WINDOW_PATCH, true))
+            .await
+            .expect("protocol ok");
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["ok"], true);
+        assert_eq!(s["saved"], false);
+        assert!(
+            s["summary"]
+                .as_str()
+                .expect("summary")
+                .starts_with("Dry run:")
+        );
+        assert_eq!(fs::read(root.join("a.plan")).expect("read"), before);
+    }
+
+    #[tokio::test]
+    async fn apply_saves() {
+        let root = fixture_root("apply_saves", &[("a", FIXTURE_A)]);
+        let result = PlanServer::new(Store::new(&root))
+            .apply(apply_args("a", WINDOW_PATCH, false))
+            .await
+            .expect("protocol ok");
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["ok"], true);
+        assert_eq!(s["saved"], true);
+
+        let text = fs::read_to_string(root.join("a.plan")).expect("read");
+        let plan = plan_core::dsl::parse(&text).expect("saved file parses");
+        assert_eq!(plan.openings.len(), 5);
+        assert_eq!(
+            text,
+            plan_core::dsl::print(&plan),
+            "saved text is canonical"
+        );
+    }
+
+    #[tokio::test]
+    async fn apply_creates_plan() {
+        let root = fixture_root("apply_creates", &[]);
+        let patch = "room A 3000 x 2000 source laser";
+        let result = PlanServer::new(Store::new(&root))
+            .apply(apply_args("new1", patch, false))
+            .await
+            .expect("protocol ok");
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["ok"], true, "{s}");
+        assert!(root.join("new1.plan").exists());
+
+        let view = PlanServer::new(Store::new(&root))
+            .get(get_args("new1", GetView::Dsl, vec![]))
+            .await
+            .expect("protocol ok");
+        let v = view.structured_content.expect("structured content");
+        assert!(
+            v["text"]
+                .as_str()
+                .expect("text")
+                .contains("room A 3000 x 2000 source laser"),
+            "{v}"
+        );
+    }
+
+    #[tokio::test]
+    async fn apply_bad_id() {
+        let root = fixture_root("apply_bad_id", &[("a", FIXTURE_A)]);
+        let result = PlanServer::new(Store::new(&root))
+            .apply(apply_args("a/b", WINDOW_PATCH, false))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(true));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["diagnostics"][0]["code"], "E021");
+    }
+
     #[test]
     fn tools_listed() {
         let names: Vec<String> = PlanServer::new(Store::new("/nonexistent"))
@@ -396,6 +568,6 @@ mod tests {
             .into_iter()
             .map(|t| t.name.to_string())
             .collect();
-        assert_eq!(names, ["check", "get"]);
+        assert_eq!(names, ["apply", "check", "get"]);
     }
 }
