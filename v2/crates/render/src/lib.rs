@@ -5,7 +5,9 @@
 
 #![forbid(unsafe_code)]
 
+pub mod render;
 pub mod svg;
 pub mod viewport;
 
+pub use render::{Region, RenderOptions, Rendered, View, render};
 pub use svg::plan_svg;

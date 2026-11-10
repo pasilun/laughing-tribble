@@ -12,9 +12,9 @@ use plan_core::resolved::{ResolvedOpening, RoomRect, Wall, WallKind};
 use plan_core::units::Mm;
 
 /// Empty margin around the drawn rooms and walls, in mm.
-const PAD: Mm = 500;
+pub(crate) const PAD: Mm = 500;
 /// Grid spacing: one line every 1 m.
-const GRID: Mm = 1000;
+pub(crate) const GRID: Mm = 1000;
 /// Font size of room names, in mm.
 const ROOM_NAME_SIZE: Mm = 200;
 /// Font size of room areas, in mm.
@@ -25,7 +25,20 @@ const ID_SIZE: Mm = 90;
 const OPENING_LINE: Mm = 30;
 
 /// The font of every text element. Embedded in W2-17.
-const FONT_FAMILY: &str = "DejaVu Sans, sans-serif";
+pub(crate) const FONT_FAMILY: &str = "DejaVu Sans, sans-serif";
+
+/// Font sizes of the room name and area labels, in viewBox units.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct RoomFonts {
+    pub name: f64,
+    pub area: f64,
+}
+
+/// Room fonts of the whole-plan drawing: names 200 mm, areas 160 mm.
+pub(crate) const PLAN_ROOM_FONTS: RoomFonts = RoomFonts {
+    name: ROOM_NAME_SIZE as f64,
+    area: ROOM_AREA_SIZE as f64,
+};
 
 /// The SVG drawing of a resolved plan, in mm.
 ///
@@ -34,15 +47,7 @@ const FONT_FAMILY: &str = "DejaVu Sans, sans-serif";
 pub fn plan_svg(resolved: &Resolved) -> String {
     let view = view_box(resolved);
     let mut elements = vec![grid(&view)];
-    for (name, rect) in &resolved.rooms {
-        elements.push(room(name.as_str(), rect));
-    }
-    for wall in resolved.walls.values() {
-        elements.push(wall_element(wall));
-    }
-    for opening in resolved.openings.values() {
-        elements.push(opening_element(opening, resolved));
-    }
+    elements.extend(drawn_elements(resolved, PLAN_ROOM_FONTS));
 
     let mut out = format!(
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="{x} {y} {w} {h}">"##,
@@ -128,8 +133,24 @@ fn grid(view: &View) -> String {
     format!(r##"<g class="grid" stroke="#d0d0d0" stroke-width="8">{lines}</g>"##)
 }
 
+/// The rooms, walls and openings, in that order, each as one SVG element.
+/// `fonts` sets the room label sizes; everything else is in mm.
+pub(crate) fn drawn_elements(resolved: &Resolved, fonts: RoomFonts) -> Vec<String> {
+    let mut elements = Vec::new();
+    for (name, rect) in &resolved.rooms {
+        elements.push(room(name.as_str(), rect, fonts));
+    }
+    for wall in resolved.walls.values() {
+        elements.push(wall_element(wall));
+    }
+    for opening in resolved.openings.values() {
+        elements.push(opening_element(opening, resolved));
+    }
+    elements
+}
+
 /// Every multiple of [`GRID`] in `from..=to`.
-fn multiples(from: Mm, to: Mm) -> Vec<Mm> {
+pub(crate) fn multiples(from: Mm, to: Mm) -> Vec<Mm> {
     // Round `from` up to a multiple of GRID.
     let first = -((-from).div_euclid(GRID)) * GRID;
     std::iter::successors(Some(first), |value| Some(value + GRID))
@@ -138,21 +159,21 @@ fn multiples(from: Mm, to: Mm) -> Vec<Mm> {
 }
 
 /// A room: a light rectangle with its name and area.
-fn room(name: &str, rect: &RoomRect) -> String {
+fn room(name: &str, rect: &RoomRect, fonts: RoomFonts) -> String {
     let (w, h) = (rect.east - rect.west, rect.south - rect.north);
     let (cx, cy) = (rect.west + w / 2, rect.north + h / 2);
     let area = format_m2(w.saturating_mul(h));
     let name_label = text(
-        cx,
-        cy - ROOM_AREA_SIZE / 2,
-        ROOM_NAME_SIZE,
+        cx as f64,
+        cy as f64 - fonts.area / 2.0,
+        fonts.name,
         " fill=\"#1a1a1a\"",
         name,
     );
     let area_label = text(
-        cx,
-        cy + ROOM_NAME_SIZE / 2,
-        ROOM_AREA_SIZE,
+        cx as f64,
+        cy as f64 + fonts.name / 2.0,
+        fonts.area,
         " fill=\"#1a1a1a\"",
         &format!("{area} m²"),
     );
@@ -252,11 +273,11 @@ fn id_label(id: &str, cx: Mm, cy: Mm, vertical: bool) -> String {
         r##" fill="#111111" stroke="#ffffff" stroke-width="{}" paint-order="stroke"{transform}"##,
         ID_SIZE / 8,
     );
-    text(cx, cy, ID_SIZE, &extra, id)
+    text(cx as f64, cy as f64, ID_SIZE as f64, &extra, id)
 }
 
 /// A `<text>` element centred on `(x, y)` with the drawing font.
-fn text(x: Mm, y: Mm, size: Mm, extra: &str, content: &str) -> String {
+pub(crate) fn text(x: f64, y: f64, size: f64, extra: &str, content: &str) -> String {
     format!(
         r##"<text x="{x}" y="{y}" font-size="{size}" font-family="{FONT_FAMILY}" text-anchor="middle" dominant-baseline="central"{extra}>{}</text>"##,
         escape(content),
@@ -264,7 +285,7 @@ fn text(x: Mm, y: Mm, size: Mm, extra: &str, content: &str) -> String {
 }
 
 /// Escape the characters that are special in SVG text and attributes.
-fn escape(text: &str) -> String {
+pub(crate) fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
