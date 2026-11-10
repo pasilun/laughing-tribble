@@ -4,6 +4,8 @@
 //! (in [`render`](crate::render)) draws them in `<g id="marks">` and labels them
 //! through the same placer as the room names.
 
+use plan_core::{Code, Resolved};
+
 use crate::viewport::Viewport;
 
 /// What a mark says. Each kind has its own colour.
@@ -41,6 +43,95 @@ pub struct Mark {
     pub to: [i64; 2],
     pub text: String,
     pub kind: MarkKind,
+}
+
+/// Where a face is: its coordinate, and the room's span on the other axis.
+///
+/// `"Garderob.north"` gives `Some((true, y_of_north_face, (west, east)))`: the
+/// `true` says the face is horizontal (north or south), so its coordinate is a y.
+/// East and west faces give `false` and an x, with the span `(north, south)`.
+/// `None` when the text has no `.`, the room is unknown, or the side is not a side.
+pub(crate) fn face_of(resolved: &Resolved, face: &str) -> Option<(bool, i64, (i64, i64))> {
+    let (room, side) = face.rsplit_once('.')?;
+    let (_, rect) = resolved
+        .rooms
+        .iter()
+        .find(|(name, _)| name.as_str() == room)?;
+    match side {
+        "north" => Some((true, rect.north, (rect.west, rect.east))),
+        "south" => Some((true, rect.south, (rect.west, rect.east))),
+        "east" => Some((false, rect.east, (rect.north, rect.south))),
+        "west" => Some((false, rect.west, (rect.north, rect.south))),
+        _ => None,
+    }
+}
+
+/// A mark between two parallel faces given as `"Room.side"`. `None` if a face
+/// is unknown or the two faces are not parallel.
+///
+/// The line sits at the middle of the two rooms' overlap on the other axis, or
+/// of the gap between them when they do not overlap (integer division). If the
+/// two faces have the same coordinate, the `to` point moves 1 mm along the
+/// mark's axis so that the line has a direction (spec §15 D38, amended).
+pub fn mark_between(
+    resolved: &Resolved,
+    id: &str,
+    from: &str,
+    to: &str,
+    text: String,
+    kind: MarkKind,
+) -> Option<Mark> {
+    let (horizontal, c1, (lo1, hi1)) = face_of(resolved, from)?;
+    let (other, c2, (lo2, hi2)) = face_of(resolved, to)?;
+    if horizontal != other {
+        return None;
+    }
+    let mid = (lo1.max(lo2) + hi1.min(hi2)) / 2;
+    let (start, mut end) = if horizontal {
+        ([mid, c1], [mid, c2])
+    } else {
+        ([c1, mid], [c2, mid])
+    };
+    if c1 == c2 {
+        if horizontal {
+            end[1] += 1;
+        } else {
+            end[0] += 1;
+        }
+    }
+    Some(Mark {
+        id: id.to_string(),
+        from: start,
+        to: end,
+        text,
+        kind,
+    })
+}
+
+/// One Conflict mark per E003 in `resolved.diagnostics` that has `data.from`,
+/// `data.to`, `data.stated` and `data.implied`. Ids are `conflict:{n}`, n from 1
+/// in diagnostics order. The text is `stated {stated}, chain gives {implied}
+/// ({r} mm)` with r = |stated − implied|, from the E003 data (spec §15 D38, amended).
+pub fn conflict_marks(resolved: &Resolved) -> Vec<Mark> {
+    let mut marks = Vec::new();
+    for diagnostic in resolved.diagnostics.iter().filter(|d| d.code == Code::E003) {
+        let data = &diagnostic.data;
+        let (Some(from), Some(to), Some(stated), Some(implied)) = (
+            data["from"].as_str(),
+            data["to"].as_str(),
+            data["stated"].as_i64(),
+            data["implied"].as_i64(),
+        ) else {
+            continue;
+        };
+        let residual = (stated - implied).abs();
+        let id = format!("conflict:{}", marks.len() + 1);
+        let text = format!("stated {stated}, chain gives {implied} ({residual} mm)");
+        if let Some(mark) = mark_between(resolved, &id, from, to, text, MarkKind::Conflict) {
+            marks.push(mark);
+        }
+    }
+    marks
 }
 
 /// The `<g id="marks">` group for `marks`, in mm units of `vp`.
@@ -206,5 +297,68 @@ mod tests {
         let rendered = render_marked(&fixture_a(), &plan_opts(), &[mark]).expect("renders");
         let vp = rendered.viewport;
         assert!(vp.origin_mm[0] as f64 + vp.size_px[0] as f64 * vp.mm_per_px >= 20000.0);
+    }
+
+    const FIXTURE_B: &str = include_str!("../../../fixtures/lgh154-b.plan");
+    const FIXTURE_C: &str = include_str!("../../../fixtures/lgh154-c.plan");
+
+    /// The draft model of a fixture (W4-02), which resolves even with E003.
+    fn draft(src: &str) -> Resolved {
+        let plan = plan_core::dsl::parse(src).expect("fixture parses");
+        plan_core::resolve_draft(&plan).0.expect("draft resolves")
+    }
+
+    #[test]
+    fn face_of_gives_coordinate_and_span() {
+        let resolved = draft(FIXTURE_B);
+        let (horizontal, y, (west, east)) = face_of(&resolved, "Garderob.north").expect("face");
+        assert!(horizontal);
+        assert_eq!(y, 0);
+        assert_eq!((west, east), (0, 1860));
+        let (horizontal, _, _) = face_of(&resolved, "Garderob.east").expect("face");
+        assert!(!horizontal);
+        assert!(face_of(&resolved, "Garderob.up").is_none());
+        assert!(face_of(&resolved, "Nowhere.north").is_none());
+    }
+
+    #[test]
+    fn mark_between_rejects_non_parallel_faces() {
+        let resolved = draft(FIXTURE_B);
+        let mark = mark_between(
+            &resolved,
+            "x",
+            "Garderob.north",
+            "Sovrum.east",
+            String::new(),
+            MarkKind::Conflict,
+        );
+        assert!(mark.is_none());
+    }
+
+    #[test]
+    fn fixture_b_has_one_conflict_mark() {
+        let marks = conflict_marks(&draft(FIXTURE_B));
+        assert_eq!(marks.len(), 1);
+        let mark = &marks[0];
+        assert_eq!(mark.id, "conflict:1");
+        assert_eq!(mark.from, [930, 0]);
+        assert_eq!(mark.to, [930, 4490]);
+        assert_eq!(mark.text, "stated 4490, chain gives 4540 (50 mm)");
+        assert_eq!(mark.kind, MarkKind::Conflict);
+    }
+
+    #[test]
+    fn fixture_c_mark_sits_in_the_overlap_and_is_one_mm_long() {
+        let marks = conflict_marks(&draft(FIXTURE_C));
+        assert_eq!(marks.len(), 1);
+        let mark = &marks[0];
+        assert_eq!(mark.from, [1920, 4540]);
+        assert_eq!(mark.to, [1920, 4541]);
+        assert_eq!(mark.text, "stated 0, chain gives 53 (53 mm)");
+    }
+
+    #[test]
+    fn fixture_a_has_no_conflict_marks() {
+        assert!(conflict_marks(&draft(FIXTURE_A)).is_empty());
     }
 }

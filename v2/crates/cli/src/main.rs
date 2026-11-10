@@ -10,10 +10,11 @@
 //!   if the plan does not resolve, print the diagnostics and exit 1.
 //! - `plan suggest <file>`: print each W001 (loose room) with its suggested
 //!   measurement, one per line.
-//! - `plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N]
+//! - `plan png <file> -o <out.png> [--view plan|labels|conflicts] [--max-tokens N]
 //!   [--region ID | --rect x,y,w,h] [--diff BEFORE]`: write the PNG and print its viewport
 //!   as JSON (with `--diff`, the plan view of the file with the differences from BEFORE
-//!   drawn on top, and a `diff` object of counts).
+//!   drawn on top, and a `diff` object of counts; with `--view conflicts`, the draft
+//!   plan view with a mark per conflict, and a `marks` count).
 //! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]`:
 //!   write the sheet as a PDF and print its paper, scale and byte count as JSON.
 //!   `--phase before|after` draws the building before or after the works (spec §15 D43).
@@ -42,12 +43,12 @@ const USAGE: &str = "usage:
   plan solve --json <file>
   plan fmt <file> [--write]
   plan svg <file> [--out path]
-  plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]
+  plan png <file> -o <out.png> [--view plan|labels|conflicts] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]
   plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]
   plan --version";
 
 /// Usage line of `plan png`, printed on its own to stderr (exit 2).
-const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]";
+const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels|conflicts] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]";
 
 /// Usage line of `plan pdf`, printed on its own to stderr (exit 2).
 const PDF_USAGE: &str = "usage: plan pdf FILE -o OUT.pdf [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims] [--phase all|before|after]";
@@ -256,6 +257,8 @@ struct PngArgs<'a> {
     file: &'a str,
     out: &'a str,
     view: View,
+    /// `--view conflicts`: the draft model, with a mark per conflict.
+    conflicts: bool,
     max_tokens: u32,
     region: Option<Region>,
     diff: Option<&'a str>,
@@ -263,11 +266,12 @@ struct PngArgs<'a> {
 
 /// Parse `FILE -o OUT [--view V] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]`.
 /// `None` is a usage error: a missing file or `-o`, an unknown option, a bad
-/// value, or both `--region` and `--rect`.
+/// value, both `--region` and `--rect`, or `--view conflicts` with `--diff`.
 fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
     let (&file, rest) = words.split_first()?;
     let mut out = None;
     let mut view = View::Labels;
+    let mut conflicts = false;
     let mut max_tokens = DEFAULT_TOKENS;
     let mut region = None;
     let mut rect = None;
@@ -279,8 +283,9 @@ fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
         match *flag {
             "-o" => out = Some(*value),
             "--view" => {
+                conflicts = *value == "conflicts";
                 view = match *value {
-                    "plan" => View::Plan,
+                    "plan" | "conflicts" => View::Plan,
                     "labels" => View::Labels,
                     _ => return None,
                 }
@@ -295,10 +300,14 @@ fn png_args<'a>(words: &[&'a str]) -> Option<PngArgs<'a>> {
     if region.is_some() && rect.is_some() {
         return None;
     }
+    if conflicts && diff.is_some() {
+        return None;
+    }
     Some(PngArgs {
         file,
         out: out?,
         view,
+        conflicts,
         max_tokens,
         region: region.or(rect),
         diff,
@@ -342,6 +351,9 @@ fn png_command(words: &[&str]) -> Result<ExitCode, String> {
         eprintln!("{PNG_USAGE}");
         return Ok(ExitCode::from(2));
     };
+    if args.conflicts {
+        return png_conflicts(args);
+    }
     let Some(resolved) = png_resolve(args.file)? else {
         return Ok(ExitCode::from(1));
     };
@@ -388,6 +400,52 @@ fn png_command(words: &[&str]) -> Result<ExitCode, String> {
         line.pop();
         line.push_str(&format!(r#","diff":{diff}}}"#));
     }
+    out(&line);
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `plan png --view conflicts`: the draft model of the file (`resolve_draft`, so a
+/// plan with E003 still draws), its plan view with a Conflict mark per E003, and
+/// the JSON viewport with `"marks": N`. A parse error prints as usual; a draft that
+/// does not resolve prints its diagnostics. Both exit 1.
+fn png_conflicts(args: PngArgs) -> Result<ExitCode, String> {
+    let (_, src) = read_source(args.file)?;
+    let plan = match dsl::parse(&src) {
+        Ok(plan) => plan,
+        Err(diagnostic) => {
+            out(&describe(&diagnostic));
+            return Ok(ExitCode::from(1));
+        }
+    };
+    let (resolved, diagnostics) = plan_core::resolve_draft(&plan);
+    let Some(resolved) = resolved else {
+        return Ok(print_unresolved(&diagnostics));
+    };
+    let marks = plan_render::marks::conflict_marks(&resolved);
+    let options = RenderOptions {
+        view: View::Plan,
+        region: args.region,
+        max_tokens: args.max_tokens,
+    };
+    let rendered = match plan_render::render_marked(&resolved, &options, &marks) {
+        Ok(rendered) => rendered,
+        Err(diagnostic) => {
+            out(&describe(&diagnostic));
+            return Ok(ExitCode::from(1));
+        }
+    };
+    let bytes = match plan_render::png(&rendered) {
+        Ok(bytes) => bytes,
+        Err(diagnostic) => {
+            out(&describe(&diagnostic));
+            return Ok(ExitCode::from(1));
+        }
+    };
+    fs::write(args.out, bytes).map_err(|error| format!("cannot write {}: {error}", args.out))?;
+    // The viewport's own JSON (fields in struct order), with `marks` appended.
+    let mut line = serde_json::to_string(&rendered.viewport).map_err(|error| error.to_string())?;
+    line.pop();
+    line.push_str(&format!(r#","marks":{}}}"#, marks.len()));
     out(&line);
     Ok(ExitCode::SUCCESS)
 }
