@@ -16,7 +16,7 @@ use crate::build::{
     room_areas, spaces,
 };
 use crate::diagnostics::{Code, Diagnostic, Severity, message};
-use crate::intent::{FaceRef, OpeningKind, Plan, RoomName, Side};
+use crate::intent::{FaceRef, OpeningKind, Phase, Plan, RoomName, Side, WallOverride};
 use crate::solve::components::with_suggested_data;
 use crate::solve::{
     AdjustedEdge, Axis, Component, CycleCheck, Edge, FaceId, FaceKey, adjusted_diagnostic,
@@ -51,6 +51,8 @@ pub struct Resolved {
     pub openings: BTreeMap<OpeningId, ResolvedOpening>,
     /// Rooms joined by `open`, with their total area.
     pub spaces: Vec<Space>,
+    /// The phase of every room that has a rectangle in `rooms`.
+    pub room_phases: BTreeMap<RoomName, Phase>,
     /// Every diagnostic found while resolving (warnings and infos; errors give `None`).
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -126,6 +128,12 @@ pub struct Wall {
     pub x: (Mm, Mm),
     /// Extent along y in mm, as `(min, max)`.
     pub y: (Mm, Mm),
+    /// Load-bearing wall (§15 D34). `false` without a wall override.
+    pub bearing: bool,
+    /// Fire rating text, e.g. "EI60" (§15 D34).
+    pub fire: Option<String>,
+    /// Existing, demolished or new (§15 D34). `Existing` without a wall override.
+    pub phase: Phase,
 }
 
 /// An opening placed on its face (§5.3 `ResolvedOpening`).
@@ -147,6 +155,10 @@ pub struct ResolvedOpening {
     pub hinge: Option<Side>,
     /// Doors: the room the leaf swings into, if the intent names one.
     pub opens_into: Option<RoomName>,
+    /// Existing, demolished or new.
+    pub phase: Phase,
+    /// Opening height in mm, if known.
+    pub height: Option<Mm>,
 }
 
 /// Rooms joined by `open`, with their total area (§9.5).
@@ -243,6 +255,7 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
             SegmentKind::Outer => WallKind::Outer,
             SegmentKind::Open => continue,
         };
+        let attributes = wall_override(plan, wall);
         let (from, to) = wall_ends(wall);
         let (from_id, to_id) = (node_id(from), node_id(to));
         nodes.insert(from_id.clone(), from);
@@ -259,11 +272,19 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
             between: (Some(wall.face.clone()), wall.other.clone()),
             x: wall.x,
             y: wall.y,
+            bearing: attributes.is_some_and(|o| o.bearing),
+            fire: attributes.and_then(|o| o.fire.clone()),
+            phase: attributes.map_or(Phase::Existing, |o| o.phase),
         };
         wall_models.insert(wall.id.clone(), model);
     }
+    let rooms = rooms(plan, &coords);
+    let room_phases = rooms
+        .keys()
+        .filter_map(|name| Some((name.clone(), plan.rooms.get(name)?.phase)))
+        .collect();
     let resolved = Resolved {
-        rooms: rooms(plan, &coords),
+        rooms,
         nodes,
         walls: wall_models,
         openings: openings
@@ -277,6 +298,7 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
                 area: space.area,
             })
             .collect(),
+        room_phases,
         diagnostics: diagnostics.clone(),
     };
     (Some(resolved), diagnostics)
@@ -372,6 +394,14 @@ fn distribute_axis(
     }
     moved.sort_by_key(|a| a.edge);
     moved
+}
+
+/// The first wall override of `plan` on the face of `wall`, or on the facing
+/// face of an interior wall (§15 D34).
+fn wall_override<'a>(plan: &'a Plan, wall: &BuiltWall) -> Option<&'a WallOverride> {
+    plan.wall_overrides
+        .iter()
+        .find(|o| o.face == wall.face || wall.other.as_ref().is_some_and(|other| o.face == *other))
 }
 
 /// The two end points of a wall on its node line, the room face it was made
@@ -525,6 +555,8 @@ fn opening_model(opening: &PlacedOpening) -> ResolvedOpening {
         wall: opening.wall.clone(),
         hinge: opening.hinge,
         opens_into: opening.opens_into.clone(),
+        phase: opening.phase,
+        height: opening.height,
     }
 }
 
@@ -533,6 +565,7 @@ mod tests {
     use super::*;
     use crate::diagnostics::Code;
     use crate::dsl::parse;
+    use crate::intent::Phase;
 
     const FIXTURE_A: &str = include_str!("../../../fixtures/lgh154-a.plan");
     const FIXTURE_B: &str = include_str!("../../../fixtures/lgh154-b.plan");
@@ -773,6 +806,63 @@ room B 1500 x 1000 source laser
         assert_eq!(d.data["drawn"], 500);
         assert_eq!(d.data["diff"], 20);
         assert_eq!(d.data["measured"]["value"], 520);
+    }
+
+    /// W3-19: wall attributes (§15 D34), opening phase and height, and room phases.
+    const REVIEW_1: &str = include_str!("../../../fixtures/review-1.plan");
+
+    #[test]
+    fn wall_attributes_openings_and_room_phases() -> Result<(), Box<dyn std::error::Error>> {
+        let plan = fixture(REVIEW_1);
+        let (resolved, diagnostics) = resolve(&plan);
+        assert!(resolved.is_some(), "{diagnostics:?}");
+        let resolved = resolved.ok_or("review-1 should resolve")?;
+
+        let interior = resolved
+            .walls
+            .get("W:A.east|B.west")
+            .ok_or("no interior wall W:A.east|B.west")?;
+        assert!(interior.bearing);
+        assert_eq!(interior.fire.as_deref(), Some("EI60"));
+        assert_eq!(interior.phase, Phase::Demolish);
+
+        let north = resolved
+            .walls
+            .get("W:A.north:outer")
+            .ok_or("no wall W:A.north:outer")?;
+        assert!(north.bearing);
+        assert_eq!(north.fire, None);
+        assert_eq!(north.phase, Phase::Existing);
+
+        let b_north = resolved
+            .walls
+            .get("W:B.north:outer")
+            .ok_or("no wall W:B.north:outer")?;
+        assert!(!b_north.bearing);
+
+        let door = resolved
+            .openings
+            .get("O:A.north:1")
+            .ok_or("no opening O:A.north:1")?;
+        assert_eq!(door.phase, Phase::New);
+        assert_eq!(door.height, None);
+
+        let window = resolved
+            .openings
+            .get("O:B.south:1")
+            .ok_or("no opening O:B.south:1")?;
+        assert_eq!(window.phase, Phase::New);
+        assert_eq!(window.height, Some(1200));
+
+        assert_eq!(
+            resolved.room_phases.get(&RoomName::new("A")?),
+            Some(&Phase::Existing)
+        );
+        assert_eq!(
+            resolved.room_phases.get(&RoomName::new("B")?),
+            Some(&Phase::Demolish)
+        );
+        Ok(())
     }
 
     #[test]

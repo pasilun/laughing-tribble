@@ -16,7 +16,7 @@
 use serde_json::json;
 
 use crate::diagnostics::{Code, Diagnostic, Severity, message};
-use crate::intent::{FaceRef, OpeningKind, Plan, RoomName, Side};
+use crate::intent::{FaceRef, OpeningKind, Phase, Plan, RoomName, Side};
 use crate::units::Mm;
 
 use super::faces::Coords;
@@ -43,6 +43,10 @@ pub struct PlacedOpening {
     pub hinge: Option<Side>,
     /// Doors: the room the leaf swings into, as written in the intent.
     pub opens_into: Option<RoomName>,
+    /// Existing, demolished or new, as written in the intent.
+    pub phase: Phase,
+    /// Opening height in mm, if the intent gives one.
+    pub height: Option<Mm>,
 }
 
 /// Place every opening of `plan` on its face (§9.3).
@@ -151,6 +155,8 @@ pub fn place_openings(
                     wall: wall.id.clone(),
                     hinge: opening.hinge,
                     opens_into: opening.opens_into.clone(),
+                    phase: opening.phase,
+                    height: opening.height,
                 }),
             },
             None => diagnostics.push(error(

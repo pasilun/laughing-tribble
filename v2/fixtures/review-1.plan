@@ -1,0 +1,13 @@
+plan "Review test"
+default_wall 90
+default_outer_wall 300
+
+room A 3000 x 2000 source laser
+room B 2000 x 2000 source laser demolish
+  east_of A gap 90
+  align north A
+
+wall A.north bearing
+wall A.east bearing fire "EI60" demolish
+door A.north at 500 width 900 hinge west opens A new
+window B.south at 400 width 1000 height 1200 new
