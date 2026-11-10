@@ -14,7 +14,7 @@ use strsim::jaro_winkler;
 
 use crate::labels::{LabelReq, PlacedLabel, place};
 use crate::svg::{FONT_FAMILY, GRID, PAD, RoomFonts, drawn_elements, multiples, text};
-use crate::viewport::{Viewport, fit};
+use crate::viewport::{Viewport, fit, within_limits};
 
 /// What the picture shows. Only `Plan` is drawn in week two.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,6 +64,11 @@ pub fn render(resolved: &Resolved, opts: &RenderOptions) -> Result<Rendered, Dia
         [content.x0, content.y0, content.width(), content.height()],
         opts.max_tokens,
     );
+    if !within_limits(&viewport, opts.max_tokens) {
+        return Err(crate::png::e012(
+            "the region is too large to draw at this limit",
+        ));
+    }
     let labels = place(
         &label_requests(resolved, opts.view, &viewport),
         viewport.size_px,

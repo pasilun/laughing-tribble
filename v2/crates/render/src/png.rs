@@ -31,7 +31,7 @@ pub fn png(r: &Rendered) -> Result<Vec<u8>, Diagnostic> {
 }
 
 /// E012 for a render that could not be rasterised.
-fn e012(reason: &str) -> Diagnostic {
+pub(crate) fn e012(reason: &str) -> Diagnostic {
     let args = [("reason", reason.to_string())];
     Diagnostic {
         code: Code::E012,

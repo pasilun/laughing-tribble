@@ -46,19 +46,32 @@ fn at_scale(rect_mm: [i64; 4], s: f64) -> Viewport {
     }
 }
 
+/// Largest power of ten tried by [`fit`]. At 8 × 10^18 mm per px every
+/// rectangle with i64 sides is at most 3 px on a side, so the ladder reaches a
+/// fitting scale well before this bound.
+const MAX_DECADE: i32 = 18;
+
 /// Smallest round scale that fits `[x, y, w, h]` (mm) into `max_tokens`.
+///
+/// The decade `k` is raised until the image fits both limits (spec §15 D9).
 pub fn fit(rect_mm: [i64; 4], max_tokens: u32) -> Viewport {
     let budget = max_tokens.clamp(1, MAX_IMAGE_TOKENS);
-    for k in 0..=4i32 {
+    for k in 0..=MAX_DECADE {
         for m in MULTIPLIERS {
             let s = m * 10f64.powi(k);
             let v = at_scale(rect_mm, s);
-            if v.size_px[0].max(v.size_px[1]) <= MAX_LONG_EDGE_PX && v.tokens <= budget {
+            if within_limits(&v, budget) {
                 return v;
             }
         }
     }
-    at_scale(rect_mm, 8.0 * 10f64.powi(4))
+    at_scale(rect_mm, 8.0 * 10f64.powi(MAX_DECADE))
+}
+
+/// Whether `v` is within the long-edge limit and at most `budget` tokens.
+pub(crate) fn within_limits(v: &Viewport, budget: u32) -> bool {
+    v.size_px[0].max(v.size_px[1]) <= MAX_LONG_EDGE_PX
+        && v.tokens <= budget.clamp(1, MAX_IMAGE_TOKENS)
 }
 
 #[cfg(test)]
@@ -99,5 +112,22 @@ mod tests {
         let v = fit([0, 0, 2000, 2000], u32::MAX);
         assert!(v.tokens <= MAX_IMAGE_TOKENS);
         assert!(v.size_px[0].max(v.size_px[1]) <= MAX_LONG_EDGE_PX);
+    }
+
+    #[test]
+    fn huge_region_stays_within_limits() {
+        let rect = [0, 0, 1_000_000_000, 1000];
+        let v = fit(rect, DEFAULT_TOKENS);
+        assert!(v.size_px[0].max(v.size_px[1]) <= MAX_LONG_EDGE_PX);
+        assert!(v.tokens <= DEFAULT_TOKENS);
+        assert_eq!(v.mm_per_px, 4e5);
+        assert_eq!(v.size_px, [2500, 1]);
+    }
+
+    #[test]
+    fn huge_region_ladder_always_fits() {
+        let v = fit([i64::MIN / 2, 0, i64::MAX / 2, i64::MAX / 2], 1);
+        assert!(v.size_px[0].max(v.size_px[1]) <= MAX_LONG_EDGE_PX);
+        assert!(v.tokens <= MAX_IMAGE_TOKENS);
     }
 }
