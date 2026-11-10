@@ -10,6 +10,8 @@
 //!   measurement, one per line.
 //! - `plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N]
 //!   [--region ID | --rect x,y,w,h]`: write the PNG and print its viewport as JSON.
+//! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]`:
+//!   write the sheet as a PDF and print its paper, scale and byte count as JSON.
 //! - `plan --version`.
 //!
 //! Exit status: 0 on success, 1 when the plan has an Error (or does not parse),
@@ -25,7 +27,7 @@ use plan_core::solve::components::suggested_w001;
 use plan_core::solve::{edges, unmeasured};
 use plan_core::{Diagnostic, Resolved, Severity, dsl, load, solve_json};
 use plan_render::viewport::DEFAULT_TOKENS;
-use plan_render::{Region, RenderOptions, View};
+use plan_render::{Paper, Region, RenderOptions, SheetOptions, View};
 
 const USAGE: &str = "usage:
   plan check <file>
@@ -34,10 +36,15 @@ const USAGE: &str = "usage:
   plan fmt <file> [--write]
   plan svg <file> [--out path]
   plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h]
+  plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]
   plan --version";
 
 /// Usage line of `plan png`, printed on its own to stderr (exit 2).
 const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h]";
+
+/// Usage line of `plan pdf`, printed on its own to stderr (exit 2).
+const PDF_USAGE: &str =
+    "usage: plan pdf FILE -o OUT.pdf [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]";
 
 /// Write a line to stdout. A closed pipe ends the program quietly with exit 0.
 fn out(text: &str) {
@@ -82,6 +89,7 @@ fn run(words: &[&str]) -> Result<ExitCode, String> {
         ["svg", file] => svg(file, None),
         ["svg", file, "--out", out] => svg(file, Some(out)),
         ["png", rest @ ..] => png_command(rest),
+        ["pdf", rest @ ..] => pdf_command(rest),
         ["--version"] => {
             out(&format!("plan {}", env!("CARGO_PKG_VERSION")));
             Ok(ExitCode::SUCCESS)
@@ -298,6 +306,114 @@ fn png_command(words: &[&str]) -> Result<ExitCode, String> {
     fs::write(args.out, bytes).map_err(|error| format!("cannot write {}: {error}", args.out))?;
     let line = serde_json::to_string(&rendered.viewport).map_err(|error| error.to_string())?;
     out(&line);
+    Ok(ExitCode::SUCCESS)
+}
+
+/// The arguments of `plan pdf`: the file, the output path and the sheet options.
+struct PdfArgs<'a> {
+    file: &'a str,
+    out: &'a str,
+    paper: Paper,
+    scale: Option<u32>,
+    title: Option<&'a str>,
+    date: Option<&'a str>,
+}
+
+/// Parse `FILE -o OUT [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]`.
+/// `None` is a usage error: a missing file or `-o`, an unknown option, a missing
+/// value, an unknown paper, or a scale that is not a positive integer.
+fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
+    let (&file, rest) = words.split_first()?;
+    let mut out = None;
+    let mut paper = Paper::A3;
+    let mut scale = None;
+    let mut title = None;
+    let mut date = None;
+    for pair in rest.chunks(2) {
+        let [flag, value] = pair else {
+            return None;
+        };
+        match *flag {
+            "-o" => out = Some(*value),
+            "--paper" => {
+                paper = match *value {
+                    "a4" => Paper::A4,
+                    "a3" => Paper::A3,
+                    _ => return None,
+                }
+            }
+            "--scale" => {
+                scale = Some(value.parse::<u32>().ok().filter(|n| *n > 0)?);
+            }
+            "--title" => title = Some(*value),
+            "--date" => date = Some(*value),
+            _ => return None,
+        }
+    }
+    Some(PdfArgs {
+        file,
+        out: out?,
+        paper,
+        scale,
+        title,
+        date,
+    })
+}
+
+/// Print every diagnostic as `check` does, and return exit status 1.
+fn print_unresolved(diagnostics: &[Diagnostic]) -> ExitCode {
+    for diagnostic in diagnostics {
+        out(&describe(diagnostic));
+    }
+    ExitCode::from(1)
+}
+
+/// `plan pdf`: draw the plan on a sheet and write it as a PDF to `-o`. Prints
+/// `{"paper":"a3","scale":25,"bytes":N}`. A plan that does not resolve prints its
+/// diagnostics and exits 1; so does a sheet or PDF diagnostic (E018, E012), and
+/// then nothing is written.
+fn pdf_command(words: &[&str]) -> Result<ExitCode, String> {
+    let Some(args) = pdf_args(words) else {
+        eprintln!("{PDF_USAGE}");
+        return Ok(ExitCode::from(2));
+    };
+    let (_, src) = read_source(args.file)?;
+    let loaded = match load(&src) {
+        Ok(loaded) => loaded,
+        Err(diagnostics) => return Ok(print_unresolved(&diagnostics)),
+    };
+    let Some(resolved) = &loaded.resolved else {
+        return Ok(print_unresolved(&loaded.diagnostics));
+    };
+    let opts = SheetOptions {
+        paper: args.paper,
+        scale: args.scale,
+        title: args
+            .title
+            .map_or_else(|| loaded.plan.name.clone(), str::to_string),
+        date: args.date.map(str::to_string),
+    };
+    let sheet = match plan_render::sheet(resolved, &opts) {
+        Ok(sheet) => sheet,
+        Err(diagnostic) => {
+            out(&describe(&diagnostic));
+            return Ok(ExitCode::from(1));
+        }
+    };
+    let bytes = match plan_render::pdf(&sheet) {
+        Ok(bytes) => bytes,
+        Err(diagnostic) => {
+            out(&describe(&diagnostic));
+            return Ok(ExitCode::from(1));
+        }
+    };
+    fs::write(args.out, &bytes).map_err(|error| format!("cannot write {}: {error}", args.out))?;
+    out(&format!(
+        "{{\"paper\":\"{}\",\"scale\":{},\"bytes\":{}}}",
+        sheet.paper.name().to_ascii_lowercase(),
+        sheet.scale,
+        bytes.len()
+    ));
     Ok(ExitCode::SUCCESS)
 }
 
