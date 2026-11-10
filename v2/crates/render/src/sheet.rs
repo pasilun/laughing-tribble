@@ -6,13 +6,18 @@
 
 use std::collections::BTreeMap;
 
+use plan_core::build::format_m2;
+use plan_core::resolved::RoomRect;
 use plan_core::{Code, Diagnostic, Resolved, Severity, message};
 use serde_json::json;
 
 use crate::corners::corner_rect;
 use crate::render::without_text;
 use crate::sheet_dims::dims_group;
-use crate::svg::{FONT_FAMILY, RoomFonts, drawn_elements, escape, has_parts, is_part, text};
+use crate::svg::{
+    FONT_FAMILY, RoomFonts, drawn_elements, escape, has_parts, is_part, printed_area, room,
+    swing_box, text,
+};
 
 /// The standard scales, 1:n, smallest first.
 const SCALES: [u32; 7] = [20, 25, 50, 100, 200, 500, 1000];
@@ -161,29 +166,59 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
         area: 2.5 * nf,
     };
 
+    // The rooms come first, each with its name, area and clear size (D49).
     let mut plan = Vec::new();
+    let mut clear_sizes = Vec::new();
+    for (name, rect) in &resolved.rooms {
+        let area = printed_area(resolved, name);
+        let (rw, rd) = (rect.east - rect.west, rect.south - rect.north);
+        // A part, and a room with parts, print no clear size (§15 D46). The
+        // clear size needs 25 × 14 mm of paper (D49).
+        let clear = !(is_part(resolved, name) || has_parts(resolved, name))
+            && rw as f64 / nf >= 25.0
+            && rd as f64 / nf >= 14.0;
+        let clear_text = format!("{rw} × {rd}");
+        // The label block: the widest of its lines, 11 mm of paper high (D49).
+        let mut lines = Vec::new();
+        if let Some(area) = area {
+            lines.push((fonts.name, name.as_str().chars().count()));
+            lines.push((
+                fonts.area,
+                format!("{} m²", format_m2(area)).chars().count(),
+            ));
+        }
+        if clear {
+            lines.push((fonts.area, clear_text.chars().count()));
+        }
+        let width = lines
+            .iter()
+            .map(|(font, chars)| 0.6 * font * *chars as f64)
+            .fold(0.0, f64::max);
+        let swings: Vec<Boxed> = resolved
+            .openings
+            .values()
+            .filter(|opening| opening.opens_into.as_ref().unwrap_or(&opening.face.room) == name)
+            .filter_map(|opening| swing_box(opening, resolved))
+            .map(|(x0, y0, x1, y1)| (x0 as f64, y0 as f64, x1 as f64, y1 as f64))
+            .collect();
+        let (lx, ly) = label_centre(rect, width, 11.0 * nf, &swings);
+        plan.push(room(name.as_str(), rect, area, fonts, true, Some((lx, ly))));
+        if clear {
+            clear_sizes.push(text(
+                lx,
+                ly + 4.5 * nf,
+                2.5 * nf,
+                " fill=\"#1a1a1a\"",
+                &clear_text,
+            ));
+        }
+    }
     for element in drawn_elements(resolved, fonts, 0.35 * nf, true) {
-        if element.starts_with(r#"<g class="room""#) {
-            plan.push(element);
-        } else {
+        if !element.starts_with(r#"<g class="room""#) {
             plan.push(without_text(&element));
         }
     }
-    for (name, rect) in &resolved.rooms {
-        // A part, and a room with parts, print no clear size (§15 D46).
-        if is_part(resolved, name) || has_parts(resolved, name) {
-            continue;
-        }
-        let (rw, rd) = (rect.east - rect.west, rect.south - rect.north);
-        let (cx, cy) = (rect.west + rw / 2, rect.north + rd / 2);
-        plan.push(text(
-            cx as f64,
-            cy as f64 + 4.5 * nf,
-            2.5 * nf,
-            " fill=\"#1a1a1a\"",
-            &format!("{rw} × {rd}"),
-        ));
-    }
+    plan.extend(clear_sizes);
     if opts.dims {
         plan.push(dims_group(resolved, minx, miny, n));
     }
@@ -265,6 +300,50 @@ fn extent(resolved: &Resolved) -> (i64, i64, i64, i64) {
         boxes.iter().map(|b| b.0.max(b.2)).max().unwrap_or(0),
         boxes.iter().map(|b| b.1.max(b.3)).max().unwrap_or(0),
     )
+}
+
+/// A box `(x0, y0, x1, y1)` in model mm.
+type Boxed = (f64, f64, f64, f64);
+
+/// Whether two boxes overlap. Touching edges do not overlap.
+fn overlaps(a: Boxed, b: Boxed) -> bool {
+    a.0 < b.2 && b.0 < a.2 && a.1 < b.3 && b.1 < a.3
+}
+
+/// The centre of a room's label block, `width` × `height` in model mm (D49).
+/// The first of five candidates whose box lies inside the room and overlaps
+/// no swing in `swings`; the room's centre when none is free.
+fn label_centre(rect: &RoomRect, width: f64, height: f64, swings: &[Boxed]) -> (f64, f64) {
+    let (w, h) = (rect.east - rect.west, rect.south - rect.north);
+    let (cx, cy) = (rect.west + w / 2, rect.north + h / 2);
+    let (qx, qy) = (w / 4, h / 4);
+    let candidates = [
+        (cx, cy),
+        (cx, cy + qy),
+        (cx, cy - qy),
+        (cx + qx, cy),
+        (cx - qx, cy),
+    ];
+    let free = |&(x, y): &(i64, i64)| {
+        let (x, y) = (x as f64, y as f64);
+        let block = (
+            x - width / 2.0,
+            y - height / 2.0,
+            x + width / 2.0,
+            y + height / 2.0,
+        );
+        let inside = block.0 >= rect.west as f64
+            && block.2 <= rect.east as f64
+            && block.1 >= rect.north as f64
+            && block.3 <= rect.south as f64;
+        inside && !swings.iter().any(|swing| overlaps(block, *swing))
+    };
+    let (x, y) = candidates
+        .iter()
+        .find(|p| free(p))
+        .copied()
+        .unwrap_or((cx, cy));
+    (x as f64, y as f64)
 }
 
 /// A 3.5 mm text in the title strip, on the baseline `y`.
@@ -680,6 +759,61 @@ mod tests {
             .svg;
         assert!(!svg.contains("2400 × 1500"), "{svg}");
         assert!(!svg.contains("2400 × 4000"), "{svg}");
+        Ok(())
+    }
+
+    /// The `y` of the text element whose content is `label`.
+    fn text_y(svg: &str, label: &str) -> f64 {
+        let end = svg
+            .find(&format!(">{label}</text>"))
+            .expect("the text is drawn");
+        let start = svg[..end].rfind("<text ").expect("an opening tag");
+        let element = &svg[start..end];
+        let attr = element.find(" y=\"").expect("a y attribute") + 4;
+        let rest = &element[attr..];
+        rest[..rest.find('"').expect("closing quote")]
+            .parse()
+            .expect("a number")
+    }
+
+    #[test]
+    fn hall_label_moves_off_the_wc_door_swing() {
+        let svg = sheet(&fixture_a(), &opts(Paper::A3, None))
+            .expect("fits")
+            .svg;
+        // The WC door swings into Hall over y 240…690; the name moves below it.
+        let y = text_y(&svg, "Hall");
+        assert!(y > 690.0, "{y}");
+        // Hand check (D49): the second candidate (2531, 834), name 31.25 above it.
+        assert!((y - 802.75).abs() < 1e-9, "{y}");
+        assert!(svg.contains(">1100 × 1113</text>"), "{svg}");
+    }
+
+    #[test]
+    fn garderob_label_stays_at_the_centre() {
+        let resolved = fixture_a();
+        let (_, rect) = resolved
+            .rooms
+            .iter()
+            .find(|(name, _)| name.as_str() == "Garderob")
+            .expect("Garderob is in fixture A");
+        let centre_y = (rect.north + (rect.south - rect.north) / 2) as f64;
+        let svg = sheet(&resolved, &opts(Paper::A3, None)).expect("fits").svg;
+        assert!((text_y(&svg, "Garderob") - (centre_y - 31.25)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn room_under_25_mm_wide_on_paper_has_no_clear_size() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // 500 mm at 1:25 is 20 mm on paper, under the 25 mm the clear size needs.
+        let loaded = plan_core::load("plan \"Tall\"\nroom Tall 500 x 4000 source laser\n")
+            .map_err(|_| "tall room loads")?;
+        let resolved = loaded.resolved.ok_or("tall room resolves")?;
+        let svg = sheet(&resolved, &opts(Paper::A3, Some(25)))
+            .map_err(|_| "tall room fits A3")?
+            .svg;
+        assert!(svg.contains(">Tall</text>"), "{svg}");
+        assert!(!svg.contains("500 × 4000"), "{svg}");
         Ok(())
     }
 }

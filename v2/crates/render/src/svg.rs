@@ -156,7 +156,7 @@ pub(crate) fn drawn_elements(
     let mut elements = Vec::new();
     for (name, rect) in &resolved.rooms {
         let area = printed_area(resolved, name);
-        elements.push(room(name.as_str(), rect, area, fonts, sheet));
+        elements.push(room(name.as_str(), rect, area, fonts, sheet, None));
     }
     for wall in resolved.walls.values() {
         elements.push(wall_element(wall, resolved, opening_stroke));
@@ -214,23 +214,31 @@ pub(crate) fn printed_area(resolved: &Resolved, name: &RoomName) -> Option<i64> 
 
 /// A room: a light rectangle with its name and area. `area` is the printed
 /// area in mm² (see [`printed_area`]); `None` (a part) prints no text. On a
-/// sheet (`sheet`, D49) the rectangle is white.
-fn room(name: &str, rect: &RoomRect, area: Option<i64>, fonts: RoomFonts, sheet: bool) -> String {
+/// sheet (`sheet`, D49) the rectangle is white. `label` is the centre of the
+/// name and area texts, `None` for the rectangle's centre.
+pub(crate) fn room(
+    name: &str,
+    rect: &RoomRect,
+    area: Option<i64>,
+    fonts: RoomFonts,
+    sheet: bool,
+    label: Option<(f64, f64)>,
+) -> String {
     let fill = if sheet { "#ffffff" } else { "#eef4fb" };
     let (w, h) = (rect.east - rect.west, rect.south - rect.north);
-    let (cx, cy) = (rect.west + w / 2, rect.north + h / 2);
+    let (cx, cy) = label.unwrap_or(((rect.west + w / 2) as f64, (rect.north + h / 2) as f64));
     let labels = match area {
         Some(area) => {
             let name_label = text(
-                cx as f64,
-                cy as f64 - fonts.area / 2.0,
+                cx,
+                cy - fonts.area / 2.0,
                 fonts.name,
                 " fill=\"#1a1a1a\"",
                 name,
             );
             let area_label = text(
-                cx as f64,
-                cy as f64 + fonts.name / 2.0,
+                cx,
+                cy + fonts.name / 2.0,
                 fonts.area,
                 " fill=\"#1a1a1a\"",
                 &format!("{} m²", format_m2(area)),
@@ -446,12 +454,7 @@ fn opening_element(
     sheet: bool,
 ) -> String {
     let horizontal = matches!(opening.face.side, Side::North | Side::South);
-    let (lo, hi) = resolved
-        .walls
-        .get(&opening.wall)
-        .map(|wall| if horizontal { wall.y } else { wall.x })
-        .or_else(|| face_position(opening, resolved))
-        .unwrap_or((0, 0));
+    let (lo, hi) = across(opening, resolved);
     let (start, end) = (opening.start, opening.end);
     let mid = (lo + hi) / 2;
     // The gap rectangle, and a line from `start` to `end` across the wall at `across`.
@@ -523,12 +526,26 @@ fn swing_path(
     stroke: f64,
     dash: &str,
 ) -> String {
-    if !matches!(opening.kind, OpeningKind::Door) {
-        return String::new();
-    }
-    let Some(hinge) = opening.hinge else {
+    let Some([(hx, hy), (lx, ly), (jx, jy)]) = swing_points(opening, wall) else {
         return String::new();
     };
+    let w = opening.end - opening.start;
+    let cross = (lx - hx) * (jy - hy) - (ly - hy) * (jx - hx);
+    let sweep = u8::from(cross > 0);
+    format!(
+        r##"<path d="M {hx} {hy} L {lx} {ly} A {w} {w} 0 0 {sweep} {jx} {jy}" fill="none" stroke="{colour}" stroke-width="{}"{dash}/>"##,
+        stroke / 2.0,
+    )
+}
+
+/// The points H (hinge), L (leaf end) and J (other jamb) of a hinged door's
+/// swing path (W3-13), in model mm. `wall` is the wall's extent across its
+/// thickness, `(lo, hi)`. `None` for windows, passages and doors without a hinge.
+fn swing_points(opening: &ResolvedOpening, wall: (Mm, Mm)) -> Option<[(Mm, Mm); 3]> {
+    if !matches!(opening.kind, OpeningKind::Door) {
+        return None;
+    }
+    let hinge = opening.hinge?;
     let (lo, hi) = wall;
     let (start, end) = (opening.start, opening.end);
     let w = end - start;
@@ -549,17 +566,42 @@ fn swing_path(
     } else {
         (start, end)
     };
-    let ((hx, hy), (lx, ly), (jx, jy)) = if horizontal {
-        ((a, c), (a, c + s * w), (b, c))
+    let points = if horizontal {
+        [(a, c), (a, c + s * w), (b, c)]
     } else {
-        ((c, a), (c + s * w, a), (c, b))
+        [(c, a), (c + s * w, a), (c, b)]
     };
-    let cross = (lx - hx) * (jy - hy) - (ly - hy) * (jx - hx);
-    let sweep = u8::from(cross > 0);
-    format!(
-        r##"<path d="M {hx} {hy} L {lx} {ly} A {w} {w} 0 0 {sweep} {jx} {jy}" fill="none" stroke="{colour}" stroke-width="{}"{dash}/>"##,
-        stroke / 2.0,
-    )
+    Some(points)
+}
+
+/// The bounding box `(x0, y0, x1, y1)` of a hinged door's swing, in model mm:
+/// the box of its points H, L and J (see [`swing_points`]). `None` for an
+/// opening with no swing. Used by the sheet to keep room labels off swings (D49).
+pub(crate) fn swing_box(
+    opening: &ResolvedOpening,
+    resolved: &Resolved,
+) -> Option<(Mm, Mm, Mm, Mm)> {
+    let points = swing_points(opening, across(opening, resolved))?;
+    let xs = points.map(|(x, _)| x);
+    let ys = points.map(|(_, y)| y);
+    Some((
+        xs.into_iter().min()?,
+        ys.into_iter().min()?,
+        xs.into_iter().max()?,
+        ys.into_iter().max()?,
+    ))
+}
+
+/// The extent of an opening's wall across its thickness, `(lo, hi)`: the
+/// wall's extent, or the room face's position when the wall is missing.
+pub(crate) fn across(opening: &ResolvedOpening, resolved: &Resolved) -> (Mm, Mm) {
+    let horizontal = matches!(opening.face.side, Side::North | Side::South);
+    resolved
+        .walls
+        .get(&opening.wall)
+        .map(|wall| if horizontal { wall.y } else { wall.x })
+        .or_else(|| face_position(opening, resolved))
+        .unwrap_or((0, 0))
 }
 
 /// The position of an opening's face as a zero-thickness band `(v, v)`, from
