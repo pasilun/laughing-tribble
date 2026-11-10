@@ -309,7 +309,7 @@ fn svg_text(
     };
     // Opening lines are 3 px wide, so they keep their size at any scale.
     let opening_stroke = 3.0 * mpp;
-    for element in drawn_elements(resolved, fonts, opening_stroke) {
+    for element in drawn_elements(resolved, fonts, opening_stroke, false) {
         out.push_str(&without_text(&element));
         out.push('\n');
     }

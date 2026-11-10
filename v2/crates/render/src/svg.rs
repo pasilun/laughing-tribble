@@ -55,6 +55,7 @@ pub fn plan_svg(resolved: &Resolved) -> String {
         resolved,
         PLAN_ROOM_FONTS,
         OPENING_LINE as f64,
+        false,
     ));
 
     let mut out = format!(
@@ -144,14 +145,17 @@ fn grid(view: &View) -> String {
 /// The rooms, walls, stubs, fixtures and openings, in that order, each as one
 /// SVG element. `fonts` sets the room and label sizes and `opening_stroke` the width
 /// of the opening lines, both in viewBox units; everything else is in mm.
+/// `sheet` draws the black and white sheet style (spec §15 D49): untinted rooms
+/// and black openings, a window as a framed double line.
 pub(crate) fn drawn_elements(
     resolved: &Resolved,
     fonts: RoomFonts,
     opening_stroke: f64,
+    sheet: bool,
 ) -> Vec<String> {
     let mut elements = Vec::new();
     for (name, rect) in &resolved.rooms {
-        elements.push(room(name.as_str(), rect, fonts));
+        elements.push(room(name.as_str(), rect, fonts, sheet));
     }
     for wall in resolved.walls.values() {
         elements.push(wall_element(wall, resolved, opening_stroke));
@@ -163,7 +167,7 @@ pub(crate) fn drawn_elements(
         elements.push(fixture_element(fixture, fonts, opening_stroke));
     }
     for opening in resolved.openings.values() {
-        elements.push(opening_element(opening, resolved, opening_stroke));
+        elements.push(opening_element(opening, resolved, opening_stroke, sheet));
     }
     elements
 }
@@ -177,8 +181,10 @@ pub(crate) fn multiples(from: Mm, to: Mm) -> Vec<Mm> {
         .collect()
 }
 
-/// A room: a light rectangle with its name and area.
-fn room(name: &str, rect: &RoomRect, fonts: RoomFonts) -> String {
+/// A room: a light rectangle with its name and area. On a sheet (`sheet`, D49)
+/// the rectangle is white.
+fn room(name: &str, rect: &RoomRect, fonts: RoomFonts, sheet: bool) -> String {
+    let fill = if sheet { "#ffffff" } else { "#eef4fb" };
     let (w, h) = (rect.east - rect.west, rect.south - rect.north);
     let (cx, cy) = (rect.west + w / 2, rect.north + h / 2);
     let area = format_m2(w.saturating_mul(h));
@@ -197,7 +203,7 @@ fn room(name: &str, rect: &RoomRect, fonts: RoomFonts) -> String {
         &format!("{area} m²"),
     );
     format!(
-        r##"<g class="room" data-id="{id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="#eef4fb"/>{name_label}{area_label}</g>"##,
+        r##"<g class="room" data-id="{id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"/>{name_label}{area_label}</g>"##,
         id = escape(name),
         x = rect.west,
         y = rect.north,
@@ -388,7 +394,17 @@ fn fixture_element(fixture: &ResolvedFixture, fonts: RoomFonts, s: f64) -> Strin
 /// The gap spans the opening's `start..end` along its face and the wall's
 /// thickness across it. If the wall is missing, the thickness is the room face.
 /// The coloured line is `stroke` wide.
-fn opening_element(opening: &ResolvedOpening, resolved: &Resolved, stroke: f64) -> String {
+///
+/// On a sheet (`sheet`, D49) the gap has a black outline `stroke / 2` wide, the
+/// line and door path are black, and a window is two lines at a third and two
+/// thirds of the wall thickness instead of the centre line. A demolished
+/// opening keeps its red dashed look.
+fn opening_element(
+    opening: &ResolvedOpening,
+    resolved: &Resolved,
+    stroke: f64,
+    sheet: bool,
+) -> String {
     let horizontal = matches!(opening.face.side, Side::North | Side::South);
     let (lo, hi) = resolved
         .walls
@@ -398,25 +414,24 @@ fn opening_element(opening: &ResolvedOpening, resolved: &Resolved, stroke: f64) 
         .unwrap_or((0, 0));
     let (start, end) = (opening.start, opening.end);
     let mid = (lo + hi) / 2;
-    let (gap, line, cx, cy) = if horizontal {
-        (
-            (start, lo, end - start, hi - lo),
-            (start, mid, end, mid),
-            (start + end) / 2,
-            mid,
-        )
+    // The gap rectangle, and a line from `start` to `end` across the wall at `across`.
+    let (gap, cx, cy) = if horizontal {
+        ((start, lo, end - start, hi - lo), (start + end) / 2, mid)
     } else {
-        (
-            (lo, start, hi - lo, end - start),
-            (mid, start, mid, end),
-            mid,
-            (start + end) / 2,
-        )
+        ((lo, start, hi - lo, end - start), mid, (start + end) / 2)
+    };
+    let seg = |across: Mm| {
+        if horizontal {
+            (start, across, end, across)
+        } else {
+            (across, start, across, end)
+        }
     };
     // A demolished opening is drawn red and dashed; new and existing ones as usual.
     let demolish = opening.phase == Phase::Demolish;
     let colour = match (demolish, opening.kind) {
         (true, _) => "#c62828",
+        (false, _) if sheet => "#000000",
         (false, OpeningKind::Door) => "#8c4a00",
         (false, OpeningKind::Window) => "#1f77d0",
         (false, OpeningKind::Passage) => "#2a9d4b",
@@ -426,19 +441,33 @@ fn opening_element(opening: &ResolvedOpening, resolved: &Resolved, stroke: f64) 
     } else {
         String::new()
     };
+    let line_element = |(x1, y1, x2, y2): (Mm, Mm, Mm, Mm)| {
+        format!(
+            r##"<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke}"{dash}/>"##
+        )
+    };
+    let lines = if sheet && opening.kind == OpeningKind::Window {
+        [lo + (hi - lo) / 3, lo + 2 * (hi - lo) / 3]
+            .into_iter()
+            .map(|across| line_element(seg(across)))
+            .collect::<String>()
+    } else {
+        line_element(seg(mid))
+    };
+    let gap_outline = if sheet {
+        format!(r##" stroke="#000000" stroke-width="{}""##, stroke / 2.0)
+    } else {
+        String::new()
+    };
     let label = id_label(&opening.id, cx, cy, !horizontal);
     let swing = swing_path(opening, (lo, hi), colour, stroke, &dash);
     format!(
-        r##"<g class="opening" data-id="{id}"><rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" fill="#ffffff"/><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{colour}" stroke-width="{stroke}"{dash}/>{swing}{label}</g>"##,
+        r##"<g class="opening" data-id="{id}"><rect x="{gx}" y="{gy}" width="{gw}" height="{gh}" fill="#ffffff"{gap_outline}/>{lines}{swing}{label}</g>"##,
         id = escape(&opening.id),
         gx = gap.0,
         gy = gap.1,
         gw = gap.2,
         gh = gap.3,
-        x1 = line.0,
-        y1 = line.1,
-        x2 = line.2,
-        y2 = line.3,
     )
 }
 
@@ -859,5 +888,12 @@ mod tests {
     #[test]
     fn fixture_a_has_no_fixture_group() {
         assert!(!fixture_a_svg().contains(r##"class="fixture""##));
+    }
+
+    #[test]
+    fn plan_view_keeps_its_colours() {
+        let svg = fixture_a_svg();
+        assert!(svg.contains("#1f77d0"), "{svg}");
+        assert!(svg.contains("#eef4fb"), "{svg}");
     }
 }

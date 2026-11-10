@@ -162,7 +162,7 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
     };
 
     let mut plan = Vec::new();
-    for element in drawn_elements(resolved, fonts, 0.35 * nf) {
+    for element in drawn_elements(resolved, fonts, 0.35 * nf, true) {
         if element.starts_with(r#"<g class="room""#) {
             plan.push(element);
         } else {
@@ -634,5 +634,35 @@ mod tests {
         assert!(group.contains(">1100<"), "{group}");
         assert!(!group.contains(">121<"), "{group}");
         assert!(!group.contains(">90<"), "{group}");
+    }
+
+    #[test]
+    fn sheet_is_black_and_white() {
+        let svg = sheet(&fixture_a(), &opts(Paper::A3, None))
+            .expect("fits")
+            .svg;
+        for colour in ["#1f77d0", "#2a9d4b", "#8c4a00", "#eef4fb"] {
+            assert!(!svg.contains(colour), "{colour} on the sheet");
+        }
+    }
+
+    #[test]
+    fn sheet_window_is_a_framed_double_line() {
+        let svg = sheet(&fixture_a(), &opts(Paper::A3, None))
+            .expect("fits")
+            .svg;
+        let start = svg
+            .find(r##"data-id="O:Sovrum.south:1""##)
+            .expect("the window is drawn");
+        let rest = &svg[start..];
+        let group = &rest[..rest.find("</g>").expect("closing tag")];
+        assert_eq!(group.matches("<line ").count(), 2, "{group}");
+        assert!(group.contains(r##"y1="4640""##), "{group}");
+        assert!(group.contains(r##"y1="4740""##), "{group}");
+        // The gap is outlined in black too.
+        assert!(
+            group.contains(r##"fill="#ffffff" stroke="#000000" stroke-width=""##),
+            "{group}"
+        );
     }
 }
