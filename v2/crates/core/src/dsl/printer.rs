@@ -228,7 +228,7 @@ fn stub_line(stub: &Stub) -> String {
     line
 }
 
-/// `room NAME W x D [source ...] [apartment "A"] [demolish|new]`.
+/// `room NAME W x D [source ...] [apartment "A"] [part PARENT] [demolish|new]`.
 fn room_line(room: &Room) -> String {
     let mut line = format!(
         "room {} {} x {}",
@@ -241,6 +241,9 @@ fn room_line(room: &Room) -> String {
     }
     if let Some(apartment) = &room.apartment {
         line.push_str(&format!(" apartment {}", quoted(apartment)));
+    }
+    if let Some(parent) = &room.part_of {
+        line.push_str(&format!(" part {parent}"));
     }
     line.push_str(phase_text(room.phase));
     line
@@ -884,6 +887,19 @@ passage Garderob.east at 0 width 680 source estimated
         assert!(wall < stub && stub < door, "{text}");
         let mut plan = parse(src).expect("parses");
         canonicalize(&mut plan);
+        assert_round_trip(&plan);
+    }
+
+    #[test]
+    fn room_part_round_trips() {
+        let src =
+            "room Kok 2400 x 4000 source laser\nroom Matvra 2400 x 1500 source laser part Kok\n";
+        let plan = crate::dsl::parse(src).expect("parses");
+        let text = print(&plan);
+        assert!(
+            text.contains("room Matvra 2400 x 1500 source laser part Kok\n"),
+            "{text}"
+        );
         assert_round_trip(&plan);
     }
 }

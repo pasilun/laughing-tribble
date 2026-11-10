@@ -125,6 +125,9 @@ pub struct Room {
     pub depth: Option<Quantity>,
     /// Apartment the room belongs to, if any.
     pub apartment: Option<String>,
+    /// The room this rectangle is a part of (`part PARENT`, §15 D46). The
+    /// parent prints the name and the summed area; the part prints neither.
+    pub part_of: Option<RoomName>,
     /// Existing, to be demolished, or new.
     pub phase: Phase,
 }
@@ -414,6 +417,7 @@ mod tests {
             width: Some(q(w, Source::Laser)),
             depth: None,
             apartment: Some("A".to_string()),
+            part_of: None,
             phase: Phase::Existing,
         };
         let face = |r: &RoomName, side| FaceRef {
@@ -564,6 +568,7 @@ mod type_roundtrip_tests {
             width: None,
             depth: None,
             apartment: None,
+            part_of: None,
             phase: Phase::New,
         })?;
         round_trip(&Room {
@@ -571,6 +576,7 @@ mod type_roundtrip_tests {
             width: Some(q(3200, Source::Laser)),
             depth: Some(q(2600, Source::Tape)),
             apartment: Some("B".to_string()),
+            part_of: None,
             phase: Phase::Demolish,
         })
     }

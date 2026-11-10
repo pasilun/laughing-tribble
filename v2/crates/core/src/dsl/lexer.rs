@@ -35,6 +35,7 @@ const KEYWORDS: &[&str] = &[
     "default_outer_wall",
     "room",
     "apartment",
+    "part",
     "east_of",
     "west_of",
     "south_of",

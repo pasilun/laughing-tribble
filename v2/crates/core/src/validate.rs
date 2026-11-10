@@ -18,7 +18,8 @@ const MIN_SIZE: Mm = 1;
 ///
 /// All diagnostics are Errors with no span. The checks run in this order: the
 /// default walls, the room sizes in declaration order, the placement relations
-/// in order, the openings in order, then the wall overrides in order.
+/// in order, the part relations in declaration order (E015, §15 D46), the
+/// openings in order, then the wall overrides in order.
 pub fn validate(plan: &Plan) -> Vec<Diagnostic> {
     let mut out = Vec::new();
 
@@ -64,6 +65,33 @@ pub fn validate(plan: &Plan) -> Vec<Diagnostic> {
                 message: message(Code::E015, &args),
                 span: None,
                 refs: vec![subject.to_string()],
+                data: json!({}),
+            });
+        }
+    }
+
+    for name in &plan.order {
+        let Some(parent) = plan.rooms.get(name).and_then(|room| room.part_of.as_ref()) else {
+            continue;
+        };
+        // A part relates to its parent as `part`. A room may not be its own
+        // part, and only one level is allowed: the parent may not be a part.
+        let parent_is_part = plan
+            .rooms
+            .get(parent)
+            .is_some_and(|room| room.part_of.is_some());
+        if parent == name || parent_is_part {
+            let args = [
+                ("subject", name.to_string()),
+                ("relation", "part".to_string()),
+                ("of", parent.to_string()),
+            ];
+            out.push(Diagnostic {
+                code: Code::E015,
+                severity: Severity::Error,
+                message: message(Code::E015, &args),
+                span: None,
+                refs: vec![name.to_string()],
                 data: json!({}),
             });
         }
@@ -168,5 +196,32 @@ mod tests {
         assert!(resolved.is_none());
         let codes: Vec<Code> = diagnostics.iter().map(|d| d.code).collect();
         assert_eq!(codes, vec![Code::E014], "{diagnostics:?}");
+    }
+
+    #[test]
+    fn part_of_itself_is_e015() {
+        let diagnostics = validate(&plan("room A 1000 x 1000 source laser part A\n"));
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        let d = &diagnostics[0];
+        assert_eq!(d.code, Code::E015);
+        assert_eq!(d.message, "\"A part A\" relates a room to itself.");
+        assert_eq!(d.refs, vec!["A".to_string()]);
+    }
+
+    #[test]
+    fn part_of_a_part_is_e015() {
+        let src = "room A 1000 x 1000 source laser\nroom B 1000 x 1000 part A\nroom C 1000 x 1000 part B\n";
+        let diagnostics = validate(&plan(src));
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        let d = &diagnostics[0];
+        assert_eq!(d.code, Code::E015);
+        assert_eq!(d.message, "\"C part B\" relates a room to itself.");
+        assert_eq!(d.refs, vec!["C".to_string()]);
+    }
+
+    #[test]
+    fn one_level_of_parts_is_valid() {
+        let src = "room A 1000 x 1000 source laser\nroom B 1000 x 1000 part A\nroom C 1000 x 1000 part A\n";
+        assert!(validate(&plan(src)).is_empty());
     }
 }

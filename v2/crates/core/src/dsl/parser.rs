@@ -501,6 +501,11 @@ fn room(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
     } else {
         None
     };
+    let part_of = if cur.opt_kw("part") {
+        Some(reference(cur, b)?)
+    } else {
+        None
+    };
     let phase = cur.phase().unwrap_or(Phase::Existing);
     cur.finish()?;
     let room = Room {
@@ -508,6 +513,7 @@ fn room(cur: &mut Cursor, b: &mut Builder) -> Result<(), Diagnostic> {
         width: width.map(|value| quantity(value, src.as_ref())),
         depth: depth.map(|value| quantity(value, src.as_ref())),
         apartment,
+        part_of,
         phase,
     };
     b.add_room(span, room)
@@ -1383,5 +1389,22 @@ mod tests {
     fn room_named_stub_is_rejected() {
         let d = e006_of("room stub 1000 x 2000\n");
         assert_eq!(d.code, Code::E006);
+    }
+
+    #[test]
+    fn room_part_names_its_parent() {
+        let plan = parse(
+            "room Kok 2400 x 4000 source laser\nroom Matvra 2400 x 1500 source laser part Kok new\n",
+        )
+        .expect("parses");
+        assert_eq!(room(&plan, "Matvra").part_of, Some(name("Kok")));
+        assert_eq!(room(&plan, "Matvra").phase, Phase::New);
+        assert_eq!(room(&plan, "Kok").part_of, None);
+    }
+
+    #[test]
+    fn part_of_unknown_room_is_e001() {
+        let d = parse("room Matvra 2400 x 1500 part Kkk\n").expect_err("expected E001");
+        assert_eq!(d.code, Code::E001);
     }
 }

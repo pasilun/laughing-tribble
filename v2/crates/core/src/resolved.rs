@@ -58,6 +58,9 @@ pub struct Resolved {
     pub spaces: Vec<Space>,
     /// The phase of every room that has a rectangle in `rooms`.
     pub room_phases: BTreeMap<RoomName, Phase>,
+    /// Rooms that are parts of another room (§15 D46): part → parent, for each
+    /// part with a rectangle whose parent also has one.
+    pub room_parts: BTreeMap<RoomName, RoomName>,
     /// Every diagnostic found while resolving (warnings and infos; errors give `None`).
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -353,6 +356,15 @@ fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>)
         .keys()
         .filter_map(|name| Some((name.clone(), plan.rooms.get(name)?.phase)))
         .collect();
+    let room_parts = plan
+        .rooms
+        .values()
+        .filter_map(|room| {
+            let parent = room.part_of.as_ref()?;
+            (rooms.contains_key(&room.name) && rooms.contains_key(parent))
+                .then(|| (room.name.clone(), parent.clone()))
+        })
+        .collect();
     let resolved = Resolved {
         rooms,
         nodes,
@@ -371,6 +383,7 @@ fn resolve_with(plan: &Plan, draft: bool) -> (Option<Resolved>, Vec<Diagnostic>)
             })
             .collect(),
         room_phases,
+        room_parts,
         diagnostics: diagnostics.clone(),
     };
     (Some(resolved), diagnostics)

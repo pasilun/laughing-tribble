@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::corners::corner_rect;
 use crate::render::without_text;
 use crate::sheet_dims::dims_group;
-use crate::svg::{FONT_FAMILY, RoomFonts, drawn_elements, escape, text};
+use crate::svg::{FONT_FAMILY, RoomFonts, drawn_elements, escape, has_parts, is_part, text};
 
 /// The standard scales, 1:n, smallest first.
 const SCALES: [u32; 7] = [20, 25, 50, 100, 200, 500, 1000];
@@ -169,7 +169,11 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
             plan.push(without_text(&element));
         }
     }
-    for rect in resolved.rooms.values() {
+    for (name, rect) in &resolved.rooms {
+        // A part, and a room with parts, print no clear size (§15 D46).
+        if is_part(resolved, name) || has_parts(resolved, name) {
+            continue;
+        }
         let (rw, rd) = (rect.east - rect.west, rect.south - rect.north);
         let (cx, cy) = (rect.west + rw / 2, rect.north + rd / 2);
         plan.push(text(
@@ -664,5 +668,18 @@ mod tests {
             group.contains(r##"fill="#ffffff" stroke="#000000" stroke-width=""##),
             "{group}"
         );
+    }
+
+    #[test]
+    fn part_and_parent_print_no_clear_size() -> Result<(), Box<dyn std::error::Error>> {
+        let text = "plan \"Kok\"\nroom Kok 2400 x 4000 source laser\nroom Matvra 2400 x 1500 source laser part Kok\n  south_of Kok open\n  align west Kok\n";
+        let loaded = plan_core::load(text).map_err(|_| "L shape loads")?;
+        let resolved = loaded.resolved.ok_or("L shape resolves")?;
+        let svg = sheet(&resolved, &opts(Paper::A3, None))
+            .map_err(|_| "L shape fits A3")?
+            .svg;
+        assert!(!svg.contains("2400 × 1500"), "{svg}");
+        assert!(!svg.contains("2400 × 4000"), "{svg}");
+        Ok(())
     }
 }

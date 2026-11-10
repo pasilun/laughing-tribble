@@ -14,7 +14,9 @@ use strsim::jaro_winkler;
 
 use crate::labels::{LabelReq, PlacedLabel, place};
 use crate::marks::{Mark, mark_colour, marks_group, point_px};
-use crate::svg::{FONT_FAMILY, GRID, PAD, RoomFonts, drawn_elements, multiples, text};
+use crate::svg::{
+    FONT_FAMILY, GRID, PAD, RoomFonts, drawn_elements, multiples, printed_area, text,
+};
 use crate::viewport::{Viewport, fit, within_limits};
 
 /// What the picture shows. Only `Plan` is drawn in week two.
@@ -120,11 +122,17 @@ fn label_requests(resolved: &Resolved, view: View, vp: &Viewport, marks: &[Mark]
     let mut reqs = Vec::new();
     for name in resolved.rooms.keys() {
         let id = name.as_str();
-        let Some(rect) = element_rect(resolved, id) else {
+        // A part has no label; its parent's label carries the summed area (§15 D46).
+        let Some(area) = printed_area(resolved, name) else {
             continue;
         };
-        let area = format_m2(rect.width().saturating_mul(rect.height()));
-        reqs.extend(request(resolved, vp, id, format!("{id} {area} m²"), 0));
+        reqs.extend(request(
+            resolved,
+            vp,
+            id,
+            format!("{id} {} m²", format_m2(area)),
+            0,
+        ));
     }
     for mark in marks {
         let mid = [
@@ -711,5 +719,22 @@ mod tests {
             (anchor[1] - mid_px[1]).abs() < 1e-9,
             "{anchor:?} {mid_px:?}"
         );
+    }
+
+    #[test]
+    fn part_has_no_label_and_parent_has_summed_area() -> Result<(), Box<dyn std::error::Error>> {
+        let text = "plan \"Kok\"\nroom Kok 2400 x 4000 source laser\nroom Matvra 2400 x 1500 source laser part Kok\n  south_of Kok open\n  align west Kok\n";
+        let loaded = plan_core::load(text).map_err(|_| "L shape loads")?;
+        let resolved = loaded.resolved.ok_or("L shape resolves")?;
+        let opts = RenderOptions {
+            view: View::Plan,
+            region: None,
+            max_tokens: 1600,
+        };
+        let rendered = render(&resolved, &opts).map_err(|_| "L shape renders")?;
+        assert!(rendered.svg.contains(">Kok 13.20 m²<"), "{}", rendered.svg);
+        assert!(rendered.labels.iter().all(|l| l.id != "Matvra"));
+        assert!(!rendered.svg.contains(">Matvra"));
+        Ok(())
     }
 }

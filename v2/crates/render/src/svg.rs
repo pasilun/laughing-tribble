@@ -7,7 +7,7 @@
 
 use plan_core::Resolved;
 use plan_core::build::format_m2;
-use plan_core::intent::{FixtureKind, OpeningKind, Phase, Side};
+use plan_core::intent::{FixtureKind, OpeningKind, Phase, RoomName, Side};
 use plan_core::resolved::{
     ResolvedFixture, ResolvedOpening, ResolvedStub, RoomRect, Wall, WallKind,
 };
@@ -155,7 +155,8 @@ pub(crate) fn drawn_elements(
 ) -> Vec<String> {
     let mut elements = Vec::new();
     for (name, rect) in &resolved.rooms {
-        elements.push(room(name.as_str(), rect, fonts, sheet));
+        let area = printed_area(resolved, name);
+        elements.push(room(name.as_str(), rect, area, fonts, sheet));
     }
     for wall in resolved.walls.values() {
         elements.push(wall_element(wall, resolved, opening_stroke));
@@ -181,29 +182,65 @@ pub(crate) fn multiples(from: Mm, to: Mm) -> Vec<Mm> {
         .collect()
 }
 
-/// A room: a light rectangle with its name and area. On a sheet (`sheet`, D49)
-/// the rectangle is white.
-fn room(name: &str, rect: &RoomRect, fonts: RoomFonts, sheet: bool) -> String {
+/// Whether `name` is a part of another room (§15 D46): it has a rectangle and
+/// so does its parent. A part prints no name and no area.
+pub(crate) fn is_part(resolved: &Resolved, name: &RoomName) -> bool {
+    resolved.room_parts.contains_key(name)
+}
+
+/// Whether some part belongs to `name` (§15 D46).
+pub(crate) fn has_parts(resolved: &Resolved, name: &RoomName) -> bool {
+    resolved.room_parts.values().any(|parent| parent == name)
+}
+
+/// The area a room prints, in mm² (§15 D46). `None` for a part. A room with a
+/// rectangle prints its own area, plus the area of each of its parts' rectangles.
+pub(crate) fn printed_area(resolved: &Resolved, name: &RoomName) -> Option<i64> {
+    if is_part(resolved, name) {
+        return None;
+    }
+    let rect_area =
+        |rect: &RoomRect| (rect.east - rect.west).saturating_mul(rect.south - rect.north);
+    let own = rect_area(resolved.rooms.get(name)?);
+    let parts = resolved
+        .room_parts
+        .iter()
+        .filter(|(_, parent)| *parent == name)
+        .filter_map(|(part, _)| resolved.rooms.get(part))
+        .map(rect_area)
+        .fold(0i64, i64::saturating_add);
+    Some(own.saturating_add(parts))
+}
+
+/// A room: a light rectangle with its name and area. `area` is the printed
+/// area in mm² (see [`printed_area`]); `None` (a part) prints no text. On a
+/// sheet (`sheet`, D49) the rectangle is white.
+fn room(name: &str, rect: &RoomRect, area: Option<i64>, fonts: RoomFonts, sheet: bool) -> String {
     let fill = if sheet { "#ffffff" } else { "#eef4fb" };
     let (w, h) = (rect.east - rect.west, rect.south - rect.north);
     let (cx, cy) = (rect.west + w / 2, rect.north + h / 2);
-    let area = format_m2(w.saturating_mul(h));
-    let name_label = text(
-        cx as f64,
-        cy as f64 - fonts.area / 2.0,
-        fonts.name,
-        " fill=\"#1a1a1a\"",
-        name,
-    );
-    let area_label = text(
-        cx as f64,
-        cy as f64 + fonts.name / 2.0,
-        fonts.area,
-        " fill=\"#1a1a1a\"",
-        &format!("{area} m²"),
-    );
+    let labels = match area {
+        Some(area) => {
+            let name_label = text(
+                cx as f64,
+                cy as f64 - fonts.area / 2.0,
+                fonts.name,
+                " fill=\"#1a1a1a\"",
+                name,
+            );
+            let area_label = text(
+                cx as f64,
+                cy as f64 + fonts.name / 2.0,
+                fonts.area,
+                " fill=\"#1a1a1a\"",
+                &format!("{} m²", format_m2(area)),
+            );
+            format!("{name_label}{area_label}")
+        }
+        None => String::new(),
+    };
     format!(
-        r##"<g class="room" data-id="{id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"/>{name_label}{area_label}</g>"##,
+        r##"<g class="room" data-id="{id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"/>{labels}</g>"##,
         id = escape(name),
         x = rect.west,
         y = rect.north,
@@ -895,5 +932,22 @@ mod tests {
         let svg = fixture_a_svg();
         assert!(svg.contains("#1f77d0"), "{svg}");
         assert!(svg.contains("#eef4fb"), "{svg}");
+    }
+
+    /// The L-shaped room of §15 D46: `Matvra` is a part of `Kok`.
+    fn l_shape() -> Resolved {
+        let text = "plan \"Kok\"\nroom Kok 2400 x 4000 source laser\nroom Matvra 2400 x 1500 source laser part Kok\n  south_of Kok open\n  align west Kok\n";
+        let loaded = plan_core::load(text).expect("L shape loads");
+        loaded.resolved.expect("L shape resolves")
+    }
+
+    #[test]
+    fn part_prints_no_name_and_parent_prints_summed_area() {
+        let svg = plan_svg(&l_shape());
+        assert_eq!(svg.matches("13.20 m²").count(), 1, "{svg}");
+        assert!(!svg.contains("3.60 m²"), "{svg}");
+        assert!(!svg.contains("9.60 m²"), "{svg}");
+        assert!(!svg.contains(">Matvra<"), "{svg}");
+        assert!(svg.contains(">Kok<"), "{svg}");
     }
 }

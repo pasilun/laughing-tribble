@@ -28,6 +28,7 @@ const KEYWORDS: &[&str] = &[
     "room",
     "x",
     "apartment",
+    "part",
     "existing",
     "demolish",
     "new",
@@ -244,6 +245,7 @@ fn room(name: RoomName) -> impl Strategy<Value = Room> {
             width: width.map(|v| quantity(v, spec)),
             depth: depth.map(|v| quantity(v, spec)),
             apartment,
+            part_of: None,
             phase,
         })
 }
