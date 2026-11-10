@@ -9,7 +9,7 @@ pub use store::Store;
 
 use base64::Engine;
 use plan_core::{Code, Diagnostic, Severity, message};
-use plan_render::{Region, RenderOptions, View as PlanView};
+use plan_render::{Paper as SheetPaper, Region, RenderOptions, SheetOptions, View as PlanView};
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -119,6 +119,38 @@ fn default_tokens() -> u32 {
     plan_render::viewport::DEFAULT_TOKENS
 }
 
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportFormat {
+    Pdf,
+}
+
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportPaper {
+    A4,
+    #[default]
+    A3,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ExportArgs {
+    /// The plan: a file name under the server's root, without `.plan`.
+    pub plan_id: String,
+    /// The file format. Only "pdf" for now.
+    pub format: ExportFormat,
+    /// a3 (default) or a4; the sheet is always landscape.
+    #[serde(default)]
+    pub paper: ExportPaper,
+    /// Scale denominator n of 1:n. Leave out for the first standard scale that fits.
+    #[serde(default)]
+    #[schemars(range(min = 1))]
+    pub scale: Option<u32>,
+    /// Text printed at the right of the title strip, for example "2026-11-10".
+    #[serde(default)]
+    pub date: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct PlanServer {
     store: Store,
@@ -166,6 +198,56 @@ impl PlanServer {
         Ok(self
             .render_value(&args)
             .unwrap_or_else(|ds| CallToolResult::structured_error(json!({ "diagnostics": ds }))))
+    }
+
+    #[tool(name = "export", description = EXPORT_DESCRIPTION, annotations(read_only_hint = false, idempotent_hint = true))]
+    pub async fn export(
+        &self,
+        Parameters(args): Parameters<ExportArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        Ok(tool_result(self.export_value(&args)))
+    }
+
+    /// Tool errors (`Err`) are E020 and E021 (unknown or bad id), the plan errors of
+    /// `load` (E006, E001, E002, E003 and so on, when the plan does not resolve),
+    /// E018 (the plan does not fit the sheet) and E012 (PDF failed), E023 (write failed).
+    fn export_value(&self, args: &ExportArgs) -> Result<serde_json::Value, Vec<Diagnostic>> {
+        let ext = match args.format {
+            ExportFormat::Pdf => "pdf",
+        };
+        let text = self.store.load(&args.plan_id).map_err(|d| vec![d])?;
+        let loaded = plan_core::load(&text)?;
+        let Some(resolved) = loaded.resolved else {
+            return Err(loaded
+                .diagnostics
+                .into_iter()
+                .filter(|d| matches!(d.severity, Severity::Error))
+                .collect());
+        };
+
+        let paper = match args.paper {
+            ExportPaper::A4 => SheetPaper::A4,
+            ExportPaper::A3 => SheetPaper::A3,
+        };
+        let opts = SheetOptions {
+            paper,
+            scale: args.scale,
+            title: loaded.plan.name.clone(),
+            date: args.date.clone(),
+        };
+        let sheet = plan_render::sheet(&resolved, &opts).map_err(|d| vec![d])?;
+        let bytes = plan_render::pdf(&sheet).map_err(|d| vec![d])?;
+        let path = self
+            .store
+            .write_export(&args.plan_id, ext, &bytes)
+            .map_err(|d| vec![d])?;
+
+        Ok(json!({
+            "path": path.to_string_lossy(),
+            "paper": sheet.paper.name().to_lowercase(),
+            "scale": sheet.scale,
+            "bytes": bytes.len(),
+        }))
     }
 
     /// Tool errors (`Err`) are E022 (view not yet drawn), the plan errors of
@@ -337,6 +419,8 @@ pub const CHECK_DESCRIPTION: &str =
 pub const GET_DESCRIPTION: &str = "Read a plan: summary (default), dsl (the plan text, to edit with apply) or json (solved faces, walls, openings, diagnostics).";
 
 pub const RENDER_DESCRIPTION: &str = "Draw a plan as a PNG sized for you, with ids on every element. Use it to judge the layout, not to measure: numbers come from get and check. Crop with region (an id or a mm rectangle) to see detail.";
+
+pub const EXPORT_DESCRIPTION: &str = "Write a print-ready PDF sheet of the plan (A4 or A3, standard scale, title strip). Returns the file path, paper and scale. The plan must be free of errors; run check first.";
 
 pub const APPLY_DESCRIPTION: &str = "Change a plan with a DSL patch. All or nothing: if any error results, nothing changes. Statements replace the statement with the same key (room by name, relation by subject, kind and room, measure by its faces, opening by face and position). Use dry_run to preview.";
 
@@ -815,6 +899,63 @@ mod tests {
             .into_iter()
             .map(|t| t.name.to_string())
             .collect();
-        assert_eq!(names, ["apply", "check", "get", "render"]);
+        assert_eq!(names, ["apply", "check", "export", "get", "render"]);
+    }
+
+    fn export_args(
+        plan_id: &str,
+        paper: ExportPaper,
+        scale: Option<u32>,
+    ) -> Parameters<ExportArgs> {
+        Parameters(ExportArgs {
+            plan_id: plan_id.into(),
+            format: ExportFormat::Pdf,
+            paper,
+            scale,
+            date: None,
+        })
+    }
+
+    #[tokio::test]
+    async fn export_fixture_a() {
+        let root = fixture_root("export_a", &[("lgh154-a", FIXTURE_A)]);
+        let result = PlanServer::new(Store::new(&root))
+            .export(export_args("lgh154-a", ExportPaper::A3, None))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(false));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(s["paper"], "a3");
+        assert_eq!(s["scale"], 25);
+        let path = PathBuf::from(s["path"].as_str().expect("path string"));
+        assert!(path.starts_with(root.join("exports")), "{path:?}");
+        let bytes = fs::read(&path).expect("pdf written");
+        assert!(bytes.starts_with(b"%PDF-"));
+        assert_eq!(s["bytes"], json!(bytes.len()));
+    }
+
+    #[tokio::test]
+    async fn export_a4_scale_20_is_e018() {
+        let root = fixture_root("export_e018", &[("lgh154-a", FIXTURE_A)]);
+        let result = PlanServer::new(Store::new(&root))
+            .export(export_args("lgh154-a", ExportPaper::A4, Some(20)))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(true));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(codes(&s), ["E018"]);
+        assert!(!root.join("exports").join("lgh154-a.pdf").exists());
+    }
+
+    #[tokio::test]
+    async fn export_unknown_plan_is_e020() {
+        let root = fixture_root("export_unknown", &[]);
+        let result = PlanServer::new(Store::new(&root))
+            .export(export_args("nope", ExportPaper::A3, None))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(true));
+        let s = result.structured_content.expect("structured content");
+        assert_eq!(codes(&s), ["E020"]);
     }
 }

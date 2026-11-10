@@ -106,7 +106,7 @@ fn stdio_session() {
         .map(|t| t["name"].as_str().expect("tool name"))
         .collect();
     names.sort();
-    assert_eq!(names, ["apply", "check", "get", "render"]);
+    assert_eq!(names, ["apply", "check", "export", "get", "render"]);
     for tool in tools {
         let name = tool["name"].as_str().expect("tool name");
         let required = tool["inputSchema"]["required"]
@@ -116,10 +116,10 @@ fn stdio_session() {
             required.iter().any(|r| r == "plan_id"),
             "{name} requires plan_id: {tool}"
         );
-        if name == "apply" {
+        if name == "apply" || name == "export" {
             assert!(
                 tool["annotations"]["readOnlyHint"] != true,
-                "apply must not be read only: {tool}"
+                "{name} must not be read only: {tool}"
             );
         } else {
             assert_eq!(

@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use plan_core::{Code, Diagnostic, Severity, message};
@@ -42,16 +42,47 @@ impl Store {
     /// saves of one plan never share a temp file), then rename over the file.
     /// E023 (action "save") on error.
     pub fn save(&self, plan_id: &str, text: &str) -> Result<(), Diagnostic> {
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
         let path = self.path(plan_id)?;
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let tmp = path.with_extension(format!("plan.{}-{n}.tmp", std::process::id()));
-        fs::write(&tmp, text).map_err(|e| io_error("save", plan_id, &e))?;
-        fs::rename(&tmp, &path).map_err(|e| {
-            let _ = fs::remove_file(&tmp);
-            io_error("save", plan_id, &e)
-        })
+        write_atomic(&path, text.as_bytes(), "save", plan_id)
     }
+
+    /// `<root>/exports/<plan_id>.<ext>` (spec D33). Validates the id like `path` does and
+    /// creates the `exports` folder when it is missing. E023 (action "export") on failure.
+    pub fn export_path(&self, plan_id: &str, ext: &str) -> Result<PathBuf, Diagnostic> {
+        self.path(plan_id)?;
+        let dir = self.root.join("exports");
+        fs::create_dir_all(&dir).map_err(|e| io_error("export", plan_id, &e))?;
+        Ok(dir.join(format!("{plan_id}.{ext}")))
+    }
+
+    /// Write export bytes to `export_path(plan_id, ext)` through a temp file in the same
+    /// folder, then rename. Returns the path written. E023 (action "export") on failure.
+    pub fn write_export(
+        &self,
+        plan_id: &str,
+        ext: &str,
+        bytes: &[u8],
+    ) -> Result<PathBuf, Diagnostic> {
+        let path = self.export_path(plan_id, ext)?;
+        write_atomic(&path, bytes, "export", plan_id)?;
+        Ok(path)
+    }
+}
+
+/// Write `bytes` to a unique temp file next to `path`, then rename it over `path`.
+fn write_atomic(path: &Path, bytes: &[u8], action: &str, plan_id: &str) -> Result<(), Diagnostic> {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let tmp = path.with_extension(format!(
+        "{}.{}-{n}.tmp",
+        path.extension().and_then(|e| e.to_str()).unwrap_or(""),
+        std::process::id()
+    ));
+    fs::write(&tmp, bytes).map_err(|e| io_error(action, plan_id, &e))?;
+    fs::rename(&tmp, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        io_error(action, plan_id, &e)
+    })
 }
 
 /// True when the id is 1 to 64 ASCII letters, digits, `-` or `_`.
