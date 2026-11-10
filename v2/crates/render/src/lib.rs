@@ -22,5 +22,5 @@ pub use marks::{Mark, MarkKind};
 pub use pdf::pdf;
 pub use png::png;
 pub use render::{Region, RenderOptions, Rendered, View, render, render_marked};
-pub use sheet::{Paper, Sheet, SheetOptions, sheet};
+pub use sheet::{Lang, Paper, Sheet, SheetOptions, sheet};
 pub use svg::plan_svg;

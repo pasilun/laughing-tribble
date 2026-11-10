@@ -14,7 +14,7 @@
 //!   [--region ID | --rect x,y,w,h] [--diff BEFORE]`: write the PNG and print its viewport
 //!   as JSON (with `--diff`, the plan view of the file with the differences from BEFORE
 //!   drawn on top, and a `diff` object of counts).
-//! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]`:
+//! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv]`:
 //!   write the sheet as a PDF and print its paper, scale and byte count as JSON.
 //! - `plan --version`.
 //!
@@ -31,7 +31,7 @@ use plan_core::solve::components::suggested_w001;
 use plan_core::solve::{edges, unmeasured};
 use plan_core::{Diagnostic, Resolved, Severity, dsl, load, solve_json};
 use plan_render::viewport::DEFAULT_TOKENS;
-use plan_render::{Paper, Region, RenderOptions, SheetOptions, View};
+use plan_render::{Lang, Paper, Region, RenderOptions, SheetOptions, View};
 
 const USAGE: &str = "usage:
   plan check <file>
@@ -41,15 +41,14 @@ const USAGE: &str = "usage:
   plan fmt <file> [--write]
   plan svg <file> [--out path]
   plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]
-  plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]
+  plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv]
   plan --version";
 
 /// Usage line of `plan png`, printed on its own to stderr (exit 2).
 const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]";
 
 /// Usage line of `plan pdf`, printed on its own to stderr (exit 2).
-const PDF_USAGE: &str =
-    "usage: plan pdf FILE -o OUT.pdf [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]";
+const PDF_USAGE: &str = "usage: plan pdf FILE -o OUT.pdf [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv]";
 
 /// Write a line to stdout. A closed pipe ends the program quietly with exit 0.
 fn out(text: &str) {
@@ -399,11 +398,12 @@ struct PdfArgs<'a> {
     scale: Option<u32>,
     title: Option<&'a str>,
     date: Option<&'a str>,
+    lang: Lang,
 }
 
-/// Parse `FILE -o OUT [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT]`.
+/// Parse `FILE -o OUT [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv]`.
 /// `None` is a usage error: a missing file or `-o`, an unknown option, a missing
-/// value, an unknown paper, or a scale that is not a positive integer.
+/// value, an unknown paper or language, or a scale that is not a positive integer.
 fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
     let (&file, rest) = words.split_first()?;
     let mut out = None;
@@ -411,6 +411,7 @@ fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
     let mut scale = None;
     let mut title = None;
     let mut date = None;
+    let mut lang = Lang::En;
     for pair in rest.chunks(2) {
         let [flag, value] = pair else {
             return None;
@@ -429,6 +430,13 @@ fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
             }
             "--title" => title = Some(*value),
             "--date" => date = Some(*value),
+            "--lang" => {
+                lang = match *value {
+                    "en" => Lang::En,
+                    "sv" => Lang::Sv,
+                    _ => return None,
+                }
+            }
             _ => return None,
         }
     }
@@ -439,6 +447,7 @@ fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
         scale,
         title,
         date,
+        lang,
     })
 }
 
@@ -474,6 +483,8 @@ fn pdf_command(words: &[&str]) -> Result<ExitCode, String> {
             .title
             .map_or_else(|| loaded.plan.name.clone(), str::to_string),
         date: args.date.map(str::to_string),
+        lang: args.lang,
+        block: loaded.plan.title.clone(),
     };
     let sheet = match plan_render::sheet(resolved, &opts) {
         Ok(sheet) => sheet,

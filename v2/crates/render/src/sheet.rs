@@ -4,6 +4,8 @@
 //! Everything in the SVG is in paper mm. The plan is drawn in a group that
 //! maps model mm to paper mm: `k` mm of paper per model mm, `1 / scale`.
 
+use std::collections::BTreeMap;
+
 use plan_core::{Code, Diagnostic, Resolved, Severity, message};
 use serde_json::json;
 
@@ -13,6 +15,49 @@ use crate::svg::{FONT_FAMILY, RoomFonts, drawn_elements, escape, text};
 
 /// The standard scales, 1:n, smallest first.
 const SCALES: [u32; 7] = [20, 25, 50, 100, 200, 500, 1000];
+
+/// The language of the words printed on a sheet (spec §15 D41).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lang {
+    /// English.
+    En,
+    /// Swedish.
+    Sv,
+}
+
+/// The words printed on a sheet, in one language.
+struct Words {
+    scale: &'static str,
+    property: &'static str,
+    address: &'static str,
+    applicant: &'static str,
+    drawing: &'static str,
+    drawn_by: &'static str,
+    date: &'static str,
+}
+
+fn words(lang: Lang) -> Words {
+    match lang {
+        Lang::En => Words {
+            scale: "Scale",
+            property: "Property",
+            address: "Address",
+            applicant: "Applicant",
+            drawing: "Drawing",
+            drawn_by: "Drawn by",
+            date: "Date",
+        },
+        Lang::Sv => Words {
+            scale: "Skala",
+            property: "Fastighet",
+            address: "Adress",
+            applicant: "Sökande",
+            drawing: "Ritning",
+            drawn_by: "Ritad av",
+            date: "Datum",
+        },
+    }
+}
 
 /// The paper sizes of a sheet. Always landscape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +97,12 @@ pub struct SheetOptions {
     pub title: String,
     /// The date, printed at the right of the title strip, if any.
     pub date: Option<String>,
+    /// The language of the printed words.
+    pub lang: Lang,
+    /// The plan's title statements (keys: property, address, applicant,
+    /// drawing, drawn_by, date, description). When empty, the strip is the
+    /// one-row strip; otherwise it is the two-row title block (§15 D41).
+    pub block: BTreeMap<String, String>,
 }
 
 /// A drawn sheet: the SVG in paper mm, with the paper and the scale used.
@@ -126,7 +177,8 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
         ));
     }
 
-    let baseline = h - 15.5;
+    let has_block = !opts.block.is_empty();
+    let baseline = if has_block { h - 19.5 } else { h - 15.5 };
     let mut out = Vec::new();
     out.push(format!(
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="{w}mm" height="{h}mm" viewBox="0 0 {w} {h}">"##
@@ -148,15 +200,20 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
         r##"<g id="plan" transform="translate({tx} {ty}) scale({k})">{}</g>"##,
         plan.join("\n"),
     ));
-    out.push(strip_text(14.0, "start", baseline, &opts.title));
+    let words = words(opts.lang);
     out.push(strip_text(
         w / 2.0,
         "middle",
         baseline,
-        &format!("Scale 1:{n} ({})", paper.name()),
+        &format!("{} 1:{n} ({})", words.scale, paper.name()),
     ));
-    if let Some(date) = &opts.date {
-        out.push(strip_text(w - 14.0, "end", baseline, date));
+    if has_block {
+        out.extend(title_block(opts, &words, w, h));
+    } else {
+        out.push(strip_text(14.0, "start", baseline, &opts.title));
+        if let Some(date) = &opts.date {
+            out.push(strip_text(w - 14.0, "end", baseline, date));
+        }
     }
     out.push(format!(
         r##"<line x1="{x1}" y1="{y}" x2="{x2}" y2="{y}" stroke="#000000" stroke-width="0.5"/>"##,
@@ -201,10 +258,58 @@ fn extent(resolved: &Resolved) -> (i64, i64, i64, i64) {
 
 /// A 3.5 mm text in the title strip, on the baseline `y`.
 fn strip_text(x: f64, anchor: &str, y: f64, content: &str) -> String {
+    sized_text(x, anchor, y, 3.5, content)
+}
+
+/// A text of `size` mm at `x` on the baseline `y`.
+fn sized_text(x: f64, anchor: &str, y: f64, size: f64, content: &str) -> String {
     format!(
-        r##"<text x="{x}" y="{y}" font-size="3.5" font-family="{FONT_FAMILY}" text-anchor="{anchor}">{}</text>"##,
+        r##"<text x="{x}" y="{y}" font-size="{size}" font-family="{FONT_FAMILY}" text-anchor="{anchor}">{}</text>"##,
         escape(content),
     )
+}
+
+/// The two rows of the title block (§15 D41), 2.8 mm text on the baselines
+/// `H − 19.5` and `H − 14`. Left: the sheet title (or the description) and the
+/// property and address. Right: the drawing and date, the applicant and the
+/// drawn-by. Each row lists only the parts that are present.
+fn title_block(opts: &SheetOptions, words: &Words, w: f64, h: f64) -> Vec<String> {
+    let field = |key: &str| opts.block.get(key).map(String::as_str);
+    let (row1, row2, size) = (h - 19.5, h - 14.0, 2.8);
+    let mut out = Vec::new();
+
+    let title = field("description").unwrap_or(&opts.title);
+    out.push(sized_text(14.0, "start", row1, size, title));
+
+    let property = field("property").map(|p| format!("{}: {p}", words.property));
+    let address = field("address").map(|a| match &property {
+        Some(_) => format!(", {a}"),
+        None => format!("{}: {a}", words.address),
+    });
+    let left2: String = [property, address].into_iter().flatten().collect();
+    if !left2.is_empty() {
+        out.push(sized_text(14.0, "start", row2, size, &left2));
+    }
+
+    let date = opts.date.as_deref().or_else(|| field("date"));
+    let right1 = [
+        field("drawing").map(|d| format!("{}: {d}", words.drawing)),
+        date.map(|d| format!("{}: {d}", words.date)),
+    ];
+    let right1: Vec<String> = right1.into_iter().flatten().collect();
+    if !right1.is_empty() {
+        out.push(sized_text(w - 14.0, "end", row1, size, &right1.join(" · ")));
+    }
+
+    let right2 = [
+        field("applicant").map(|a| format!("{}: {a}", words.applicant)),
+        field("drawn_by").map(|d| format!("{}: {d}", words.drawn_by)),
+    ];
+    let right2: Vec<String> = right2.into_iter().flatten().collect();
+    if !right2.is_empty() {
+        out.push(sized_text(w - 14.0, "end", row2, size, &right2.join(" · ")));
+    }
+    out
 }
 
 #[cfg(test)]
@@ -224,7 +329,84 @@ mod tests {
             scale,
             title: "Lgh 154".to_string(),
             date: None,
+            lang: Lang::En,
+            block: BTreeMap::new(),
         }
+    }
+
+    fn block_opts(lang: Lang) -> SheetOptions {
+        let block = [
+            ("property", "Stockholm Gnejsen 6"),
+            ("drawing", "A-01"),
+            ("applicant", "Brf Gnejsen"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+        SheetOptions {
+            date: Some("2026-11-10".to_string()),
+            lang,
+            block,
+            ..opts(Paper::A3, None)
+        }
+    }
+
+    #[test]
+    fn swedish_scale_text_with_empty_block() {
+        let options = SheetOptions {
+            lang: Lang::Sv,
+            ..opts(Paper::A3, None)
+        };
+        let svg = sheet(&fixture_a(), &options).expect("fits").svg;
+        assert!(svg.contains("Skala 1:25 (A3)"));
+        assert!(!svg.contains("Scale 1:"));
+    }
+
+    #[test]
+    fn title_block_in_swedish() {
+        let svg = sheet(&fixture_a(), &block_opts(Lang::Sv))
+            .expect("fits")
+            .svg;
+        assert!(svg.contains("Fastighet: Stockholm Gnejsen 6"), "{svg}");
+        assert!(svg.contains("Ritning: A-01 · Datum: 2026-11-10"), "{svg}");
+        assert!(svg.contains("Sökande: Brf Gnejsen"), "{svg}");
+        assert!(svg.contains("Skala 1:25 (A3)"), "{svg}");
+    }
+
+    #[test]
+    fn title_block_in_english() {
+        let svg = sheet(&fixture_a(), &block_opts(Lang::En))
+            .expect("fits")
+            .svg;
+        assert!(svg.contains("Property: Stockholm Gnejsen 6"), "{svg}");
+        assert!(svg.contains("Drawing: A-01 · Date: 2026-11-10"), "{svg}");
+        assert!(svg.contains("Applicant: Brf Gnejsen"), "{svg}");
+    }
+
+    #[test]
+    fn title_block_address_joins_the_property_row_and_description_replaces_title() {
+        let mut options = block_opts(Lang::En);
+        options
+            .block
+            .insert("address".to_string(), "Gnejsvägen 6".to_string());
+        options
+            .block
+            .insert("description".to_string(), "Ny planlösning".to_string());
+        let svg = sheet(&fixture_a(), &options).expect("fits").svg;
+        assert!(svg.contains("Property: Stockholm Gnejsen 6, Gnejsvägen 6"));
+        assert!(svg.contains(">Ny planlösning</text>"));
+        assert!(!svg.contains(">Lgh 154</text>"));
+    }
+
+    #[test]
+    fn opts_date_wins_over_block_date() {
+        let mut options = block_opts(Lang::En);
+        options
+            .block
+            .insert("date".to_string(), "2020-01-01".to_string());
+        let svg = sheet(&fixture_a(), &options).expect("fits").svg;
+        assert!(svg.contains("Date: 2026-11-10"));
+        assert!(!svg.contains("2020-01-01"));
     }
 
     #[test]

@@ -9,7 +9,9 @@ pub use store::Store;
 
 use base64::Engine;
 use plan_core::{Code, Diagnostic, Severity, message};
-use plan_render::{Paper as SheetPaper, Region, RenderOptions, SheetOptions, View as PlanView};
+use plan_render::{
+    Lang as SheetLang, Paper as SheetPaper, Region, RenderOptions, SheetOptions, View as PlanView,
+};
 use rmcp::{
     ErrorData as McpError, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -119,10 +121,19 @@ fn default_tokens() -> u32 {
     plan_render::viewport::DEFAULT_TOKENS
 }
 
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ExportFormat {
+    #[default]
     Pdf,
+}
+
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportLang {
+    #[default]
+    En,
+    Sv,
 }
 
 #[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
@@ -137,7 +148,8 @@ pub enum ExportPaper {
 pub struct ExportArgs {
     /// The plan: a file name under the server's root, without `.plan`.
     pub plan_id: String,
-    /// The file format. Only "pdf" for now.
+    /// The file format. Only "pdf" for now; the default.
+    #[serde(default)]
     pub format: ExportFormat,
     /// a3 (default) or a4; the sheet is always landscape.
     #[serde(default)]
@@ -149,6 +161,9 @@ pub struct ExportArgs {
     /// Text printed at the right of the title strip, for example "2026-11-10".
     #[serde(default)]
     pub date: Option<String>,
+    /// The language of the printed words: "en" (default) or "sv".
+    #[serde(default)]
+    pub lang: ExportLang,
 }
 
 #[derive(Debug, Clone)]
@@ -234,6 +249,11 @@ impl PlanServer {
             scale: args.scale,
             title: loaded.plan.name.clone(),
             date: args.date.clone(),
+            lang: match args.lang {
+                ExportLang::En => SheetLang::En,
+                ExportLang::Sv => SheetLang::Sv,
+            },
+            block: loaded.plan.title.clone(),
         };
         let sheet = plan_render::sheet(&resolved, &opts).map_err(|d| vec![d])?;
         let bytes = plan_render::pdf(&sheet).map_err(|d| vec![d])?;
@@ -986,6 +1006,7 @@ mod tests {
             paper,
             scale,
             date: None,
+            lang: ExportLang::En,
         })
     }
 
@@ -1018,6 +1039,22 @@ mod tests {
         let s = result.structured_content.expect("structured content");
         assert_eq!(codes(&s), ["E018"]);
         assert!(!root.join("exports").join("lgh154-a.pdf").exists());
+    }
+
+    #[tokio::test]
+    async fn export_without_format_is_pdf() {
+        let root = fixture_root("export_no_format", &[("lgh154-a", FIXTURE_A)]);
+        let args: ExportArgs = serde_json::from_value(json!({"plan_id": "lgh154-a"}))
+            .expect("format and lang are optional");
+        let result = PlanServer::new(Store::new(&root))
+            .export(Parameters(args))
+            .await
+            .expect("protocol ok");
+        assert_eq!(result.is_error, Some(false));
+        let s = result.structured_content.expect("structured content");
+        let path = PathBuf::from(s["path"].as_str().expect("path string"));
+        assert!(path.ends_with("lgh154-a.pdf"), "{path:?}");
+        assert!(fs::read(&path).expect("pdf written").starts_with(b"%PDF-"));
     }
 
     #[tokio::test]

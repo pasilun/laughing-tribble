@@ -35,7 +35,7 @@ pub fn pdf(sheet: &Sheet) -> Result<Vec<u8>, Diagnostic> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sheet::{Paper, SheetOptions, sheet};
+    use crate::sheet::{Lang, Paper, SheetOptions, sheet};
 
     const FIXTURE_A: &str = include_str!("../../../fixtures/lgh154-a.plan");
 
@@ -47,6 +47,8 @@ mod tests {
             scale: None,
             title: "Lgh 154".to_string(),
             date: None,
+            lang: Lang::En,
+            block: std::collections::BTreeMap::new(),
         };
         sheet(&resolved, &opts).expect("fixture A sheet")
     }
