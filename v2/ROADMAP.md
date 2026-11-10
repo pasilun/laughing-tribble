@@ -11,12 +11,12 @@ Order of work, decided with the maintainer on 2026-11-10. It replaces the outloo
 | 5 | Diagnostic views: conflicts, missing measurements, diff (cards W4-01…W4-R1). Overlay on a source image moves to row 7 | Cards written 2026-11-10 |
 | 6 | Permit sheet: title block, Swedish texts, before/after sheets, dimension chains on two sides (cards W4-09…W4-R2) | Cards written 2026-11-10 |
 | 7 | Source images, the v1 way (no LLM call in the server): the user uploads a drawing or photo through a link, the server stores it and hands it back to the calling model as an image or a crop, calibration against printed dimensions is deterministic, and the `overlay` view draws the plan over it. Plus the `find` and `history` tools and command-log storage | Not started |
-| 8 | Eval across Haiku, Sonnet and Opus on a fixed task set | Not started |
+| 8 | Eval across Haiku, Sonnet and Opus on a fixed task set | Skipped (maintainer, 2026-11-10) |
 | 9 | Import of v1 plans and cut-over | Not started |
 | 10 | Desktop editor, SketchUp-style (egui/wgpu; lift snapping and the typed-value parser from BenchUp) | Last |
 | 11 | Accounts, sharing and MCP OAuth, then the mobile viewer (it needs share links) | Last |
 
-**Dropped:** DXF export.
+**Dropped:** DXF export. **Skipped:** the cross-model eval, and `.skp` export for now.
 
 ## Open points
 
