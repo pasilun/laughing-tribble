@@ -119,7 +119,7 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
         let (cx, cy) = (rect.west + rw / 2, rect.north + rd / 2);
         plan.push(text(
             cx as f64,
-            cy as f64 + 3.5 * nf,
+            cy as f64 + 4.5 * nf,
             2.5 * nf,
             " fill=\"#1a1a1a\"",
             &format!("{rw} × {rd}"),
@@ -286,5 +286,51 @@ mod tests {
         options.date = Some("2026-11-10".to_string());
         let svg = sheet(&fixture_a(), &options).expect("fits").svg;
         assert!(svg.contains(r#"text-anchor="end">2026-11-10</text>"#));
+    }
+
+    /// The value of the attribute `name="…"` in `element`, as a number.
+    fn attr_value(element: &str, name: &str) -> f64 {
+        let key = format!(" {name}=\"");
+        let start = element
+            .find(&key)
+            .unwrap_or_else(|| panic!("no {name} in {element}"))
+            + key.len();
+        let end = start + element[start..].find('"').expect("closing quote");
+        element[start..end].parse().expect("a number")
+    }
+
+    /// The whole `<text …>…</text>` element that contains `content`.
+    fn text_element(svg: &str, content: &str) -> String {
+        let end = svg
+            .find(&format!("{content}</text>"))
+            .unwrap_or_else(|| panic!("no text {content}"))
+            + content.len()
+            + "</text>".len();
+        let start = svg[..end].rfind("<text").expect("a text start");
+        svg[start..end].to_string()
+    }
+
+    #[test]
+    fn clear_size_text_starts_below_the_area_line() {
+        let svg = sheet(&fixture_a(), &opts(Paper::A3, None))
+            .expect("fits")
+            .svg;
+        // The area line of Garderob, inside its room group.
+        let group_start = svg
+            .find(r#"<g class="room" data-id="Garderob">"#)
+            .expect("Garderob is drawn");
+        let group = &svg[group_start..];
+        let group = &group[..group.find("</g>").expect("group end")];
+        let area = text_element(group, " m²");
+        let area_bottom = attr_value(&area, "y") + attr_value(&area, "font-size") / 2.0;
+
+        // The clear size of Garderob, drawn after the room groups.
+        let clear = text_element(&svg, "1860 × 2360");
+        let clear_top = attr_value(&clear, "y") - attr_value(&clear, "font-size") / 2.0;
+
+        assert!(
+            clear_top > area_bottom,
+            "clear size starts at {clear_top}, area line ends at {area_bottom}"
+        );
     }
 }
