@@ -13,6 +13,7 @@ pub mod dsl;
 pub mod intent;
 pub mod report;
 pub mod resolved;
+pub mod review;
 pub mod solve;
 pub mod units;
 pub mod validate;
@@ -26,4 +27,5 @@ pub use intent::{
 };
 pub use report::solve_json;
 pub use resolved::{Resolved, resolve};
+pub use review::review;
 pub use units::{Mm, Quantity, Source};
