@@ -11,6 +11,8 @@ use plan_core::intent::{OpeningKind, Side};
 use plan_core::resolved::{ResolvedOpening, RoomRect, Wall, WallKind};
 use plan_core::units::Mm;
 
+use crate::corners::corner_rect;
+
 /// Empty margin around the drawn rooms and walls, in mm.
 pub(crate) const PAD: Mm = 500;
 /// Grid spacing: one line every 1 m.
@@ -150,7 +152,7 @@ pub(crate) fn drawn_elements(
         elements.push(room(name.as_str(), rect, fonts));
     }
     for wall in resolved.walls.values() {
-        elements.push(wall_element(wall));
+        elements.push(wall_element(wall, resolved));
     }
     for opening in resolved.openings.values() {
         elements.push(opening_element(opening, resolved, opening_stroke));
@@ -194,15 +196,24 @@ fn room(name: &str, rect: &RoomRect, fonts: RoomFonts) -> String {
     )
 }
 
-/// A wall: a grey rectangle over its x and y extents, labelled with its id.
-fn wall_element(wall: &Wall) -> String {
-    let (x, y) = (wall.x.0, wall.y.0);
-    let (w, h) = (wall.x.1 - wall.x.0, wall.y.1 - wall.y.0);
+/// A wall: a grey rectangle, labelled with its id. The rectangle is the
+/// [`corner_rect`] of the wall (D28); the label is centred on the wall's own
+/// x and y extents.
+fn wall_element(wall: &Wall, resolved: &Resolved) -> String {
+    let (x0, y0, x1, y1) = corner_rect(wall, resolved);
+    let (x, y) = (x0, y0);
+    let (w, h) = (x1 - x0, y1 - y0);
     let fill = match wall.kind {
         WallKind::Interior => "#a6a6a6",
         WallKind::Outer => "#6e6e6e",
     };
-    let label = id_label(&wall.id, x + w / 2, y + h / 2, h > w);
+    let (own_w, own_h) = (wall.x.1 - wall.x.0, wall.y.1 - wall.y.0);
+    let label = id_label(
+        &wall.id,
+        wall.x.0 + own_w / 2,
+        wall.y.0 + own_h / 2,
+        own_h > own_w,
+    );
     format!(
         r##"<g class="wall" data-id="{id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"/>{label}</g>"##,
         id = escape(&wall.id),

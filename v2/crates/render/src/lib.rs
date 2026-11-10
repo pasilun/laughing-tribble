@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+mod corners;
 pub mod labels;
 pub mod png;
 pub mod render;
