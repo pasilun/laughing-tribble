@@ -2,7 +2,7 @@
 //!
 //! Commands (arguments are read by hand, no argument crate):
 //! - `plan check <file>`: print the diagnostics, one per line; exit 1 if any is an Error.
-//! - `plan review <file>`: print the permit review (W030–W033, I030), one per line,
+//! - `plan review <file>`: print the permit review (W030–W033, I030, I031), one per line,
 //!   or `Nothing to report.`; exit 1 if the plan does not load.
 //! - `plan solve --json <file>`: print the §7.7 solve value as pretty JSON.
 //! - `plan fmt <file> [--write]`: print the canonical DSL, or rewrite the file.
@@ -141,7 +141,7 @@ fn review_report(src: &str) -> (String, u8) {
     {
         return (diagnostics_text(&loaded.diagnostics), 1);
     }
-    let findings = plan_core::review(resolved);
+    let findings = plan_core::review(&loaded.plan, resolved);
     if findings.is_empty() {
         return ("Nothing to report.\n".to_string(), 0);
     }
@@ -640,11 +640,18 @@ room Förråd 800 x 2000 source laser
     }
 
     #[test]
-    fn review_fixture_a_nothing_to_report() {
-        assert_eq!(
-            review_report(FIXTURE_A),
-            ("Nothing to report.\n".to_string(), 0)
-        );
+    fn review_fixture_a_lists_the_title_block() {
+        let title = |key: &str| {
+            format!("I031 info Title block has no {key}; add: title {key} \"\u{2026}\"\n")
+        };
+        let expected = [
+            title("property"),
+            title("drawing"),
+            title("applicant"),
+            title("date"),
+        ]
+        .concat();
+        assert_eq!(review_report(FIXTURE_A), (expected, 0));
     }
 
     #[test]

@@ -144,6 +144,9 @@ pub enum Code {
     /// I030: a new opening has no height (spec §8, D35).
     #[serde(rename = "I030")]
     I030,
+    /// I031: a title block key is missing or blank (spec §8, D41).
+    #[serde(rename = "I031")]
+    I031,
 }
 
 impl Code {
@@ -182,6 +185,7 @@ impl Code {
             Code::I010 => "I010",
             Code::I020 => "I020",
             Code::I030 => "I030",
+            Code::I031 => "I031",
         }
     }
 }
@@ -343,6 +347,7 @@ pub fn message(code: Code, args: &[(&str, String)]) -> String {
             r#"{kind} {id} is new and has no height; add "height <mm>" if the engineer needs it."#,
             args,
         ),
+        Code::I031 => fill(r#"Title block has no {key}; add: title {key} "…""#, args),
     }
 }
 

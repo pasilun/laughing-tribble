@@ -431,10 +431,16 @@ impl PlanServer {
                 let review = r
                     .resolved
                     .as_ref()
-                    .map(plan_core::review)
+                    .map(|resolved| plan_core::review(&r.plan, resolved))
                     .unwrap_or_default();
+                // I031 adds no step (W3-23), so the steps ignore it.
+                let step_review: Vec<Diagnostic> = review
+                    .iter()
+                    .filter(|d| d.code != Code::I031)
+                    .cloned()
+                    .collect();
                 let steps =
-                    next_steps::next_steps_with_review(Some(&r.plan), &r.diagnostics, &review);
+                    next_steps::next_steps_with_review(Some(&r.plan), &r.diagnostics, &step_review);
                 Ok(json!({
                     "plan_id": plan_id,
                     "resolved": r.resolved.is_some(),
@@ -588,6 +594,16 @@ mod tests {
         PlanServer::new(Store::new(root))
     }
 
+    /// The codes of the `review` entries in a check result, in order.
+    fn review_codes(s: &serde_json::Value) -> Vec<&str> {
+        s["review"]
+            .as_array()
+            .expect("review array")
+            .iter()
+            .map(|d| d["code"].as_str().expect("code string"))
+            .collect()
+    }
+
     fn structured_steps(s: &serde_json::Value) -> Vec<String> {
         s["next_steps"]
             .as_array()
@@ -605,12 +621,12 @@ mod tests {
             .expect("protocol ok");
         assert_eq!(result.is_error, Some(false));
         let s = result.structured_content.expect("structured content");
-        let review = s["review"].as_array().expect("review array");
-        let review_codes: Vec<&str> = review
-            .iter()
-            .map(|d| d["code"].as_str().expect("code string"))
-            .collect();
-        assert_eq!(review_codes, ["W030", "W031", "W032", "I030"]);
+        assert_eq!(
+            review_codes(&s),
+            [
+                "W030", "W031", "W032", "I030", "I031", "I031", "I031", "I031"
+            ]
+        );
         let tell: Vec<String> = structured_steps(&s)
             .into_iter()
             .filter(|step| step.starts_with("Tell the user: "))
@@ -625,7 +641,8 @@ mod tests {
             .await
             .expect("protocol ok");
         let s = result.structured_content.expect("structured content");
-        assert_eq!(s["review"], json!([]));
+        // Only the title block is missing (I031, D41); the steps do not change.
+        assert_eq!(review_codes(&s), ["I031", "I031", "I031", "I031"]);
         assert_eq!(structured_steps(&s).len(), 4);
     }
 

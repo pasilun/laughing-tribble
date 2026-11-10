@@ -6,3 +6,7 @@ W030 warning Wall W:A.east|B.west is load-bearing and is demolished; this needs 
 W031 warning Wall W:A.east|B.west is a fire-cell boundary (EI60) and is demolished; a fire protection description is required.
 W032 warning Door O:A.north:1 is new and sits in load-bearing wall W:A.north:outer; this needs a structural engineer's statement.
 I030 info Door O:A.north:1 is new and has no height; add "height <mm>" if the engineer needs it.
+I031 info Title block has no property; add: title property "…"
+I031 info Title block has no drawing; add: title drawing "…"
+I031 info Title block has no applicant; add: title applicant "…"
+I031 info Title block has no date; add: title date "…"
