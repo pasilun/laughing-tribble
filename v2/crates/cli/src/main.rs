@@ -39,6 +39,26 @@ const USAGE: &str = "usage:
 /// Usage line of `plan png`, printed on its own to stderr (exit 2).
 const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h]";
 
+/// Write a line to stdout. A closed pipe ends the program quietly with exit 0.
+fn out(text: &str) {
+    use std::io::Write;
+    let mut stdout = std::io::stdout().lock();
+    match writeln!(stdout, "{text}") {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => std::process::exit(0),
+        _ => {}
+    }
+}
+
+/// Write text to stdout without a newline. A closed pipe ends the program quietly with exit 0.
+fn out_text(text: &str) {
+    use std::io::Write;
+    let mut stdout = std::io::stdout().lock();
+    match write!(stdout, "{text}") {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => std::process::exit(0),
+        _ => {}
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -63,7 +83,7 @@ fn run(words: &[&str]) -> Result<ExitCode, String> {
         ["svg", file, "--out", out] => svg(file, Some(out)),
         ["png", rest @ ..] => png_command(rest),
         ["--version"] => {
-            println!("plan {}", env!("CARGO_PKG_VERSION"));
+            out(&format!("plan {}", env!("CARGO_PKG_VERSION")));
             Ok(ExitCode::SUCCESS)
         }
         _ => Err(format!("unknown command\n{USAGE}")),
@@ -75,7 +95,7 @@ fn check(file: &str) -> Result<ExitCode, String> {
     let (_, src) = read_source(file)?;
     let (_, diagnostics) = solve_source(&src);
     for diagnostic in &diagnostics {
-        println!("{}", describe(diagnostic));
+        out(&describe(diagnostic));
     }
     Ok(exit_for(&diagnostics))
 }
@@ -86,7 +106,7 @@ fn check(file: &str) -> Result<ExitCode, String> {
 fn suggest(file: &str) -> Result<ExitCode, String> {
     let (_, src) = read_source(file)?;
     let (text, code) = suggest_report(&src);
-    print!("{text}");
+    out_text(&text);
     Ok(ExitCode::from(code))
 }
 
@@ -131,7 +151,7 @@ fn solve(file: &str) -> Result<ExitCode, String> {
     let (resolved, diagnostics) = solve_source(&src);
     let value = solve_json(&stem, resolved.as_ref(), &diagnostics);
     // `{:#}` prints the value as pretty JSON, so serde_json need not be a direct dependency.
-    println!("{value:#}");
+    out(&format!("{value:#}"));
     Ok(ExitCode::SUCCESS)
 }
 
@@ -149,28 +169,28 @@ fn fmt(file: &str, write: bool) -> Result<ExitCode, String> {
     if write {
         fs::write(file, text).map_err(|error| format!("cannot write {file}: {error}"))?;
     } else {
-        print!("{text}");
+        out_text(&text);
     }
     Ok(ExitCode::SUCCESS)
 }
 
-/// `plan svg`: draw the resolved plan, to stdout or to `out`. An unresolved plan
+/// `plan svg`: draw the resolved plan, to stdout or to `dest`. An unresolved plan
 /// prints its diagnostics and no image, and exits 1.
-fn svg(file: &str, out: Option<&str>) -> Result<ExitCode, String> {
+fn svg(file: &str, dest: Option<&str>) -> Result<ExitCode, String> {
     let (_, src) = read_source(file)?;
     let (resolved, diagnostics) = solve_source(&src);
     let Some(resolved) = resolved else {
         for diagnostic in &diagnostics {
-            println!("{}", describe(diagnostic));
+            out(&describe(diagnostic));
         }
         return Ok(ExitCode::from(1));
     };
     let text = plan_render::plan_svg(&resolved);
-    match out {
+    match dest {
         Some(path) => {
             fs::write(path, text).map_err(|error| format!("cannot write {path}: {error}"))?;
         }
-        None => print!("{text}"),
+        None => out_text(&text),
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -252,7 +272,7 @@ fn png_command(words: &[&str]) -> Result<ExitCode, String> {
             .iter()
             .filter(|diagnostic| diagnostic.severity == Severity::Error)
         {
-            println!("{}", describe(diagnostic));
+            out(&describe(diagnostic));
         }
         return Ok(ExitCode::from(1));
     };
@@ -264,20 +284,20 @@ fn png_command(words: &[&str]) -> Result<ExitCode, String> {
     let rendered = match plan_render::render(&resolved, &options) {
         Ok(rendered) => rendered,
         Err(diagnostic) => {
-            println!("{}", describe(&diagnostic));
+            out(&describe(&diagnostic));
             return Ok(ExitCode::from(1));
         }
     };
     let bytes = match plan_render::png(&rendered) {
         Ok(bytes) => bytes,
         Err(diagnostic) => {
-            println!("{}", describe(&diagnostic));
+            out(&describe(&diagnostic));
             return Ok(ExitCode::from(1));
         }
     };
     fs::write(args.out, bytes).map_err(|error| format!("cannot write {}: {error}", args.out))?;
     let line = serde_json::to_string(&rendered.viewport).map_err(|error| error.to_string())?;
-    println!("{line}");
+    out(&line);
     Ok(ExitCode::SUCCESS)
 }
 
