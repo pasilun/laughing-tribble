@@ -7,4 +7,4 @@ pub mod resolve;
 
 pub use lexer::{Token, TokenKind, lex};
 pub use parser::parse;
-pub use printer::print;
+pub use printer::{canonicalize, print};

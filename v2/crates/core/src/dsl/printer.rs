@@ -20,7 +20,8 @@
 //!   width is known, else the depth's. An opening's clause comes from `at`.
 //! - `phase` is written only when it is not `existing`.
 //! - Measures are sorted by their `from` face, then by `to`. Walls are sorted by
-//!   face. Openings are sorted by face, then by `at`. Ties keep their order.
+//!   face. Openings are sorted by kind, then face, then `at`. Ties keep their
+//!   order. [`canonicalize`] does the sorting; the printer reads a canonical clone.
 //! - Comments are not kept (spec §7.2).
 
 use crate::intent::{
@@ -28,6 +29,67 @@ use crate::intent::{
     WallOverride,
 };
 use crate::units::{Quantity, Source};
+
+/// The directional keywords, in the order the printer writes them.
+const DIRECTIONS: [&str; 4] = ["east_of", "west_of", "south_of", "north_of"];
+
+/// Put every list of `plan` in the order the printer writes it (spec §7.2, D7).
+///
+/// Relations: for each room in `plan.order`, its directional relations in
+/// keyword order, then its aligns of at least two rooms that start with it.
+/// Then every one-room align. Relations not placed by these rules go last, in
+/// their current order. Only the order changes, never a value.
+pub fn canonicalize(plan: &mut Plan) {
+    let mut pool: Vec<Option<Relation>> = std::mem::take(&mut plan.relations)
+        .into_iter()
+        .map(Some)
+        .collect();
+    let mut relations = Vec::with_capacity(pool.len());
+    for room in &plan.order {
+        for keyword in DIRECTIONS {
+            take_relations(&mut pool, &mut relations, |r| {
+                placement(r).is_some_and(|(subject, kw, _, _)| subject == room && kw == keyword)
+            });
+        }
+        take_relations(&mut pool, &mut relations, |r| {
+            matches!(r, Relation::Align { rooms, .. }
+                if rooms.len() >= 2 && rooms.first() == Some(room))
+        });
+    }
+    take_relations(
+        &mut pool,
+        &mut relations,
+        |r| matches!(r, Relation::Align { rooms, .. } if rooms.len() == 1),
+    );
+    relations.extend(pool.into_iter().flatten());
+    plan.relations = relations;
+
+    plan.measures.sort_by(|a, b| {
+        (face_key(&a.from), face_key(&a.to)).cmp(&(face_key(&b.from), face_key(&b.to)))
+    });
+    plan.wall_overrides
+        .sort_by(|a, b| face_key(&a.face).cmp(&face_key(&b.face)));
+    plan.openings.sort_by(|a, b| {
+        (kind_rank(a.kind), face_key(&a.face), a.at.value).cmp(&(
+            kind_rank(b.kind),
+            face_key(&b.face),
+            b.at.value,
+        ))
+    });
+}
+
+/// Move every relation in `pool` that `keep` accepts to `out`, in pool order.
+fn take_relations(
+    pool: &mut [Option<Relation>],
+    out: &mut Vec<Relation>,
+    keep: impl Fn(&Relation) -> bool,
+) {
+    for slot in pool.iter_mut() {
+        if slot.as_ref().is_some_and(&keep) {
+            out.extend(slot.take());
+        }
+    }
+}
 
 /// Print a plan in canonical form. The result ends with a newline.
 pub fn print(plan: &Plan) -> String {
@@ -74,25 +136,18 @@ pub fn print(plan: &Plan) -> String {
 
 /// The `measure`, `wall`, `door`, `window` and `passage` lines, in that order.
 fn statement_lines(plan: &Plan) -> Vec<String> {
-    let mut measures: Vec<&Measure> = plan.measures.iter().collect();
-    measures.sort_by(|a, b| {
-        (face_key(&a.from), face_key(&a.to)).cmp(&(face_key(&b.from), face_key(&b.to)))
-    });
+    let mut canon = plan.clone();
+    canonicalize(&mut canon);
 
-    let mut walls: Vec<&WallOverride> = plan.wall_overrides.iter().collect();
-    walls.sort_by(|a, b| face_key(&a.face).cmp(&face_key(&b.face)));
-
-    let mut openings: Vec<&Opening> = plan.openings.iter().collect();
-    openings.sort_by(|a, b| (face_key(&a.face), a.at.value).cmp(&(face_key(&b.face), b.at.value)));
-
-    let mut lines: Vec<String> = measures.into_iter().map(measure_line).collect();
-    lines.extend(walls.into_iter().map(wall_line));
+    let mut lines: Vec<String> = canon.measures.iter().map(measure_line).collect();
+    lines.extend(canon.wall_overrides.iter().map(wall_line));
     for kind in [OpeningKind::Door, OpeningKind::Window, OpeningKind::Passage] {
         lines.extend(
-            openings
+            canon
+                .openings
                 .iter()
                 .filter(|o| o.kind == kind)
-                .map(|o| opening_line(o)),
+                .map(opening_line),
         );
     }
     lines
@@ -118,8 +173,11 @@ fn room_line(room: &Room) -> String {
 
 /// The relations whose subject is `room`, indented under it.
 fn relation_lines(plan: &Plan, room: &RoomName) -> Vec<String> {
+    let mut canon = plan.clone();
+    canonicalize(&mut canon);
+    let plan = &canon;
     let mut lines = Vec::new();
-    for keyword in ["east_of", "west_of", "south_of", "north_of"] {
+    for keyword in DIRECTIONS {
         for relation in &plan.relations {
             if let Some((subject, kw, of, gap)) = placement(relation)
                 && subject == room
@@ -150,7 +208,10 @@ fn relation_lines(plan: &Plan, room: &RoomName) -> Vec<String> {
 /// align needs at least one more room after the side, so these are printed at
 /// top level, after the rooms.
 fn lone_align_lines(plan: &Plan) -> Vec<String> {
-    plan.relations
+    let mut canon = plan.clone();
+    canonicalize(&mut canon);
+    canon
+        .relations
         .iter()
         .filter_map(|relation| match relation {
             Relation::Align { side, rooms } => match rooms.as_slice() {
@@ -272,6 +333,15 @@ fn face_text(face: &FaceRef) -> String {
 /// Sort key for a face: room name, then side in compass order.
 fn face_key(face: &FaceRef) -> (&str, u8) {
     (face.room.as_str(), side_rank(face.side))
+}
+
+/// Printed order of opening kinds: doors, then windows, then passages.
+fn kind_rank(kind: OpeningKind) -> u8 {
+    match kind {
+        OpeningKind::Door => 0,
+        OpeningKind::Window => 1,
+        OpeningKind::Passage => 2,
+    }
 }
 
 fn side_rank(side: Side) -> u8 {
@@ -499,5 +569,49 @@ passage Garderob.east at 0 width 680 source estimated
                         window Sovrum.south at 100 width 100\n\
                         window Sovrum.south at 900 width 100\n";
         assert_eq!(print_of(src), expected);
+    }
+
+    #[test]
+    fn canonicalize_is_idempotent() {
+        for src in [FIXTURE_A, FIXTURE_B, FIXTURE_C] {
+            let mut once = parse(src).expect("fixture parses");
+            canonicalize(&mut once);
+            let mut twice = once.clone();
+            canonicalize(&mut twice);
+            assert_eq!(twice, once);
+        }
+    }
+
+    #[test]
+    fn canonical_plan_round_trips_exactly() {
+        for src in [FIXTURE_A, FIXTURE_B, FIXTURE_C] {
+            let mut p = parse(src).expect("fixture parses");
+            canonicalize(&mut p);
+            assert_eq!(parse(&print(&p)).expect("canonical text parses"), p);
+        }
+    }
+
+    #[test]
+    fn openings_order_is_kind_face_at() {
+        let src = "room A 1000 x 2000\n\
+                   room B 1000 x 2000\n\
+                   window B.south at 10 width 100\n\
+                   door A.north at 5 width 100\n\
+                   door A.north at 1 width 100\n";
+        let mut plan = parse(src).expect("source parses");
+        canonicalize(&mut plan);
+        let got: Vec<(OpeningKind, String, i64)> = plan
+            .openings
+            .iter()
+            .map(|o| (o.kind, face_text(&o.face), o.at.value))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (OpeningKind::Door, "A.north".to_string(), 1),
+                (OpeningKind::Door, "A.north".to_string(), 5),
+                (OpeningKind::Window, "B.south".to_string(), 10),
+            ]
+        );
     }
 }
