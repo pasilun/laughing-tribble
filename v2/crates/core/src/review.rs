@@ -10,7 +10,7 @@
 use serde_json::json;
 
 use crate::diagnostics::{Code, Diagnostic, Severity, message};
-use crate::intent::{OpeningKind, Phase, Plan};
+use crate::intent::{FixtureKind, OpeningKind, Phase, Plan};
 use crate::resolved::Resolved;
 
 /// The title block keys a permit drawing needs, in the order they are checked (§15 D41).
@@ -19,7 +19,9 @@ const REQUIRED_TITLE_KEYS: [&str; 4] = ["property", "drawing", "applicant", "dat
 /// Permit review of a resolved plan: what the application will need. Pure.
 ///
 /// Walls come first, in id order: for each wall W030 then W031. Then openings
-/// in id order: for each new opening W032, W033 and I030. Last, for each of
+/// in id order: for each new opening W032, W033 and I030. Then W034 once if a
+/// kitchen, sink or stove fixture is demolished and no plug fixture exists, and
+/// I032 once if an exhaust fixture is new or demolished. Last, for each of
 /// `property`, `drawing`, `applicant`, `date` that is missing from the title
 /// block or only white space, I031. Coordinates and units are those of
 /// [`Resolved`] (mm, x east, y south).
@@ -113,6 +115,51 @@ pub fn review(plan: &Plan, resolved: &Resolved) -> Vec<Diagnostic> {
                 data: json!({ "opening": id }),
             });
         }
+    }
+
+    let wet_demolished: Vec<String> = resolved
+        .fixtures
+        .values()
+        .filter(|f| {
+            matches!(
+                f.kind,
+                FixtureKind::Kitchen | FixtureKind::Sink | FixtureKind::Stove
+            ) && f.phase == Phase::Demolish
+        })
+        .map(|f| f.id.clone())
+        .collect();
+    let has_plug = resolved
+        .fixtures
+        .values()
+        .any(|f| f.kind == FixtureKind::Plug);
+    if !wet_demolished.is_empty() && !has_plug {
+        out.push(Diagnostic {
+            code: Code::W034,
+            severity: Severity::Warning,
+            message: message(Code::W034, &[]),
+            span: None,
+            refs: wet_demolished.clone(),
+            data: json!({ "fixtures": wet_demolished }),
+        });
+    }
+
+    let ventilation: Vec<String> = resolved
+        .fixtures
+        .values()
+        .filter(|f| {
+            f.kind == FixtureKind::Exhaust && matches!(f.phase, Phase::New | Phase::Demolish)
+        })
+        .map(|f| f.id.clone())
+        .collect();
+    if !ventilation.is_empty() {
+        out.push(Diagnostic {
+            code: Code::I032,
+            severity: Severity::Info,
+            message: message(Code::I032, &[]),
+            span: None,
+            refs: ventilation.clone(),
+            data: json!({ "fixtures": ventilation }),
+        });
     }
 
     for key in REQUIRED_TITLE_KEYS {
@@ -266,6 +313,59 @@ mod tests {
         let found = review(&plan, &resolved);
         let keys = ["property", "drawing", "applicant", "date"];
         assert_eq!(found, keys.map(i031));
+        Ok(())
+    }
+
+    /// A kitchen `Kok` with the given fixture lines and the full title block.
+    fn kok_with_title(fixtures: &str) -> String {
+        format!("plan \"Kok\"\nroom Kok 2400 x 4000 source laser\n{fixtures}\n{TITLE_LINES}")
+    }
+
+    #[test]
+    fn w034_demolished_sink_without_plug() -> Result<(), Box<dyn std::error::Error>> {
+        let src = kok_with_title("fixture sink Kok.north at 900 demolish");
+        let (plan, resolved) = plan_and_resolved_of(&src)?;
+        let found = review(&plan, &resolved);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].code, Code::W034);
+        assert_eq!(found[0].severity, Severity::Warning);
+        assert_eq!(
+            found[0].message,
+            r#"Kitchen fixtures are demolished but no capped connection is marked; add a "plug" fixture where the pipes are capped."#
+        );
+        assert_eq!(found[0].refs, vec!["F:Kok.north:1"]);
+        assert_eq!(found[0].data, json!({ "fixtures": ["F:Kok.north:1"] }));
+        Ok(())
+    }
+
+    #[test]
+    fn w034_none_with_plug() -> Result<(), Box<dyn std::error::Error>> {
+        let src = kok_with_title(
+            "fixture sink Kok.north at 900 demolish\nfixture plug Kok.north at 1000",
+        );
+        let (plan, resolved) = plan_and_resolved_of(&src)?;
+        assert!(review(&plan, &resolved).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn i032_new_exhaust() -> Result<(), Box<dyn std::error::Error>> {
+        let src = kok_with_title("fixture exhaust Kok.north at 0 new");
+        let (plan, resolved) = plan_and_resolved_of(&src)?;
+        let found = review(&plan, &resolved);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].code, Code::I032);
+        assert_eq!(found[0].severity, Severity::Info);
+        assert_eq!(found[0].refs, vec!["F:Kok.north:1"]);
+        assert_eq!(found[0].data, json!({ "fixtures": ["F:Kok.north:1"] }));
+        Ok(())
+    }
+
+    #[test]
+    fn existing_stove_gives_no_finding() -> Result<(), Box<dyn std::error::Error>> {
+        let src = kok_with_title("fixture stove Kok.north at 200");
+        let (plan, resolved) = plan_and_resolved_of(&src)?;
+        assert!(review(&plan, &resolved).is_empty());
         Ok(())
     }
 }
