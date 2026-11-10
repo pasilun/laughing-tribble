@@ -10,7 +10,7 @@ Order of work, decided with the maintainer on 2026-11-10. It replaces the outloo
 | 4 | `.skp` export through OpenSKP | Skipped for now (maintainer, 2026-11-10) |
 | 5 | Diagnostic views: conflicts, missing measurements, diff (cards W4-01…W4-R1). Overlay on a source image moves to row 7 | Cards written 2026-11-10 |
 | 6 | Permit sheet: title block, Swedish texts, before/after sheets, dimension chains on two sides (cards W4-09…W4-R2) | Cards written 2026-11-10 |
-| 6b | Model extensions that v1 plans and the editor need: free-standing walls and partitions, non-rectangular rooms, angled walls, fixtures (kitchen, WC, shower, furniture), several apartments and a stairwell in one plan (`docs/v2-agent-specs.md` §13) | Not started |
+| 6b | Model extensions that v1 plans and the editor need: free-standing walls, wall stubs and partitions, non-rectangular rooms, fixtures (kitchen, WC, shower, furniture), balconies, several apartments and a stairwell in one plan (`docs/v2-agent-specs.md` §13). Angled walls are left for later (maintainer, 2026-11-10) | Not started |
 | 7 | Source images, the v1 way (no LLM call in the server): the user uploads a drawing or photo through a link, the server stores it and hands it back to the calling model as an image or a crop, calibration against printed dimensions is deterministic, and the `overlay` view draws the plan over it. Plus the `find` and `history` tools and command-log storage | Not started |
 | 8 | Eval across Haiku, Sonnet and Opus on a fixed task set | Skipped (maintainer, 2026-11-10) |
 | 9 | Import of v1 plans and cut-over | Not started |
@@ -27,3 +27,4 @@ Order of work, decided with the maintainer on 2026-11-10. It replaces the outloo
 - **Free-standing walls, angled walls, non-rectangular rooms** (`docs/v2-agent-specs.md` §13) are needed before the editor; the spec run for row 10 decides the DSL.
 - **Not yet carded from rows 5–6:** door swings can cross a small room's label; interior dimension lines; chains on the south and east sides; v1's kitchen-plug, ventilation and property-name checks (they need fixtures).
 - **Row 7 has no LLM call (maintainer, 2026-11-10).** The model that calls the MCP tools reads the image itself, as in v1 (`plan_upload_link`, `plan_source_add`, `plan_view`). `docs/v2-kernel-plan.md` point 6 of "Giving the model vision" ("read with structured outputs") is superseded: the server never calls a model.
+- **Angled walls: later.** The real plans have a few (the stairwell walls of the Gnejsen 48 A/B plan taper), so they are needed before those plans can be imported in full, but not in the first batch of row 6b.
