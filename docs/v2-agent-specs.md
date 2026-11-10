@@ -315,10 +315,15 @@ pub struct AxisGraphSolver;      // §6.2, Phase 1
 file        = { line } ;
 line        = [ statement ] [ comment ] NEWLINE ;
 comment     = "#" { any } ;
-statement   = plan | default | title | room | relation | align | measure | opening | wall | stub | fixture ;
+statement   = plan | default | title | source | room | relation | align | measure | opening | wall | stub | fixture ;
 stub        = "stub" face "at" INT "length" INT [ "thickness" INT ] [ "offset" INT ] [ "bearing" ] [ phase ] ;   (* §15 D45 *)
 fixture     = "fixture" KIND face "at" INT [ "width" INT ] [ "depth" INT ] [ "offset" INT ] [ "label" STRING ] [ phase ] ;   (* §15 D44 *)
 title       = "title" KEY STRING ;   (* KEY: property, address, applicant, drawing, drawn_by, date, description; §15 D41 *)
+source      = "source" NAME STRING [ "mm_per_px" DEC ] [ "at" [ "-" ] INT "," [ "-" ] INT ] [ "role" ROLE ]
+              [ "year" INT ] [ "view" VIEW ] ;   (* §15 D50 *)
+ROLE        = "archive" | "before" | "after" | "other" ;   (* other is the default *)
+VIEW        = "plan" | "elevation" ;                        (* plan is the default *)
+DEC         = digit { digit } "." digit [ digit [ digit ] ] ;   (* mm per pixel, thousandths; 6.35 = 6350 *)
 plan        = "plan" STRING ;
 default     = ("default_wall" | "default_outer_wall") qty ;
 room        = "room" NAME size "x" size [ src ] [ "apartment" STRING ] [ "part" NAME ] [ phase ] ;   (* part: §15 D46 *)
@@ -346,6 +351,7 @@ Notes:
 - Keywords are lower case. Room names are case-sensitive.
 - `INDENT` is any leading whitespace. An indented relation without a subject applies to the last declared room.
 - Lengths: plain integers are mm. `1.86m` is 1860. Anything else is E006.
+- `at` in a `source` line takes a leading `-` on either coordinate, so a drawing may sit west or north of the plan origin; `mm_per_px` is the only decimal (thousandths).
 
 ### 7.2 Printer (canonical form)
 
@@ -353,8 +359,9 @@ Notes:
 
 Canonical form:
 1. `plan`, then the defaults.
-2. Rooms in declaration order. Each room's relations are indented by two spaces under it, in this order: east_of, west_of, south_of, north_of, then align.
-3. Then `measure`, `wall`, `door`, `window`, `passage` lines, each group sorted by face then `at`.
+2. `title` lines (key order of D41), then `source` lines in declaration order (§15 D50).
+3. Rooms in declaration order. Each room's relations are indented by two spaces under it, in this order: east_of, west_of, south_of, north_of, then align.
+4. Then `measure`, `wall`, `door`, `window`, `passage` lines, each group sorted by face then `at`.
 
 Omit a `source` equal to the default (`assumed` for defaults, none for exact relations), and omit `tol` equal to the source default. Comments are not preserved in canonical form; the raw text is kept in storage separately.
 
@@ -521,6 +528,9 @@ pub struct Diagnostic {
 | E021 | Error | Invalid plan id (MCP) | `Invalid plan_id "{id}": use 1 to 64 letters, digits, "-" or "_".` |
 | E022 | Error | Render view not available yet | `View "{view}" is not available yet; use "plan" or "labels".` |
 | E023 | Error | Plan file read or write failed (MCP) | `Could not {action} plan "{id}": {reason}.` |
+| E024 | Error | Source file unreadable or unsupported | `Source "{name}" could not be read: {reason}.` |
+| E025 | Error | Unknown source | `Unknown source "{name}".{ Did you mean "{suggestion}"?} Use a source name from get.` |
+| E026 | Error | Duplicate source | `Source "{name}" is declared twice (lines {a} and {b}).` |
 | I020 | Info | Measurement suggested (not in `check` output; `plan suggest` and MCP next steps only) | `{what} {value} mm has source {source} (±{tol} mm); measure {from} to {to} with the laser.` |
 | E014 | Error | Size below 1 mm | `{what} is {value} mm; it must be at least 1 mm.` |
 | E015 | Error | Relation of a room to itself | `"{subject} {relation} {of}" relates a room to itself.` |
@@ -535,9 +545,12 @@ pub struct Diagnostic {
 | I031 | Info | Review: title block entry missing | `Title block has no {key}; add: title {key} "…"` |
 | E019 | Error | Fixture or stub outside its room | `{what} on {face} at {at} runs outside {room}.` |
 | W034 | Warning | Review: kitchen demolished, no capped connection | `Kitchen fixtures are demolished but no capped connection is marked; add a "plug" fixture where the pipes are capped.` |
+| W040 | Warning | Source axes disagree after calibration | `Source "{name}": the x and y scales differ by {pct} %; check the printed dimensions.` |
 | I032 | Info | Review: ventilation changes | `Ventilation changes: the flows must be re-balanced against the latest OVK and a new OVK made.` |
+| I033 | Info | Source not calibrated | `Source "{name}" is not calibrated; give at least one printed dimension to source_calibrate.` |
 
 Codes E011–E023 (E013 added in D19) and I020 were added by the spec run of 2026-11-09 (§15 D10, D13, D17, D8).
+Codes E024–E026, W040 and I033 were added by the row-7 spec run (§15 D50–D56); E026 is the duplicate-source error of §7.4, and E024/E025 are the source errors of the tools.
 
 Codes E014–E018, W030–W033 and I030 were added by the spec run of 2026-11-10 (§15 D26, D31, D35). W030–W033 and I030 come from `review`, never from `resolve`. W005 and W020 are emitted from week three on (cards W3-06, W3-07).
 
@@ -732,11 +745,30 @@ Done when: tests …
 { "plan_id": "string",
   "view": "plan|labels|conflicts|missing|diff|overlay",
   "region": { "id": "W:…" } | { "rect_mm": [x,y,w,h] },
-  "max_tokens": 1600 }
-// → image + { mm_per_px, origin_mm, size_px }
+  "max_tokens": 1600,
+  "source": "name (overlay only; default the first source)",
+  "grid": false }
+// → image + { mm_per_px, origin_mm, size_px, source?, calibrated? }
 
 // find
-{ "plan_id": "string", "query": "room or wall name, partial ok" }
+{ "plan_id": "string", "query": "room or wall name, partial ok", "limit": 20 }
+// → { plan_id, query, count, matches[]: { id, kind, rect, label } }
+
+// upload
+{ "plan_id": "string" }
+// → { url, expires_in_s, note }   (a localhost link; the user drops a file; it becomes a source)
+
+// source_calibrate
+{ "plan_id": "string", "source": "name",
+  "measurements": [ { "a": {"x":0,"y":0}, "b": {"x":0,"y":0}, "mm": 6080, "label": "6,08 m" } ],
+  "anchor": { "x": 0, "y": 0 }, "dry_run": false }
+// → { factor_x, factor_y, mm_per_px_x, mm_per_px_y, rms_mm, residuals[], axes_disagree, patch, saved, rev, diagnostics[] }
+
+// source_view
+{ "plan_id": "string", "source": "name (default the first)",
+  "region": { "id": "Rum" } | { "rect_mm": [x,y,w,h] },
+  "max_tokens": 1600, "overlay": true, "grid": true }
+// → image + { source, calibrated, mm_per_px, origin_mm, size_px, source_rect_mm, tokens }
 
 // import
 { "plan_id": "string", "kind": "photo|sketch|v1|dxf|skp", "file_id": "string", "note": "free text" }
@@ -744,10 +776,13 @@ Done when: tests …
 
 // history
 { "plan_id": "string", "limit": 20 }
+// → { plan_id, rev, entries[]: { rev, at, author, patch, changes, summary } }   (newest first)
 ```
 
+Sources live beside the plan: `<root>/sources/<plan_id>/<name>.png` for the server, `<plan dir>/sources/<plan stem>/<name>.png` for the CLI; uploads land in `<root>/uploads/`. The `source` statement, the asset rules and the tools are §15 D50–D56. `render` views `overlay` and `source_view` are screen renders, not sheets.
+
 - **P4-01 (B):** `rmcp` server skeleton plus the tools above over `core`.
-- **P4-02 (B):** storage as a command log plus snapshots in SQLite.
+- **P4-02 (B):** storage as a command log plus snapshots. Row 7 uses JSONL plus `NNNN.plan` snapshots (§15 D55); SQLite replaces it behind the same `Store` methods when there are concurrent writers (row 11).
 - **P4-03 (A):** `import` for photos.
   - Structured-output schema for laser readings.
   - Labelled render alongside, so the model proposes which faces each reading spans.
@@ -872,3 +907,14 @@ Decisions taken by the spec runs where the sections above left a choice open. Ea
 - **D48. Review with fixtures.** v1's `plug` and `ventilation` checks: W034 when kitchen fixtures are demolished and no plug is marked, I032 when an exhaust is new or demolished. Card W5-08.
 - **D49. Sheet style.** Sheets are black and white (grey walls): rooms untinted, openings black, windows a framed double line. The clear-size text needs 25 × 14 mm of paper, and a room's texts move off door swings to the first free of five positions. Screen renders keep their colours. Cards W5-09, W5-10.
 - **Angled walls** are left for later (maintainer, 2026-11-10); the Gnejsen 48 A/B stairwell has two.
+
+**Spec run 2026-11-10, fourth (row 7: source images, overlay, find, history, command log):**
+
+- **D50. Sources in the DSL and on disk.** `source NAME "FILE" [mm_per_px DEC] [at X,Y] [role archive|before|after|other] [year N] [view plan|elevation]`. NAME is `[A-Za-zÅÄÖåäö0-9_-]{1,64}` and unique (E026); FILE is the original upload's basename, for provenance only. `mm_per_px` is thousandths of a millimetre per pixel (6.35 → 6350), `None` when not calibrated; `at` is the top-left corner in plan mm (negative allowed); role defaults to `other`, view to `plan`. The stored asset is `<root>/sources/<plan_id>/<NAME>.png` (server) or `<plan dir>/sources/<plan stem>/<NAME>.png` (CLI), an 8-bit greyscale PNG converted on arrival; originals are not kept; limit 12 000 px on the long edge. A source name or file that could escape the folder is E006. Cards W6-01…03, W6-11.
+- **D51. Upload link.** The tool `upload {plan_id}` starts, once per server process, a tiny HTTP listener on `127.0.0.1:0` (random port) and returns `http://127.0.0.1:<port>/u/<token>` (valid 3600 s, one upload). The page is plain HTML with a drag-and-drop script that PUTs the raw bytes with `?name=&scale=&dpi=&role=&year=`; no multipart. Limit 30 MB checked before reading. On receipt the file is decoded and added like `source_add`, and the page names the source (or shows the E024 message); the model sees it on the next `get`/`check`. PNG, JPEG and TIFF; PDF is not supported yet (E024 asks for a PNG/TIFF export). Cards W6-03, W6-04.
+- **D52. Calibration.** `source_calibrate {plan_id, source, measurements, anchor?, dry_run?}`. Points are plan mm under the source's current scale, read off `source_view`. A measurement is horizontal when `|dx| ≥ |dy|`, vertical otherwise; each set gets `k = Σ(d·mm)/Σ(d²)`; an empty set copies the other (isotropic). The source is rescaled around `anchor` (default 0,0): `mm_per_px *= k` and `at = anchor + (at − anchor)·k` per axis. Residuals and RMS are reported in mm; W040 when both sets exist and the factors differ by more than 0.5 %. Card W6-05.
+- **D53. Source view and overlay.** One renderer (`plan_render::underlay`) draws the stored PNG under the plan: image opacity 0.55, the plan's ordinary colours, a 1 m grid with labels on the top and left edges every 1000 mm, sized by the viewport rules of D9 (default budget 1600). `source_view` crops by an element id (300 mm pad) or a `rect_mm`, default the whole source, and returns `{source, calibrated, mm_per_px, origin_mm, size_px, source_rect_mm, tokens}`. `render` view `overlay` uses the plan's content rectangle (or `region`) with the same underlay; `source` selects the source, the first one by default. An uncalibrated source uses a nominal 1 mm/px and returns I033. Cards W6-06, W6-07.
+- **D54. Find.** `find {plan_id, query, limit?}` searches `element_ids` case-insensitively: exact (rank 0), prefix (1), contains (2); ties by kind (room, wall, opening, fixture, stub), then id. Each match is `{id, kind, rect, label}`. A wall's label is its two `between` faces; an opening's or fixture's is its kind; a stub's is none. No match is an empty list, not an error. Card W6-08.
+- **D55. History.** The command log is JSONL plus snapshots, not SQLite yet: `<root>/.history/<plan_id>/log.jsonl` holds `{rev, at, author, patch, changes, summary}` and `NNNN.plan` holds the canonical text after each save. Every successful, non-dry-run save appends (apply, source add, upload, calibration); a failed apply writes nothing; plans made before history start at rev 0. `apply` returns `rev`, `get`/`check` JSON carry `rev`, and `history {plan_id, limit=20}` returns the newest entries first. SQLite stays for row 11 (concurrent writers, accounts) behind the same `Store` methods. Cards W6-09, W6-10.
+- **D56. Tool names and dependencies.** New tools: `upload`, `source_calibrate`, `source_view`, `find`, `history`; `render` gains `source` and `grid` and implements `overlay`; `get` gains the `sources` field group. New crate `plan-scan` (lib `plan_scan`) holds image decoding, scale conversion, calibration math, asset helpers and history files; `plan-server` adds `tiny_http` and `getrandom`; `plan-render` adds `base64`; `plan-scan` adds `image`, `serde`, `serde_json` and `chrono`; `plan-cli` depends on `plan-scan`. Cards W6-02…11.
+- **D57. Row-7 acceptance.** A synthetic 600×400 PNG at 6.35 mm/px with two printed dimensions, one on each axis, and a 1 m square: upload (or `source add`) → calibrate (residual ≤ 2 mm, no W040) → `source_view` (the square measures 1000 mm) → overlay in MCP and CLI → `find` returns the room and wall → `history` lists the three writes in order → `./ci.sh` green. Card W6-R2. Open: PDF sources (needs pdfium or an external converter), G4/CCITT TIFFs when the decoder refuses them, wall/opening detection from scans (not row 7), and `import` for photos (P4-03).
