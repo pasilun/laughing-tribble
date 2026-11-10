@@ -26,7 +26,8 @@ pub struct AdjustedEdge {
     pub origin: String,
     /// The stated value.
     pub value: Mm,
-    /// `round_half_even(x[to] − x[from])` after distribution.
+    /// `coords[to] − coords[from]` from the rounded coordinates the solver
+    /// writes, so it is what is drawn (§15 D23).
     pub adjusted: Mm,
     /// `(x[to] − x[from]) − value`, unrounded.
     pub shift: f64,
@@ -93,9 +94,12 @@ pub fn distribute(
 
     let x = wls(faces.len(), &fixed, &soft, &hard)?;
 
+    // The rounded coordinates are the ones the solver writes, so every edge
+    // reports the difference of what is actually drawn (§15 D23).
+    let rounded: Vec<Mm> = x.iter().map(|&i| round_half_even(i)).collect();
     let mut face_coords = BTreeMap::new();
-    for (face, &i) in faces.iter().zip(x.iter()) {
-        face_coords.insert(key(face), round_half_even(i));
+    for (face, &c) in faces.iter().zip(rounded.iter()) {
+        face_coords.insert(key(face), c);
     }
 
     let adjusted = member
@@ -107,7 +111,7 @@ pub fn distribute(
                 edge: i,
                 origin: e.origin.clone(),
                 value: e.value,
-                adjusted: round_half_even(d),
+                adjusted: rounded[b] - rounded[a],
                 shift: d - e.value as f64,
             }
         })

@@ -252,8 +252,8 @@ pub fn resolve(plan: &Plan) -> (Option<Resolved>, Vec<Diagnostic>) {
 /// Distribute every component of `axis` that has a non-zero within-tolerance
 /// residual (§6.2 step 5). Each distributed component's coordinates replace the
 /// first-pass ones in `coords`; a component that `distribute` cannot solve keeps
-/// them. Returns the edges that moved more than half a millimetre, in edge-index
-/// order.
+/// them. Returns the edges whose drawn value differs from the stated one, in
+/// edge-index order (§15 D23).
 fn distribute_axis(
     edges: &[Edge],
     comps: &[Component],
@@ -276,7 +276,7 @@ fn distribute_axis(
             continue;
         };
         coords.extend(dist.coords);
-        moved.extend(dist.edges.into_iter().filter(|a| a.shift.abs() > 0.5));
+        moved.extend(dist.edges.into_iter().filter(|a| a.adjusted != a.value));
     }
     moved.sort_by_key(|a| a.edge);
     moved

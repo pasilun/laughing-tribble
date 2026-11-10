@@ -88,8 +88,8 @@ pub fn conflict_diagnostic(check: &CycleCheck, edges: &[Edge]) -> Option<Diagnos
 }
 
 /// The W004 diagnostic for one axis that distributed its within-tolerance
-/// cycles (§6.2 step 6, §15 D6), or `None` when no edge moved more than half
-/// a millimetre.
+/// cycles (§6.2 step 6, §15 D6, D23), or `None` when every edge is drawn at its
+/// stated value.
 ///
 /// `adjusted` holds the edges that moved, in edge-index order. The list
 /// argument gives each as `origin value→adjusted`, joined by `, `; `refs` are
@@ -391,7 +391,7 @@ measure Garderob.north to Sovrum.south = {measured} source laser
         assert_eq!(w004[0].severity, Severity::Warning);
         assert_eq!(
             w004[0].message,
-            "Adjusted to fit within tolerance: room Garderob depth 2360→2359, room Sovrum depth 2090→2089, Sovrum south_of Garderob gap 90→82, measure Garderob.north to Sovrum.south 4530→4531."
+            "Adjusted to fit within tolerance: room Garderob depth 2360→2359, Sovrum south_of Garderob gap 90→82, measure Garderob.north to Sovrum.south 4530→4531."
         );
     }
 
