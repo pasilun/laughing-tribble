@@ -13,6 +13,7 @@ pub mod pdf;
 pub mod png;
 pub mod render;
 pub mod sheet;
+mod sheet_dims;
 pub mod svg;
 pub mod viewport;
 

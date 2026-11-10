@@ -164,6 +164,15 @@ pub struct ExportArgs {
     /// The language of the printed words: "en" (default) or "sv".
     #[serde(default)]
     pub lang: ExportLang,
+    /// Draw the dimension chains on the north and west sides (default true).
+    /// Set false to leave them out and reserve no paper for them.
+    #[serde(default = "default_dims")]
+    pub dims: bool,
+}
+
+/// The default of `ExportArgs::dims`: the chains are drawn.
+fn default_dims() -> bool {
+    true
 }
 
 #[derive(Debug, Clone)]
@@ -254,6 +263,7 @@ impl PlanServer {
                 ExportLang::Sv => SheetLang::Sv,
             },
             block: loaded.plan.title.clone(),
+            dims: args.dims,
         };
         let sheet = plan_render::sheet(&resolved, &opts).map_err(|d| vec![d])?;
         let bytes = plan_render::pdf(&sheet).map_err(|d| vec![d])?;
@@ -1007,6 +1017,7 @@ mod tests {
             scale,
             date: None,
             lang: ExportLang::En,
+            dims: true,
         })
     }
 

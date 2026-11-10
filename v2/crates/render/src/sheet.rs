@@ -11,6 +11,7 @@ use serde_json::json;
 
 use crate::corners::corner_rect;
 use crate::render::without_text;
+use crate::sheet_dims::dims_group;
 use crate::svg::{FONT_FAMILY, RoomFonts, drawn_elements, escape, text};
 
 /// The standard scales, 1:n, smallest first.
@@ -103,6 +104,9 @@ pub struct SheetOptions {
     /// drawing, drawn_by, date, description). When empty, the strip is the
     /// one-row strip; otherwise it is the two-row title block (§15 D41).
     pub block: BTreeMap<String, String>,
+    /// Draw the dimension chains on the north and west sides, and reserve the
+    /// 14 mm of paper they need (spec §15 D42).
+    pub dims: bool,
 }
 
 /// A drawn sheet: the SVG in paper mm, with the paper and the scale used.
@@ -127,7 +131,10 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
     let (ew, eh) = ((maxx - minx) as f64, (maxy - miny) as f64);
     // 10 mm margin, 15 mm title strip, 5 mm padding.
     let (aw, ah) = (w - 30.0, h - 45.0);
-    let fits = |n: u32| n > 0 && ew / f64::from(n) <= aw && eh / f64::from(n) <= ah;
+    // The dimension chains take 14 mm of paper on the north and west sides.
+    let reserve = if opts.dims { 14.0 } else { 0.0 };
+    let fits =
+        |n: u32| n > 0 && ew / f64::from(n) + reserve <= aw && eh / f64::from(n) + reserve <= ah;
     let first_fit = SCALES.iter().copied().find(|&n| fits(n));
     let n = opts.scale.unwrap_or_else(|| first_fit.unwrap_or(1000));
     if !fits(n) {
@@ -150,8 +157,8 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
 
     let nf = f64::from(n);
     let k = 1.0 / nf;
-    let tx = 15.0 + (aw - ew * k) / 2.0 - minx as f64 * k;
-    let ty = 15.0 + (ah - eh * k) / 2.0 - miny as f64 * k;
+    let tx = 15.0 + reserve + (aw - reserve - ew * k) / 2.0 - minx as f64 * k;
+    let ty = 15.0 + reserve + (ah - reserve - eh * k) / 2.0 - miny as f64 * k;
     let fonts = RoomFonts {
         name: 3.5 * nf,
         area: 2.5 * nf,
@@ -175,6 +182,9 @@ pub fn sheet(resolved: &Resolved, opts: &SheetOptions) -> Result<Sheet, Diagnost
             " fill=\"#1a1a1a\"",
             &format!("{rw} × {rd}"),
         ));
+    }
+    if opts.dims {
+        plan.push(dims_group(resolved, minx, miny, n));
     }
 
     let has_block = !opts.block.is_empty();
@@ -331,6 +341,7 @@ mod tests {
             date: None,
             lang: Lang::En,
             block: BTreeMap::new(),
+            dims: false,
         }
     }
 
@@ -538,5 +549,76 @@ mod tests {
                 paper.name()
             );
         }
+    }
+
+    fn dims_opts(paper: Paper) -> SheetOptions {
+        SheetOptions {
+            dims: true,
+            ..opts(paper, None)
+        }
+    }
+
+    /// The `<g id="dims">` group of `svg`, from its start to its end.
+    fn dims_group_of(svg: &str) -> &str {
+        let start = svg.find(r#"<g id="dims">"#).expect("dims group is drawn");
+        let group = &svg[start..];
+        &group[..group.find("</g>").expect("group end") + "</g>".len()]
+    }
+
+    #[test]
+    fn dims_on_a3_prints_the_chain_segments_and_totals() {
+        let svg = sheet(&fixture_a(), &dims_opts(Paper::A3))
+            .expect("fits")
+            .svg;
+        assert!(svg.contains(r#"<g id="dims">"#));
+        let group = dims_group_of(&svg);
+        for text in [
+            ">1860<", ">1100<", ">2370<", ">5541<", ">2360<", ">2090<", ">4540<",
+        ] {
+            assert!(group.contains(text), "{text} missing from {group}");
+        }
+        // Segments under 6 mm on paper get no text.
+        assert!(!group.contains(">121<"), "{group}");
+        assert!(!group.contains(">90<"), "{group}");
+    }
+
+    #[test]
+    fn dims_on_a3_keeps_scale_25() {
+        let sheet = sheet(&fixture_a(), &dims_opts(Paper::A3)).expect("fits");
+        assert_eq!(sheet.scale, 25);
+    }
+
+    #[test]
+    fn dims_west_texts_are_rotated() {
+        let svg = sheet(&fixture_a(), &dims_opts(Paper::A3))
+            .expect("fits")
+            .svg;
+        let group = dims_group_of(&svg);
+        for content in [">2360", ">2090"] {
+            let element = text_element(group, content);
+            assert!(element.contains("rotate(-90"), "{element}");
+        }
+        // The north texts are not rotated.
+        let north = text_element(group, ">1100");
+        assert!(!north.contains("rotate(-90"), "{north}");
+    }
+
+    #[test]
+    fn dims_off_draws_no_group_and_keeps_the_scale() {
+        let svg = sheet(&fixture_a(), &opts(Paper::A3, None))
+            .expect("fits")
+            .svg;
+        assert!(!svg.contains(r#"id="dims""#));
+        assert!(!svg.contains("rotate(-90"));
+    }
+
+    #[test]
+    fn dims_on_a4_keeps_scale_50_and_prints_only_long_segments() {
+        let sheet = sheet(&fixture_a(), &dims_opts(Paper::A4)).expect("fits");
+        assert_eq!(sheet.scale, 50);
+        let group = dims_group_of(&sheet.svg);
+        assert!(group.contains(">1100<"), "{group}");
+        assert!(!group.contains(">121<"), "{group}");
+        assert!(!group.contains(">90<"), "{group}");
     }
 }

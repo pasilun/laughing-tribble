@@ -49,6 +49,7 @@ mod tests {
             date: None,
             lang: Lang::En,
             block: std::collections::BTreeMap::new(),
+            dims: false,
         };
         sheet(&resolved, &opts).expect("fixture A sheet")
     }

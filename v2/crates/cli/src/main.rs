@@ -14,7 +14,7 @@
 //!   [--region ID | --rect x,y,w,h] [--diff BEFORE]`: write the PNG and print its viewport
 //!   as JSON (with `--diff`, the plan view of the file with the differences from BEFORE
 //!   drawn on top, and a `diff` object of counts).
-//! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv]`:
+//! - `plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims]`:
 //!   write the sheet as a PDF and print its paper, scale and byte count as JSON.
 //! - `plan --version`.
 //!
@@ -41,14 +41,14 @@ const USAGE: &str = "usage:
   plan fmt <file> [--write]
   plan svg <file> [--out path]
   plan png <file> -o <out.png> [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]
-  plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv]
+  plan pdf <file> -o <out.pdf> [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims]
   plan --version";
 
 /// Usage line of `plan png`, printed on its own to stderr (exit 2).
 const PNG_USAGE: &str = "usage: plan png FILE -o OUT.png [--view plan|labels] [--max-tokens N] [--region ID | --rect x,y,w,h] [--diff BEFORE]";
 
 /// Usage line of `plan pdf`, printed on its own to stderr (exit 2).
-const PDF_USAGE: &str = "usage: plan pdf FILE -o OUT.pdf [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv]";
+const PDF_USAGE: &str = "usage: plan pdf FILE -o OUT.pdf [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims]";
 
 /// Write a line to stdout. A closed pipe ends the program quietly with exit 0.
 fn out(text: &str) {
@@ -399,9 +399,10 @@ struct PdfArgs<'a> {
     title: Option<&'a str>,
     date: Option<&'a str>,
     lang: Lang,
+    dims: bool,
 }
 
-/// Parse `FILE -o OUT [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv]`.
+/// Parse `FILE -o OUT [--paper a4|a3] [--scale N] [--title TEXT] [--date TEXT] [--lang en|sv] [--no-dims]`.
 /// `None` is a usage error: a missing file or `-o`, an unknown option, a missing
 /// value, an unknown paper or language, or a scale that is not a positive integer.
 fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
@@ -412,14 +413,20 @@ fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
     let mut title = None;
     let mut date = None;
     let mut lang = Lang::En;
-    for pair in rest.chunks(2) {
-        let [flag, value] = pair else {
-            return None;
-        };
-        match *flag {
-            "-o" => out = Some(*value),
+    let mut dims = true;
+    let mut rest = rest;
+    while let Some((&flag, after)) = rest.split_first() {
+        if flag == "--no-dims" {
+            dims = false;
+            rest = after;
+            continue;
+        }
+        let (&value, after) = after.split_first()?;
+        rest = after;
+        match flag {
+            "-o" => out = Some(value),
             "--paper" => {
-                paper = match *value {
+                paper = match value {
                     "a4" => Paper::A4,
                     "a3" => Paper::A3,
                     _ => return None,
@@ -428,10 +435,10 @@ fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
             "--scale" => {
                 scale = Some(value.parse::<u32>().ok().filter(|n| *n > 0)?);
             }
-            "--title" => title = Some(*value),
-            "--date" => date = Some(*value),
+            "--title" => title = Some(value),
+            "--date" => date = Some(value),
             "--lang" => {
-                lang = match *value {
+                lang = match value {
                     "en" => Lang::En,
                     "sv" => Lang::Sv,
                     _ => return None,
@@ -448,6 +455,7 @@ fn pdf_args<'a>(words: &[&'a str]) -> Option<PdfArgs<'a>> {
         title,
         date,
         lang,
+        dims,
     })
 }
 
@@ -485,6 +493,7 @@ fn pdf_command(words: &[&str]) -> Result<ExitCode, String> {
         date: args.date.map(str::to_string),
         lang: args.lang,
         block: loaded.plan.title.clone(),
+        dims: args.dims,
     };
     let sheet = match plan_render::sheet(resolved, &opts) {
         Ok(sheet) => sheet,
