@@ -30,7 +30,6 @@ pub enum Lang {
 struct Words {
     scale: &'static str,
     property: &'static str,
-    address: &'static str,
     applicant: &'static str,
     drawing: &'static str,
     drawn_by: &'static str,
@@ -42,7 +41,6 @@ fn words(lang: Lang) -> Words {
         Lang::En => Words {
             scale: "Scale",
             property: "Property",
-            address: "Address",
             applicant: "Applicant",
             drawing: "Drawing",
             drawn_by: "Drawn by",
@@ -51,7 +49,6 @@ fn words(lang: Lang) -> Words {
         Lang::Sv => Words {
             scale: "Skala",
             property: "Fastighet",
-            address: "Adress",
             applicant: "Sökande",
             drawing: "Ritning",
             drawn_by: "Ritad av",
@@ -294,7 +291,7 @@ fn title_block(opts: &SheetOptions, words: &Words, w: f64, h: f64) -> Vec<String
     let property = field("property").map(|p| format!("{}: {p}", words.property));
     let address = field("address").map(|a| match &property {
         Some(_) => format!(", {a}"),
-        None => format!("{}: {a}", words.address),
+        None => a.to_string(),
     });
     let left2: String = [property, address].into_iter().flatten().collect();
     if !left2.is_empty() {
@@ -407,6 +404,23 @@ mod tests {
         assert!(svg.contains("Property: Stockholm Gnejsen 6, Gnejsvägen 6"));
         assert!(svg.contains(">Ny planlösning</text>"));
         assert!(!svg.contains(">Lgh 154</text>"));
+    }
+
+    #[test]
+    fn address_without_property_prints_the_address_alone() {
+        for lang in [Lang::En, Lang::Sv] {
+            let mut options = SheetOptions {
+                lang,
+                ..opts(Paper::A3, None)
+            };
+            options
+                .block
+                .insert("address".to_string(), "Storgatan 1".to_string());
+            let svg = sheet(&fixture_a(), &options).expect("fits").svg;
+            assert!(svg.contains(">Storgatan 1</text>"), "{lang:?}: {svg}");
+            assert!(!svg.contains("Address: Storgatan 1"), "{lang:?}: {svg}");
+            assert!(!svg.contains("Adress: Storgatan 1"), "{lang:?}: {svg}");
+        }
     }
 
     #[test]
