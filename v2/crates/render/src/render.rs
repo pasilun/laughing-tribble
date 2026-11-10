@@ -2,12 +2,15 @@
 //!
 //! The image is `size_px` pixels, and its viewBox is `size_px × mm_per_px`
 //! mm, so one pixel is exactly `mm_per_px` mm. Strokes and text given in
-//! pixels are multiplied by `mm_per_px`. Labels (W2-14) are not drawn yet.
+//! pixels are multiplied by `mm_per_px`. Labels (W2-15) are placed by
+//! [`place`](crate::labels::place) and drawn last, in `<g id="labels">`. The
+//! id labels of the other drawings are removed, so each text appears once.
 
+use plan_core::build::format_m2;
 use plan_core::{Diagnostic, RectMm, Resolved, element_ids, element_rect};
 
-use crate::labels::PlacedLabel;
-use crate::svg::{FONT_FAMILY, GRID, PAD, RoomFonts, drawn_elements, multiples};
+use crate::labels::{LabelReq, PlacedLabel, place};
+use crate::svg::{FONT_FAMILY, GRID, PAD, RoomFonts, drawn_elements, multiples, text};
 use crate::viewport::{Viewport, fit};
 
 /// What the picture shows. Only `Plan` is drawn in week two.
@@ -50,12 +53,73 @@ pub fn render(resolved: &Resolved, opts: &RenderOptions) -> Result<Rendered, Dia
         [content.x0, content.y0, content.width(), content.height()],
         opts.max_tokens,
     );
-    let svg = svg_text(resolved, &viewport);
+    let labels = place(
+        &label_requests(resolved, opts.view, &viewport),
+        viewport.size_px,
+    );
+    let svg = svg_text(resolved, &viewport, &labels);
     Ok(Rendered {
         svg,
         viewport,
-        labels: Vec::new(),
+        labels,
     })
+}
+
+/// The label requests of `view`, anchored at the centre of each element in px.
+///
+/// Rooms are always labelled (`name area`, priority 0). Walls (1) and openings
+/// (2) carry their id, and only in [`View::Labels`]. Elements whose anchor lies
+/// outside the image get no request.
+fn label_requests(resolved: &Resolved, view: View, vp: &Viewport) -> Vec<LabelReq> {
+    let mut reqs = Vec::new();
+    for name in resolved.rooms.keys() {
+        let id = name.as_str();
+        let Some(rect) = element_rect(resolved, id) else {
+            continue;
+        };
+        let area = format_m2(rect.width().saturating_mul(rect.height()));
+        reqs.extend(request(resolved, vp, id, format!("{id} {area} m²"), 0));
+    }
+    if view == View::Labels {
+        for id in resolved.walls.keys() {
+            reqs.extend(request(resolved, vp, id, id.to_string(), 1));
+        }
+        for id in resolved.openings.keys() {
+            reqs.extend(request(resolved, vp, id, id.to_string(), 2));
+        }
+    }
+    reqs
+}
+
+/// One request for element `id`, or `None` when its anchor is off the image.
+fn request(
+    resolved: &Resolved,
+    vp: &Viewport,
+    id: &str,
+    text: String,
+    priority: u8,
+) -> Option<LabelReq> {
+    let rect = element_rect(resolved, id)?;
+    let anchor_px = anchor_px(&rect, vp)?;
+    Some(LabelReq {
+        id: id.to_string(),
+        text,
+        anchor_px,
+        priority,
+    })
+}
+
+/// The centre of `rect` in px, or `None` when it lies outside the image.
+fn anchor_px(rect: &RectMm, vp: &Viewport) -> Option<[f64; 2]> {
+    let mpp = vp.mm_per_px;
+    let [ox, oy] = vp.origin_mm;
+    let [w, h] = vp.size_px;
+    let px = [
+        ((rect.x0 + rect.x1) as f64 / 2.0 - ox as f64) / mpp,
+        ((rect.y0 + rect.y1) as f64 / 2.0 - oy as f64) / mpp,
+    ];
+    let inside = (0.0..=f64::from(w)).contains(&px[0]) && (0.0..=f64::from(h)).contains(&px[1]);
+    inside.then_some(px)
 }
 
 /// The padded union of every element's rectangle, in mm.
@@ -74,7 +138,7 @@ fn content_rect(resolved: &Resolved) -> RectMm {
 }
 
 /// The full SVG document for `vp`.
-fn svg_text(resolved: &Resolved, vp: &Viewport) -> String {
+fn svg_text(resolved: &Resolved, vp: &Viewport, labels: &[PlacedLabel]) -> String {
     let mpp = vp.mm_per_px;
     let [ox, oy] = vp.origin_mm;
     let [w, h] = vp.size_px;
@@ -111,14 +175,60 @@ fn svg_text(resolved: &Resolved, vp: &Viewport) -> String {
         area: 12.0 * mpp,
     };
     for element in drawn_elements(resolved, fonts) {
-        out.push_str(&element);
+        out.push_str(&without_text(&element));
         out.push('\n');
     }
 
     out.push_str(&scale_bar(vp, vh));
     out.push('\n');
+    out.push_str(&labels_group(labels, vp));
+    out.push('\n');
     out.push_str("</svg>\n");
     out
+}
+
+/// `element` with every `<text>` removed: the labels are drawn by [`labels_group`].
+fn without_text(element: &str) -> String {
+    const END: &str = "</text>";
+    let mut out = String::with_capacity(element.len());
+    let mut rest = element;
+    while let Some(start) = rest.find("<text ") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find(END) {
+            Some(end) => rest = &rest[start + end + END.len()..],
+            None => return out,
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The `<g id="labels">` group: for each label, its leader line (if any) and
+/// its text, centred in the box. Converted from px back to mm.
+fn labels_group(labels: &[PlacedLabel], vp: &Viewport) -> String {
+    let mpp = vp.mm_per_px;
+    let [ox, oy] = vp.origin_mm;
+    let to_mm = |p: [f64; 2]| [ox as f64 + p[0] * mpp, oy as f64 + p[1] * mpp];
+    let mut body = String::new();
+    for label in labels {
+        let centre = to_mm(label.center_px);
+        if label.leader {
+            let anchor = to_mm(label.anchor_px);
+            body.push_str(&format!(
+                r##"<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#555" stroke-width="{mpp}"/>"##,
+                x1 = anchor[0],
+                y1 = anchor[1],
+                x2 = centre[0],
+                y2 = centre[1],
+            ));
+        }
+        let extra = format!(
+            r##" fill="#000" stroke="#fff" stroke-width="{}" paint-order="stroke""##,
+            3.0 * mpp
+        );
+        body.push_str(&text(centre[0], centre[1], 12.0 * mpp, &extra, &label.text));
+    }
+    format!(r##"<g id="labels">{body}</g>"##)
 }
 
 /// A 1 m black bar 20 px from the left and 30 px above the bottom, labelled `1 m`.
@@ -215,5 +325,83 @@ mod tests {
         let coarse = plan_render(1600).viewport.mm_per_px;
         let fine = plan_render(4784).viewport.mm_per_px;
         assert!(fine < coarse, "{fine} vs {coarse}");
+    }
+
+    fn labels_render(view: View) -> Rendered {
+        let opts = RenderOptions {
+            view,
+            region: None,
+            max_tokens: 1600,
+        };
+        render(&fixture_a(), &opts).expect("fixture A renders")
+    }
+
+    /// `[x0, y0, x1, y1]` of a placed label's box, in px.
+    fn box_of(label: &PlacedLabel) -> [f64; 4] {
+        let [cx, cy] = label.center_px;
+        let [w, h] = label.size_px;
+        [cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0]
+    }
+
+    #[test]
+    fn labels_view_has_every_id_once() {
+        let resolved = fixture_a();
+        let svg = labels_render(View::Labels).svg;
+        for id in element_ids(&resolved) {
+            let rect = element_rect(&resolved, &id).expect("element rect");
+            let is_room = resolved.rooms.keys().any(|k| k.as_str() == id);
+            let text = if is_room {
+                let area = format_m2(rect.width() * rect.height());
+                format!("{id} {area} m²")
+            } else {
+                id.clone()
+            };
+            let needle = format!(">{text}<");
+            assert_eq!(svg.matches(&needle).count(), 1, "{needle}");
+        }
+    }
+
+    #[test]
+    fn plan_view_has_rooms_only() {
+        let svg = labels_render(View::Plan).svg;
+        assert!(svg.contains(">Garderob 4.39 m²<"));
+        assert!(!svg.contains(">W:"));
+    }
+
+    #[test]
+    fn no_overlaps_in_fixture_a() {
+        let rendered = labels_render(View::Labels);
+        let free: Vec<&PlacedLabel> = rendered.labels.iter().filter(|l| !l.overlaps).collect();
+        for (i, a) in free.iter().enumerate() {
+            for b in &free[i + 1..] {
+                let (ba, bb) = (box_of(a), box_of(b));
+                let hit = ba[0] < bb[2] && bb[0] < ba[2] && ba[1] < bb[3] && bb[1] < ba[3];
+                assert!(!hit, "{} and {} overlap", a.id, b.id);
+            }
+        }
+        let crowded: Vec<&str> = rendered
+            .labels
+            .iter()
+            .filter(|l| l.overlaps)
+            .map(|l| l.id.as_str())
+            .collect();
+        eprintln!("{} labels overlap: {crowded:?}", crowded.len());
+    }
+
+    #[test]
+    fn escape() {
+        let label = PlacedLabel {
+            id: "A".to_string(),
+            text: "A&B".to_string(),
+            anchor_px: [10.0, 10.0],
+            center_px: [10.0, 10.0],
+            size_px: [20.0, 16.0],
+            leader: false,
+            overlaps: false,
+        };
+        let vp = fit([0, 0, 1000, 1000], 1600);
+        let svg = labels_group(&[label], &vp);
+        assert!(svg.contains(">A&amp;B<"), "{svg}");
+        assert!(!svg.contains("A&B"), "{svg}");
     }
 }
