@@ -106,7 +106,7 @@ export function changedSince(old: Plan, now: Plan): string {
   return out.slice(0, 40).join('\n') + (out.length > 40 ? `\n… och ${out.length - 40} till` : '')
 }
 
-function brief(x: unknown): string {
+export function brief(x: unknown): string {
   const o = x as Record<string, unknown>
   const p = (v: unknown) => (v && typeof v === 'object' ? `(${(v as Pt).x},${(v as Pt).y})` : '')
   if (o.a && o.b) return `${p(o.a)}→${p(o.b)} tj ${o.thickness}`
