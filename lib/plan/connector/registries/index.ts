@@ -51,6 +51,10 @@ export const MANAGE_ACTIONS = new Registry<Entry & { needsId: boolean }>('manage
   { name: 'restore', needsId: true, summary: 'Take a document back from the trash' },
   { name: 'trash', needsId: false, summary: 'List what the person has deleted' },
 ])
+export const TEMPLATES = new Registry<Entry>('templates', 'mall', [
+  { name: 'empty', summary: 'A new, empty plan (default)' },
+  { name: 'demo', summary: 'A plan with a demo drawing' },
+])
 
 // Every family, by its English key. The guide's `vocabulary` topic is written from this.
 export const FAMILIES: Record<string, Registry<Entry>> = {

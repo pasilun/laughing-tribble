@@ -8,7 +8,7 @@ import type { Plan } from '../../domain/types'
 import { answer } from '../answer'
 import { badArgument, invalidOperation, notFound } from '../findings'
 import type { Entry } from '../names'
-import { MANAGE_ACTIONS } from '../registries'
+import { MANAGE_ACTIONS, TEMPLATES } from '../registries'
 import { toToolResult, type ToolResult } from '../result'
 import type { Finding, Next } from '../types'
 import type { Args } from './index'
@@ -28,7 +28,12 @@ export async function manage(args: Args): Promise<ToolResult> {
   if ((r.entry as ManageEntry).needsId && !id) return fail([badArgument('id', `krävs för åtgärden ${name}`)])
   try {
     if (name === 'create') {
-      const template = a.template === 'demo' ? 'demo' : 'empty'
+      let template: 'empty' | 'demo' = 'empty'
+      if (a.template !== undefined) {
+        const t = TEMPLATES.resolve(String(a.template))
+        if ('finding' in t) return fail([t.finding])
+        template = t.entry.name as 'empty' | 'demo'
+      }
       const res = await createPlan({ name: String(a.name ?? 'Planritning'), template, author: 'claude' })
       if ('errors' in res) return fail(res.errors!.map(invalidOperation))
       const next: Next[] = [{ tool: 'source', arguments: { id: res.plan.id, action: 'upload_link' }, why: 'Har användaren en ritning eller bild att rita av? Ge länken.' }]
