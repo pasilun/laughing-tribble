@@ -20,7 +20,7 @@ test('guide vocabulary lists the families', async ({ request }) => {
   const r = await connector(request, 'guide', { topic: 'vocabulary' })
   const text = r.content[0].text!
   expect(text).toContain('operations: add, update, delete')
-  expect(text).toMatch(/^views: –$/m)
+  expect(text).toMatch(/^views: sheet, overlay, source$/m)
 })
 
 test('guide findings describes the finding shape and codes', async ({ request }) => {

@@ -22,7 +22,11 @@ export const LIST_KINDS = new Registry<Entry>('list', 'lista', [
   { name: 'plans', summary: 'The documents the person can open, with revision and tags (default)' },
   { name: 'revisions', summary: 'The revisions of one document (needs id)' },
 ])
-export const VIEWS = new Registry<Entry>('views', 'vy', [])
+export const VIEWS = new Registry<Entry>('views', 'vy', [
+  { name: 'sheet', summary: 'The drawing sheet (default); options.sheet is "efter" or "fore"' },
+  { name: 'overlay', summary: 'The plan drawn over the source drawing; region zooms; options.source picks the source' },
+  { name: 'source', summary: 'The source drawing alone, with a grid in mm; region zooms' },
+])
 export const CHECKS = new Registry<Entry>('checks', 'kontroll', [permit])
 export const FORMATS = new Registry<Entry>('formats', 'format', [
   { name: 'text', summary: 'The listing as text' },
