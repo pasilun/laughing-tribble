@@ -26,15 +26,15 @@ The list is fixed. So are the names, the fields in the table, and the three hint
 | Tool | Reads or writes | Fixed fields | Open slot (the engine's vocabulary) |
 |---|---|---|---|
 | `guide` | reads | `topic?` | topics |
-| `list` | reads | `what?`, `plan_id?`, `query?`, `limit?`, `cursor?` | what can be listed |
-| `get` | reads | `plan_id`, `parts?`, `since?`, `format?` | parts, formats |
-| `check` | reads | `plan_id`, `scope?`, `against?` | check families |
-| `view` | reads | `plan_id`, `view?`, `region?`, `max_tokens?`, `options?` | views, options |
-| `scan` | reads | `plan_id`, `action`, `args?`, `max_tokens?` | scan actions |
-| `edit` | writes | `plan_id`, `base_revision`, `ops`, `dry_run?`, `message?`, `image?` | operations |
-| `source` | writes | `plan_id`, `base_revision?`, `action`, `args?`, `dry_run?` | source actions |
-| `manage` | writes, can remove | `action`, `plan_id?`, `args?` | manage actions |
-| `export` | writes a file or link | `plan_id`, `format`, `options?` | formats, options |
+| `list` | reads | `what?`, `id?`, `query?`, `limit?`, `cursor?` | what can be listed |
+| `get` | reads | `id`, `parts?`, `since?`, `format?` | parts, formats |
+| `check` | reads | `id`, `scope?`, `against?` | check families |
+| `view` | reads | `id`, `view?`, `region?`, `max_tokens?`, `options?` | views, options |
+| `scan` | reads | `id`, `action`, `args?`, `max_tokens?` | scan actions |
+| `edit` | writes | `id`, `base_revision`, `ops`, `dry_run?`, `message?`, `image?` | operations |
+| `source` | writes | `id`, `base_revision?`, `action`, `args?`, `dry_run?` | source actions |
+| `manage` | writes, can remove | `action`, `id?`, `args?` | manage actions |
+| `export` | writes a file or link | `id`, `format`, `options?` | formats, options |
 
 What each is for:
 
@@ -55,7 +55,7 @@ Fixed fields are typed in the schema. Open slots are typed only as far as this t
 
 | Field | Schema | Meaning |
 |---|---|---|
-| `plan_id` | string | The plan. Its kind (floor plan, site plan) follows from the id |
+| `id` | string | The document: a floor plan, a site plan or any later kind. The kind follows from the id |
 | `base_revision` | integer | The revision the caller last read. A stale one is refused (§5, `stale-revision`) |
 | `ops` | array of objects, each with a required string `op`; other properties free | The operations. The schema lists no operation names and no operation fields |
 | `action` | string | Which action. The schema lists none |
@@ -83,7 +83,7 @@ Every answer has a short text for Claude to read and the same structured object:
   "ok": true,                    // false: nothing was saved
   "contract": 1,                 // this document's version
   "engine": "2026.11.2",         // the engine's version, for bug reports and guides
-  "plan_id": "…",
+  "id": "…",
   "revision": 31,                // the plan's revision after the call
   "changed": [ { "kind": "wall", "id": "v12", "what": "moved 114 mm south" } ],
   "findings": [ /* §5 */ ],
@@ -121,7 +121,7 @@ One shape for everything the engine has to say: a refused call, a broken rule, a
 `next` is the engine telling Claude what to do, as calls ready to make:
 
 ```jsonc
-{ "tool": "edit", "arguments": { "plan_id": "…", "base_revision": 31, "ops": [ … ] }, "why": "…" }
+{ "tool": "edit", "arguments": { "id": "…", "base_revision": 31, "ops": [ … ] }, "why": "…" }
 ```
 
 A session can therefore use an operation it has never heard of. `check` always returns `next`; the other tools return it when there is something to say.
