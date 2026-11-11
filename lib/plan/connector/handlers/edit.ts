@@ -52,7 +52,7 @@ export async function edit(args: Args): Promise<ToolResult> {
   const unknown: Finding[] = []
   for (let i = 0; i < named.length; i++) {
     const r = OPERATIONS.resolve(named[i].op)
-    if ('finding' in r) unknown.push({ ...r.finding, data: { ...r.finding.data, index: i } })
+    if ('finding' in r) unknown.push({ ...r.finding, message: `Operation ${i + 1}: ${r.finding.message}`, data: { ...r.finding.data, index: i } })
   }
   if (unknown.length) return refuse(unknown, undefined, { id })
 
