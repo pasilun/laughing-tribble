@@ -1,4 +1,5 @@
 import type { Revision } from '../../domain/types'
+import { PLANS } from '../../storage/docs'
 import { listPlans, listRevisions } from '../../storage/store'
 import { answer } from '../answer'
 import { badArgument, notFound } from '../findings'
@@ -76,7 +77,12 @@ async function revisions(args: Args, limit: number, offset: number): Promise<Too
     const f = badArgument('id', 'krävs')
     return toToolResult(answer({ ok: false, findings: [f] }), { summary: f.message })
   }
-  const all = (await listRevisions(id)).sort((p, q) => q.n - p.n)
+  if (!PLANS.id.test(id)) {
+    const f = badArgument('id', 'ogiltigt id')
+    return toToolResult(answer({ ok: false, findings: [f] }), { summary: f.message })
+  }
+  const stored = await listRevisions(id).catch(() => null)
+  const all = (stored ?? []).sort((p, q) => q.n - p.n)
   if (!all.length) {
     const nf = notFound(id)
     return toToolResult(answer({ ok: false, findings: [nf] }), { summary: nf.message })

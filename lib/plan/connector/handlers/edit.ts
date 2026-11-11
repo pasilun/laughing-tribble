@@ -1,6 +1,7 @@
 import { checkPlan } from '../../domain/checks'
 import { applyOps, type Op } from '../../domain/ops'
 import { preview } from '../../mcp/format'
+import { PLANS } from '../../storage/docs'
 import { editPlan, loadPlan } from '../../service'
 import { answer } from '../answer'
 import { changedList } from '../changes'
@@ -21,6 +22,7 @@ function argumentFinding(args: Args): Finding | undefined {
   const { id, base_revision: base, ops, dry_run: dryRun, image, message } = args
   if (id === undefined || id === '') return badArgument('id', 'krävs')
   if (typeof id !== 'string') return badArgument('id', 'ska vara en text')
+  if (!PLANS.id.test(id)) return badArgument('id', 'ogiltigt id')
   if (base === undefined) return badArgument('base_revision', 'krävs')
   if (!Number.isInteger(base)) return badArgument('base_revision', 'ska vara ett heltal')
   if (ops === undefined) return badArgument('ops', 'krävs')
@@ -55,7 +57,12 @@ export async function edit(args: Args): Promise<ToolResult> {
   if (unknown.length) return refuse(unknown)
 
   // 3. Load
-  const loaded = await loadPlan(id)
+  let loaded: Awaited<ReturnType<typeof loadPlan>>
+  try {
+    loaded = await loadPlan(id)
+  } catch (e) {
+    return refuse([invalidOperation(e instanceof Error ? e.message : String(e))])
+  }
   if (!loaded) return refuse([notFound(id)])
   const before = loaded.plan
   const current = loaded.meta.n
@@ -83,7 +90,12 @@ export async function edit(args: Args): Promise<ToolResult> {
   }
 
   // 6. Save
-  const res = await editPlan(id, ops, base, 'claude', (args.message as string | undefined) ?? 'Ändring av Claude')
+  let res: Awaited<ReturnType<typeof editPlan>>
+  try {
+    res = await editPlan(id, ops, base, 'claude', (args.message as string | undefined) ?? 'Ändring av Claude')
+  } catch (e) {
+    return refuse([invalidOperation(e instanceof Error ? e.message : String(e))])
+  }
   if (res.status === 404) return refuse([notFound(id)])
   if (res.status === 409) return refuse([staleRevision(base, res.head)])
   if (res.status !== 200) return refuse(res.errors.map((m) => invalidOperation(m)))

@@ -1,4 +1,5 @@
 import { changedSince, links, summarisePlan, type Section } from '../../mcp/format'
+import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
 import { answer } from '../answer'
 import { badArgument, notFound } from '../findings'
@@ -20,6 +21,7 @@ function argumentFinding(args: Args): Finding | undefined {
   const { id, parts, since, format } = args
   if (id === undefined || id === '') return badArgument('id', 'krävs')
   if (typeof id !== 'string') return badArgument('id', 'ska vara en text')
+  if (!PLANS.id.test(id)) return badArgument('id', 'ogiltigt id')
   if (parts !== undefined && (!Array.isArray(parts) || !parts.every((p) => typeof p === 'string'))) return badArgument('parts', 'ska vara en lista av texter')
   if (since !== undefined && !Number.isInteger(since)) return badArgument('since', 'ska vara ett heltal')
   if (format !== undefined && typeof format !== 'string') return badArgument('format', 'ska vara en text')
@@ -50,7 +52,7 @@ export async function get(args: Args): Promise<ToolResult> {
   if (unknown.length) return toToolResult(answer({ ok: false, findings: unknown }), { summary: unknown[0].message })
 
   // 4. Load
-  const rev = await loadPlan(id)
+  const rev = await loadPlan(id).catch(() => null)
   if (!rev) {
     const nf = notFound(id)
     return toToolResult(answer({ ok: false, findings: [nf] }), { summary: nf.message })
