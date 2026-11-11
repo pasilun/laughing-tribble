@@ -25,7 +25,7 @@
       "properties": {
         "what": {
           "type": "string",
-          "description": "What to list. Default \"plans\". See guide topic \"vocabulary\"."
+          "description": "What to list. See guide topic \"vocabulary\"."
         },
         "id": {
           "type": "string",
@@ -74,7 +74,7 @@
         },
         "format": {
           "type": "string",
-          "description": "\"text\" (default) or \"json\" for the whole plan as data."
+          "description": "How to return the document. See guide topic \"vocabulary\"."
         }
       },
       "required": [
@@ -131,7 +131,7 @@
         },
         "view": {
           "type": "string",
-          "description": "Which picture. Default \"sheet\". See guide topic \"vocabulary\"."
+          "description": "Which picture. See guide topic \"vocabulary\"."
         },
         "region": {
           "type": "object",

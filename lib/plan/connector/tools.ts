@@ -30,7 +30,7 @@ export const READ_SPECS: ToolSpec[] = [
     name: 'list',
     description: 'Planstudio: lists the person\'s documents (floor plans and site plans) with their latest revision and tags. With id and what "revisions" it lists the revisions of one document. Example: {"what":"revisions","id":"my-plan"}.',
     inputSchema: schema({
-      what: str('What to list. Default "plans". See guide topic "vocabulary".'),
+      what: str('What to list. See guide topic "vocabulary".'),
       id: str('A document, for lists that belong to one.'),
       query: str('Only names and tags that contain this text.'),
       limit: int('At most this many items. Default 50.'),
@@ -45,7 +45,7 @@ export const READ_SPECS: ToolSpec[] = [
       id: str('The document.'),
       parts: strs('Only these parts. See guide topic "vocabulary".'),
       since: int('Only what changed after this revision.'),
-      format: str('"text" (default) or "json" for the whole plan as data.'),
+      format: str('How to return the document. See guide topic "vocabulary".'),
     }, ['id']),
     annotations: READ,
   },
@@ -64,7 +64,7 @@ export const READ_SPECS: ToolSpec[] = [
     description: 'Planstudio: one picture: the sheet, a zoomed region, or a source drawing with the plan over it, sized to max_tokens. A picture shows what is there; never read a measurement from it. Example: {"id":"my-plan","region":{"id":"v12"}}.',
     inputSchema: schema({
       id: str('The document.'),
-      view: str('Which picture. Default "sheet". See guide topic "vocabulary".'),
+      view: str('Which picture. See guide topic "vocabulary".'),
       region: {
         type: 'object',
         description: 'Zoom: give id (an element) or rect_mm ([x, y, w, h] in plan mm).',
