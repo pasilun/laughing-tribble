@@ -3,18 +3,12 @@ import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
 import { answer } from '../answer'
 import { badArgument, notFound } from '../findings'
-import { PARTS } from '../registries'
-import { Registry, type Entry } from '../names'
+import { FORMATS, PARTS } from '../registries'
 import { toToolResult, type ToolResult } from '../result'
 import type { Finding } from '../types'
 import type { Args } from './index'
 
 // Reads a document: its listing as text (whole, in parts, or what changed since a revision), or the whole plan as data.
-
-const FORMATS = new Registry<Entry>('formats-of-get', 'format', [
-  { name: 'text', summary: 'The listing as text' },
-  { name: 'json', summary: 'The whole plan as data' },
-])
 
 // The first bad argument, or undefined when all of them are fine.
 function argumentFinding(args: Args): Finding | undefined {
