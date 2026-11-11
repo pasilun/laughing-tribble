@@ -76,9 +76,9 @@ Sizes are estimates. Almost all of it is TypeScript in v1.
 
 | # | Work | What it delivers | Size |
 |---|---|---|---|
-| 0 | Housekeeping | The dropped v2 cards marked as dropped; the plan documents on one branch | Under a day |
+| 0 | Housekeeping | The dropped v2 cards marked as dropped; the plan documents on one branch | Done 2026-11-11 |
 | 1 | Baseline eval | `npm run eval:agent` with a real model on today's connector, so later changes can be compared | A few dollars of API use |
-| 2 | The connector contract | The ten tools, one answer shape, registries, a generated guide, the frozen-list test, today's 37 tools mapped across | 25–35 cards |
+| 2 | The connector contract | The ten tools, one answer shape, registries, a generated guide, the frozen-list test, today's 37 tools mapped across | 25–35 cards. **First batch written: `work/cards/S2-01`…`S2-R1` (foundation, frozen list, endpoint, guide, edit, get, list).** Next: `check`, `view`, `manage`, `export`, `source`, `scan`, then removing the old tools |
 | 3 | Walls on faces, and better words | The reference side and the temporary centre-line view; the move of the 32 places to one body function, then the view deleted; operations that speak in faces; compass words for hinges and swings; openings anchored to a face; things named by position as well as by id; checks for stale dimensions and for text over walls | 20–28 cards |
 | 4 | Measurements as input | State a clear distance between two named faces; the plan's value reported against each; apply by moving a named face | 8–12 cards |
 | 5 | The measurement kernel | Measurements checked against each other in chains; conflicts with both chains; what to measure next. Later: a new apartment drawn from measurements alone | 15–25 cards, after a spike |
@@ -86,7 +86,7 @@ Sizes are estimates. Almost all of it is TypeScript in v1.
 
 **Why this order.** The contract comes first so that steps 3–5 add vocabulary without touching the tool list. Faces come before measurements because a measurement names two faces. The kernel comes last because turning an existing traced plan into the kernel's terms is untested.
 
-**Before scheduled runs can build this:** the runner and the card format are set up for Rust. They need a v1 variant (TypeScript, Playwright tests, and the Next.js notes in `AGENTS.md`). The scheduled runs are paused.
+**How it is built.** Cards live in `work/cards/`, the rules in `work/CLAUDE.md`, the runner in `work/RUNNER.md`; the two agents are `.claude/agents/v1-implementer.md` (Haiku) and `v1-reviewer.md` (Opus). Runs work on the branch `auto/v1-build`, which the runner creates. The scheduled runs are paused and no trigger exists for this runner yet.
 
 ## 5. Decisions waiting on the maintainer
 
