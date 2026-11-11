@@ -64,5 +64,24 @@ export const audit: CheckEntry = { name: 'audit', summary: 'The plan against the
     const po = c.against.printed_outer_mm as { width?: unknown; length?: unknown } | undefined
     const printed = po && num(po.width) !== undefined && num(po.length) !== undefined ? { width: po.width as number, length: po.length as number } : undefined
     const items = await auditPlan(c.id, c.plan, { sourceId: typeof c.against.source === 'string' ? c.against.source : undefined, printed })
-    return { findings: items.map((i) => finding({ id: i.id, code: `audit-${i.id.split(':')[0]}`, level: i.level, message: i.text, refs: [i.id], ...(i.fix ? { fix: i.fix as Array<Record<string, unknown>> } : {}), ...(i.fixText ? { data: { fix_text: i.fixText } } : {}) })) }
+    const used = new Map<string, number>()
+    const codeOf = (id: string) => {
+      const [kind, ...rest] = id.split(':')
+      return kind === 'plan' && rest.length ? `audit-plan-${rest.join('-')}` : `audit-${kind}`
+    }
+    return {
+      findings: items.map((i) => {
+        const n = (used.get(i.id) ?? 0) + 1
+        used.set(i.id, n)
+        return finding({
+          id: n === 1 ? i.id : `${i.id}#${n}`,
+          code: codeOf(i.id),
+          level: i.level,
+          message: i.text,
+          refs: [i.id],
+          ...(i.fix ? { fix: i.fix as Array<Record<string, unknown>> } : {}),
+          ...(i.fixText ? { data: { fix_text: i.fixText } } : {}),
+        })
+      }),
+    }
   } }

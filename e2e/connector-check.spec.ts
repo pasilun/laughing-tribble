@@ -31,7 +31,7 @@ test('check: audit without a source says so', async ({ request }) => {
   const a = await makePlan(request, 'Check audit')
   const au = (await connector(request, 'check', { id: a.id, scope: ['audit'] })).structuredContent!
   expect(au.ok).toBe(true)
-  expect(au.findings!.some((f) => f.id === 'plan:no-source' && f.code === 'audit-plan')).toBe(true)
+  expect(au.findings!.some((f) => f.id === 'plan:no-source' && f.code === 'audit-plan-no-source')).toBe(true)
 })
 
 test('check: compare with a reference plan', async ({ request }) => {
@@ -41,4 +41,13 @@ test('check: compare with a reference plan', async ({ request }) => {
   expect(cmp.structuredContent!.ok).toBe(true); expect(cmp.content[0].text).toContain(`Jämförelse med ${b.id}`)
   expect((await connector(request, 'check', { id: a.id, scope: ['compare'] })).structuredContent!.findings![0].code).toBe('bad-argument')
   expect((await connector(request, 'check', { id: a.id, scope: ['compare'], against: { id: 'no-such-plan' } })).structuredContent!.findings![0].code).toBe('not-found')
+})
+
+test('check: finding ids are unique within an answer', async ({ request }) => {
+  const a = await makePlan(request, 'Check ids')
+  const au = (await connector(request, 'check', { id: a.id, scope: ['audit'] })).structuredContent!
+  const ids = au.findings!.map((f) => f.id)
+  expect(new Set(ids).size).toBe(ids.length)
+  for (const f of au.findings!) expect(f.code.startsWith('audit-')).toBe(true)
+  expect(au.findings!.some((f) => f.code === 'audit-plan')).toBe(false)
 })
