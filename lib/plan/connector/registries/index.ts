@@ -1,7 +1,7 @@
 import { SECTIONS, type Section } from '../../mcp/format'
 import { Registry, type Entry } from '../names'
 import { OPERATIONS } from './operations'
-import { permit } from '../checks'
+import { permit, review, finish } from '../checks'
 import { TOPICS } from './topics'
 
 export { TOPICS } from './topics'
@@ -27,7 +27,7 @@ export const VIEWS = new Registry<Entry>('views', 'vy', [
   { name: 'overlay', summary: 'The plan drawn over the source drawing; region zooms; options.source picks the source' },
   { name: 'source', summary: 'The source drawing alone, with a grid in mm; region zooms' },
 ])
-export const CHECKS = new Registry<Entry>('checks', 'kontroll', [permit])
+export const CHECKS = new Registry<Entry>('checks', 'kontroll', [permit, review, finish])
 export const FORMATS = new Registry<Entry>('formats', 'format', [
   { name: 'text', summary: 'The listing as text' },
   { name: 'json', summary: 'The whole plan as data' },
