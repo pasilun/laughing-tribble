@@ -1,0 +1,414 @@
+{
+ "id": "spike",
+ "name": "Spike: v2 solve -> v1 plan",
+ "sheet": {
+  "paper": "A3",
+  "orientation": "landscape",
+  "scale": 50,
+  "northAngle": 0,
+  "titleBlock": {
+   "project": "v2 → v1",
+   "property": "Stockholm Gnejsen 6",
+   "address": "",
+   "apartments": "Lgh 154",
+   "floor": "",
+   "drawingNumber": "A-01",
+   "author": "v2 kernel",
+   "date": "2026-11-11",
+   "revision": ""
+  }
+ },
+ "walls": [
+  {
+   "id": "W:Garderob.east|Hall.west",
+   "a": {
+    "x": 1860,
+    "y": 0
+   },
+   "b": {
+    "x": 1860,
+    "y": 1113
+   },
+   "thickness": 121,
+   "phase": "existing",
+   "ref": "right"
+  },
+  {
+   "id": "W:Garderob.east|Vardagsrum.west",
+   "a": {
+    "x": 1860,
+    "y": 1113
+   },
+   "b": {
+    "x": 1860,
+    "y": 2450
+   },
+   "thickness": 121,
+   "phase": "existing",
+   "ref": "right"
+  },
+  {
+   "id": "W:Garderob.north:outer",
+   "a": {
+    "x": 0,
+    "y": 0
+   },
+   "b": {
+    "x": 1981,
+    "y": 0
+   },
+   "thickness": 300,
+   "phase": "existing",
+   "exterior": true,
+   "ref": "right"
+  },
+  {
+   "id": "W:Garderob.south|Sovrum.north",
+   "a": {
+    "x": 0,
+    "y": 2360
+   },
+   "b": {
+    "x": 1860,
+    "y": 2360
+   },
+   "thickness": 90,
+   "phase": "existing",
+   "ref": "left"
+  },
+  {
+   "id": "W:Garderob.west:outer",
+   "a": {
+    "x": 0,
+    "y": 0
+   },
+   "b": {
+    "x": 0,
+    "y": 2450
+   },
+   "thickness": 300,
+   "phase": "existing",
+   "exterior": true,
+   "ref": "left"
+  },
+  {
+   "id": "W:Hall.east|WC.west",
+   "a": {
+    "x": 3081,
+    "y": 0
+   },
+   "b": {
+    "x": 3081,
+    "y": 1113
+   },
+   "thickness": 90,
+   "phase": "existing",
+   "ref": "right"
+  },
+  {
+   "id": "W:Hall.north:outer",
+   "a": {
+    "x": 1981,
+    "y": 0
+   },
+   "b": {
+    "x": 3171,
+    "y": 0
+   },
+   "thickness": 300,
+   "phase": "existing",
+   "exterior": true,
+   "ref": "right"
+  },
+  {
+   "id": "W:Sovrum.east|Vardagsrum.west",
+   "a": {
+    "x": 1860,
+    "y": 2450
+   },
+   "b": {
+    "x": 1860,
+    "y": 4593
+   },
+   "thickness": 121,
+   "phase": "existing",
+   "ref": "right"
+  },
+  {
+   "id": "W:Sovrum.south:outer",
+   "a": {
+    "x": 0,
+    "y": 4540
+   },
+   "b": {
+    "x": 1981,
+    "y": 4540
+   },
+   "thickness": 300,
+   "phase": "existing",
+   "exterior": true,
+   "ref": "left"
+  },
+  {
+   "id": "W:Sovrum.west:outer",
+   "a": {
+    "x": 0,
+    "y": 2450
+   },
+   "b": {
+    "x": 0,
+    "y": 4540
+   },
+   "thickness": 300,
+   "phase": "existing",
+   "exterior": true,
+   "ref": "left"
+  },
+  {
+   "id": "W:Vardagsrum.east:outer",
+   "a": {
+    "x": 5541,
+    "y": 1113
+   },
+   "b": {
+    "x": 5541,
+    "y": 4593
+   },
+   "thickness": 300,
+   "phase": "existing",
+   "exterior": true,
+   "ref": "right"
+  },
+  {
+   "id": "W:Vardagsrum.north|WC.south",
+   "a": {
+    "x": 3081,
+    "y": 1112
+   },
+   "b": {
+    "x": 5541,
+    "y": 1112
+   },
+   "thickness": 123,
+   "phase": "existing",
+   "ref": "right"
+  },
+  {
+   "id": "W:Vardagsrum.south:outer",
+   "a": {
+    "x": 1981,
+    "y": 4593
+   },
+   "b": {
+    "x": 5541,
+    "y": 4593
+   },
+   "thickness": 300,
+   "phase": "existing",
+   "exterior": true,
+   "ref": "left"
+  },
+  {
+   "id": "W:WC.east:outer",
+   "a": {
+    "x": 5541,
+    "y": 0
+   },
+   "b": {
+    "x": 5541,
+    "y": 1113
+   },
+   "thickness": 300,
+   "phase": "existing",
+   "exterior": true,
+   "ref": "right"
+  },
+  {
+   "id": "W:WC.north:outer",
+   "a": {
+    "x": 3171,
+    "y": 0
+   },
+   "b": {
+    "x": 5541,
+    "y": 0
+   },
+   "thickness": 300,
+   "phase": "existing",
+   "exterior": true,
+   "ref": "right"
+  }
+ ],
+ "openings": [
+  {
+   "id": "O:Garderob.east:1",
+   "wallId": "W:Garderob.east|Hall.west",
+   "kind": "opening",
+   "offset": 0,
+   "width": 680,
+   "phase": "existing",
+   "through": true
+  },
+  {
+   "id": "O:Sovrum.south:1",
+   "wallId": "W:Sovrum.south:outer",
+   "kind": "window",
+   "offset": 380,
+   "width": 1350,
+   "phase": "existing"
+  },
+  {
+   "id": "O:Vardagsrum.south:1",
+   "wallId": "W:Vardagsrum.south:outer",
+   "kind": "window",
+   "offset": 1610,
+   "width": 1280,
+   "phase": "existing"
+  },
+  {
+   "id": "O:WC.west:1",
+   "wallId": "W:Hall.east|WC.west",
+   "kind": "door",
+   "offset": 240,
+   "width": 450,
+   "phase": "existing",
+   "hinge": "b",
+   "swing": "right"
+  }
+ ],
+ "fixtures": [],
+ "rooms": [
+  {
+   "id": "Garderob",
+   "name": "Garderob",
+   "at": {
+    "x": 930,
+    "y": 1180
+   },
+   "polygon": [
+    {
+     "x": 0,
+     "y": 0
+    },
+    {
+     "x": 1860,
+     "y": 0
+    },
+    {
+     "x": 1860,
+     "y": 2360
+    },
+    {
+     "x": 0,
+     "y": 2360
+    }
+   ]
+  },
+  {
+   "id": "Hall",
+   "name": "Hall",
+   "at": {
+    "x": 2531,
+    "y": 556
+   },
+   "polygon": [
+    {
+     "x": 1981,
+     "y": 0
+    },
+    {
+     "x": 3081,
+     "y": 0
+    },
+    {
+     "x": 3081,
+     "y": 1113
+    },
+    {
+     "x": 1981,
+     "y": 1113
+    }
+   ]
+  },
+  {
+   "id": "Sovrum",
+   "name": "Sovrum",
+   "at": {
+    "x": 930,
+    "y": 3495
+   },
+   "polygon": [
+    {
+     "x": 0,
+     "y": 2450
+    },
+    {
+     "x": 1860,
+     "y": 2450
+    },
+    {
+     "x": 1860,
+     "y": 4540
+    },
+    {
+     "x": 0,
+     "y": 4540
+    }
+   ]
+  },
+  {
+   "id": "Vardagsrum",
+   "name": "Vardagsrum",
+   "at": {
+    "x": 3761,
+    "y": 2853
+   },
+   "polygon": [
+    {
+     "x": 1981,
+     "y": 1113
+    },
+    {
+     "x": 5541,
+     "y": 1113
+    },
+    {
+     "x": 5541,
+     "y": 4593
+    },
+    {
+     "x": 1981,
+     "y": 4593
+    }
+   ]
+  },
+  {
+   "id": "WC",
+   "name": "WC",
+   "at": {
+    "x": 4356,
+    "y": 495
+   },
+   "polygon": [
+    {
+     "x": 3171,
+     "y": 0
+    },
+    {
+     "x": 5541,
+     "y": 0
+    },
+    {
+     "x": 5541,
+     "y": 990
+    },
+    {
+     "x": 3171,
+     "y": 990
+    }
+   ]
+  }
+ ],
+ "dimensions": [],
+ "notes": []
+}

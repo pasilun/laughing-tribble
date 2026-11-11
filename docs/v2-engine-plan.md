@@ -1,62 +1,99 @@
-# Planstudio: v1 stays the product, v2 becomes its measurement engine
+# Planstudio: the plan from here
 
-Direction chosen with the maintainer on 2026-11-11, after a review of scope. This replaces the goal of v2 reaching parity with v1 and taking over.
+Written 2026-11-11, replacing the earlier text of this file. It gathers the direction, the architecture and the remaining work in one place. Nothing in steps 1–6 is built yet.
 
-## 1. Why
+Related documents:
+- `docs/mcp-contract.md`: the connector contract (ten fixed tools).
+- `docs/mcp-design-evidence.md` (on `main`): what building v1 taught us, with numbers.
+- `spikes/face-walls/`: the spike behind section 3.
+- `v2/spikes/v1-export/` (on `auto/v2-build`): the spike that wrote a kernel solution as a v1 plan.
 
-v2 was started to fix three things in v1: clear sizes had to be turned into centre lines by hand, conflicting measurements were absorbed silently, and a guessed wall thickness could move a room. The v2 kernel fixed all three by its second week. After that the v2 plan went on to rebuild what v1 already has: permit sheets, the permit review, fixtures, source images, hosting, sharing, an editor. That part is dropped.
+## 1. Direction
 
-**Spike, 2026-11-11** (`v2/spikes/v1-export`): the v2 solution of lgh 154 was written out as a v1 plan. v1 validated it, drew a normal A3 sheet from it, and computed the same room areas to the mm². So a solved set of measurements maps onto v1's wall model without loss.
+1. **v1 stays the product.** It has the editor, the scan tools, the permit sheets, hosting, accounts and sharing. The plan to rebuild all of that in v2 is dropped.
+2. **Changes stay JSON operations.** 535 operations in 89 real calls, none rejected; every error seen was about meaning, not format. A text language for editing is dropped.
+3. **The connector becomes a fixed contract** of ten general tools. New capabilities become new operations, actions, views and checks, never new tools.
+4. **Walls move from centre lines to faces.** This was decided at the start of v2 and still holds; it is done inside v1's model (section 3).
+5. **Measurements become input.** A clear distance between two named faces is something the plan can be told and checked against.
+6. **The v2 kernel becomes one part of the engine**: reasoning about measurements. It is connected last, because that part is the least proven.
 
-## 2. The parts, and what may depend on what
+## 2. Architecture
 
 ```
-ways in        the browser editor · the Claude connector (MCP) · the HTTP API · a read-only view
-                    │  (each is replaceable; none holds rules of its own)
-use cases      lib/plan/service.ts, plus the new lib/plan/measure/
-                    │
-domain         lib/plan/domain (the plan, sheet, checks)        engine: the v2 kernel as WebAssembly
-                    │                                              (measurements → geometry and findings)
-storage, auth  lib/plan/storage, lib/plan/auth
+ CLIENTS    Claude            Browser editor      Phone view        a later editor or API
+              │ MCP               │ HTTP              │ HTTP              │
+ ═════════════╪═══════════════════╪═══════════════════╪═══════════════════╪══════════════
+ WAYS IN    Connector contract   HTTP routes
+            (ten fixed tools,    (sign-in, parse, status codes)
+             one answer shape)
+              │ one function per tool                 │
+ ═════════════╪═══════════════════════════════════════╪══════════════════════════════════
+ ENGINE     Use cases: the only layer that joins the parts below
+            Registries: operations · actions · views · checks · formats
+              │               │                │                │
+            Plan domain     Scan code        Sheets and       Measurement kernel
+            model on wall   reads a          export           chains, conflicts,
+            faces, ops,     scanned          PDF, PNG,        what to measure next
+            checks, rooms   drawing          SVG, DXF         (Rust → WebAssembly)
+              │
+            Storage and accounts
 ```
 
-- **The engine is pure.** Text in, data out: no files, no network, no accounts. It knows nothing about v1 except one output format.
-- **Use cases are the only place that joins the two.** A new way in (a different editor, a second API, a phone view) calls the use cases and gets the same answers as the others. This is the rule v1 already follows (`lib/README.md`); the engine is added under it, not beside it.
-- **Swapping a part** then means: a new editor replaces one box in the top row; a new API adds one; a different solver replaces the engine behind the same few functions.
+- **Above the first line** are clients we do not control. **Between the lines** are the ways in; they hold no rules about plans. **Below** is the engine, where development happens.
+- **The connector contract is the one fixed part.** Its tool list does not change when anything in the engine does.
+- **The four parts in the bottom row do not call each other.** The use cases join them, so one can be replaced without the others noticing.
+- **The editor and Claude use the same use cases**, as today.
 
-## 3. How measured geometry lives in a v1 plan
+## 3. Walls on faces
 
-- A plan gets an optional **measurement document**: the v2 text (rooms with clear sizes, wall thicknesses, openings, laser readings), with a position in the plan.
-- The engine turns it into walls, openings and rooms. Those are written into the plan as ordinary v1 elements, marked as **generated** (ids with a fixed prefix).
-- **Regenerating** replaces the generated elements only. Everything drawn or traced by hand stays. So one plan can hold a measured apartment next to traced neighbours, as in the Gnejsen 152–154 basplan.
-- A generated element is changed by changing the measurements. To edit one by hand it is first **detached** (it becomes an ordinary element and is no longer regenerated).
-- Findings (conflicts with both chains of numbers, what to measure next) are stored with the plan and shown wherever the plan is shown.
+**The problem with centre lines.** A wall is stored as a centre line and a thickness. A laser reading is a distance between faces. So every measurement is converted by hand, and changing a thickness moves both faces. v1's history shows the cost: three rounds on one south wall, and a request to "trim the facade from the outside" that the model cannot express.
 
-## 4. Steps
+**The change.** A wall gets an optional reference side. With it, the stored line is one of the wall's faces and the body lies on the other side. Without it, the stored line is the centre line, as today, so every existing plan stays valid.
 
-| Step | Work | Size (estimate) |
-|---|---|---|
-| 1 | Engine as WebAssembly: one small crate exporting check, solve, suggest and "as a v1 plan" (the spike, rewritten in Rust with tests); built by a GitHub Action | 6–8 cards |
-| 2 | `lib/plan/measure/`: load the engine; the measurement document on a plan; generate, regenerate, detach | 5–7 cards |
-| 3 | Claude connector: tools to write measurements, check them and see conflicts; the guide tells Claude when to measure and when to trace | 3–4 cards |
-| 4 | Editor: generated elements shown as locked, a panel with the findings | 3–4 cards |
-| 5 | Read-only view for the phone, with a share link | 3–5 cards |
+**How the rest of v1 keeps working.** The plan domain offers a centre-line view of a plan: each wall moved by half its thickness, corners and T-joints run to where the centre lines meet, opening offsets adjusted. The scan code, the sheet, the checks and the room areas read that view. Only the operations, and later the editor's handles, work on the stored faces.
 
-About 20–28 cards, most of them TypeScript in v1. That is against roughly 190 for the parity plan.
+**Spike result** (`spikes/face-walls/`, lgh 154 with every wall stored on a room face, v1's own code unchanged):
+- v1 validated the view with no errors and no findings, drew a normal sheet, and computed the same room areas as before.
+- Making the south wall 100 mm thinner kept its inner face and the room's area. The same edit on the centre-line plan moved both faces 50 mm and changed the room from 3.887 to 3.980 m².
+- A face-referenced wall met a centre-line wall, and a wall at 45°, at one point.
 
-## 5. What happens to what was built in v2
+**Not yet tested:** the editor with face-referenced walls; the scan readers writing back to stored walls; shallow angles and three walls at one point. A wall with an odd thickness has its centre on a half millimetre, which the view must carry or avoid.
+
+## 4. Remaining work
+
+Sizes are estimates. Almost all of it is TypeScript in v1.
+
+| # | Work | What it delivers | Size |
+|---|---|---|---|
+| 0 | Housekeeping | The dropped v2 cards marked as dropped; the plan documents on one branch | Under a day |
+| 1 | Baseline eval | `npm run eval:agent` with a real model on today's connector, so later changes can be compared | A few dollars of API use |
+| 2 | The connector contract | The ten tools, one answer shape, registries, a generated guide, the frozen-list test, today's 37 tools mapped across | 25–35 cards |
+| 3 | Walls on faces, and better words | The reference side and the centre-line view in the domain; operations that speak in faces; compass words for hinges and swings; openings anchored to a face; things named by position as well as by id; checks for stale dimensions and for text over walls | 15–20 cards |
+| 4 | Measurements as input | State a clear distance between two named faces; the plan's value reported against each; apply by moving a named face | 8–12 cards |
+| 5 | The measurement kernel | Measurements checked against each other in chains; conflicts with both chains; what to measure next. Later: a new apartment drawn from measurements alone | 15–25 cards, after a spike |
+| 6 | View link for the phone | A read-only link without an account, with revoke and expiry | 3–5 cards |
+
+**Why this order.** The contract comes first so that steps 3–5 add vocabulary without touching the tool list. Faces come before measurements because a measurement names two faces. The kernel comes last because turning an existing traced plan into the kernel's terms is untested.
+
+**Before scheduled runs can build this:** the runner and the card format are set up for Rust. They need a v1 variant (TypeScript, Playwright tests, and the Next.js notes in `AGENTS.md`). The scheduled runs are paused.
+
+## 5. Decisions waiting on the maintainer
+
+- **Laser readings:** an operation, or a source (a list of dimensions with provenance and tolerance, like a drawing)? The second fits "which source wins", which came up repeatedly.
+- **Conflicting measurements:** refuse to save, or save them and keep the last good drawing while the conflict is open?
+- **View links:** may anyone holding the link open it without signing in?
+- **The eval:** it needs an API key in the environment of the session that runs it.
+
+## 6. What happens to v2
 
 | Part of v2 | Fate |
 |---|---|
-| Kernel: model, text format, solver, conflicts, suggestions, walls, openings | Kept. This is the engine. |
-| Diagnostic pictures (conflict, missing, diff) | Kept as engine output; v1 can show them |
-| Stdio MCP server and command-line tool | Kept as developer tools; not the product |
-| PDF sheets, title block, permit review, fixtures, apartments in v2 | Not used by v1 (v1 has its own). Left in place, not developed further |
-| Row 7 cards (sources, upload, calibration, history), hosting proposal, viewer file, v1 import, the new editor, accounts | Dropped. v1 already has sources, hosting, sharing and an editor |
-| Angled walls in v2 | Not needed: v1 draws them, and a measured apartment can sit beside hand-drawn angled walls |
+| Kernel: model on faces, solver, conflicts, suggestions | Kept; connected in step 5 |
+| Diagnostic pictures (conflict, missing, diff) | Kept as ideas for v1's views |
+| Stdio MCP server and command-line tool | Kept as developer tools |
+| The text language | Kept inside the kernel as a compact way to read measurements; not an editing interface |
+| Sheets, title block, permit review, fixtures, apartments in v2 | Unused; v1 has its own |
+| Row-7 cards (W6), hosting v2, the viewer file, v1 import, a new editor, accounts | Dropped |
+| `.skp` export, the cross-model eval of v2, DXF from v2 | Dropped or skipped earlier |
 
-## 6. Open points
-
-- **The build runs are set up for Rust cards.** Steps 2–5 are TypeScript in a Next.js app with Playwright tests, so the runner and card format need a v1 variant before cheap runs can build them. `AGENTS.md` also warns that this Next.js version differs from what models know; cards must point at the bundled docs.
-- **Generated wall segments meet with visible seams** in the spike's drawing; the exporter should merge collinear segments and make corners meet at centre-line intersections, as hand-drawn v1 walls do.
-- **A later editor.** Nothing here chooses one. The SketchUp-style editor can still be built later as another way in.
+A SketchUp-style editor is not ruled out. It would be another client above the first line and needs nothing in this plan to change.
