@@ -10,7 +10,9 @@ test('nextCalls follows the plan', () => {
   const cal = { ...src, sources: [{ ...src.sources[0], calibration: '3 mått' }] }
   expect(nextCalls(cal, 1).next[0]).toMatchObject({ tool: 'scan', arguments: { action: 'trace' } })
   const demo = demoPlan('d')
-  expect(nextCalls(demo, 4, { openIssues: 2 }).next[0]).toMatchObject({ tool: 'check', arguments: { id: 'd', scope: ['audit'] } })
+  const withSource = { ...demo, sources: cal.sources }
+  expect(nextCalls(withSource, 4, { openIssues: 2 }).next[0]).toMatchObject({ tool: 'check', arguments: { id: 'd', scope: ['audit'] } })
+  expect(nextCalls(demo, 4).next.some((n) => n.tool === 'check' && JSON.stringify(n.arguments.scope) === '["audit"]')).toBe(false)
   const noRooms = { ...demo, rooms: [] }
   const n = nextCalls(noRooms, 4, { openIssues: 0 }).next[0]
   expect(n.tool).toBe('edit'); expect(n.arguments.base_revision).toBe(4)

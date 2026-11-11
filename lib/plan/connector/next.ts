@@ -28,7 +28,7 @@ export function nextCalls(plan: Plan, revision: number, state: { openIssues?: nu
   if (plan.openings.length === 0)
     return { done, next: [{ tool: 'scan', arguments: { id, action: 'trace' }, why: 'Läser öppningar och dörrar mot väggarna som finns (rör inte väggarna).' }] }
   done.push(`${plan.openings.length} öppningar`)
-  if (state.openIssues === undefined || state.openIssues > 0)
+  if (hasSource && (state.openIssues === undefined || state.openIssues > 0))
     return { done, next: [{ tool: 'check', arguments: { id, scope: ['audit'] }, why: state.openIssues ? `${state.openIssues} anmärkningar mot ritningen: jämför och rätta.` : 'Jämför planen med ritningen och lista vad som avviker.' }] }
   done.push('ingen avvikelse mot ritningen')
   if (plan.rooms.length === 0) {

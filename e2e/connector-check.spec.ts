@@ -34,6 +34,12 @@ test('check: audit without a source says so', async ({ request }) => {
   expect(au.findings!.some((f) => f.id === 'plan:no-source' && f.code === 'audit-plan-no-source')).toBe(true)
 })
 
+test('check: a plan without a source is not sent round the audit again', async ({ request }) => {
+  const a = await makePlan(request, 'Check noaudit')
+  const au = (await connector(request, 'check', { id: a.id, scope: ['audit'] })).structuredContent!
+  expect((au.next ?? []).some((n) => n.tool === 'check' && JSON.stringify(n.arguments.scope) === '["audit"]')).toBe(false)
+})
+
 test('check: compare with a reference plan', async ({ request }) => {
   const a = await makePlan(request, 'Check cmp')
   const b = await makePlan(request, 'Check ref')
