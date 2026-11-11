@@ -1,4 +1,4 @@
-import type { ToolName } from './types'
+import { TOOL_NAMES, type ToolName } from './types'
 
 export type ToolSpec = {
   name: ToolName
@@ -90,3 +90,75 @@ export const READ_SPECS: ToolSpec[] = [
     annotations: READ,
   },
 ]
+
+const EDIT = { readOnlyHint: false, destructiveHint: false, idempotentHint: false }
+const MANAGE = { readOnlyHint: false, destructiveHint: true, idempotentHint: false }
+const EXPORT = { readOnlyHint: false, destructiveHint: false, idempotentHint: true }
+
+export const WRITE_SPECS: ToolSpec[] = [
+  {
+    name: 'edit',
+    description: 'Planstudio: changes a document with small operations, saved as a new revision all-or-nothing. Pass base_revision from get; a stale one is refused. Use dry_run to see the effect first. The operations are listed by guide topic "ops". Example: {"id":"my-plan","base_revision":3,"ops":[{"op":"update","kind":"opening","id":"d1","patch":{"width":900}}]}.',
+    inputSchema: schema({
+      id: str('The document.'),
+      base_revision: int('The revision you last read with get.'),
+      ops: {
+        type: 'array',
+        description: 'The operations, applied in order, all or none.',
+        items: {
+          type: 'object',
+          properties: { op: str('The operation name.') },
+          required: ['op'],
+        },
+      },
+      dry_run: bool('Work everything out, save nothing.'),
+      message: str('The revision note, in Swedish.'),
+      image: bool('Also return a picture of the sheet. Default false.'),
+    }, ['id', 'base_revision', 'ops']),
+    annotations: EDIT,
+  },
+  {
+    name: 'source',
+    description: 'Planstudio: gets a source drawing into a document and places it: an upload link, add, calibrate, straighten. action names the step; see guide topic "vocabulary". A chat attachment cannot reach a tool: ask the user to open the upload link.',
+    inputSchema: schema({
+      id: str('The document.'),
+      base_revision: int('The revision you last read, for actions that change the document.'),
+      action: str('Which step.'),
+      args: obj('Arguments of the action. See guide.'),
+      dry_run: bool('Work everything out, save nothing.'),
+    }, ['id', 'action']),
+    annotations: EDIT,
+  },
+  {
+    name: 'manage',
+    description: 'Planstudio: creates, copies, renames, tags, shares, trashes and restores documents. action names what to do; see guide topic "vocabulary". Deleting moves a document to the trash. Example: {"action":"create","args":{"name":"Kallare Lundagatan"}}.',
+    inputSchema: schema({
+      action: str('What to do.'),
+      id: str('The document, for actions that need one.'),
+      args: obj('Arguments of the action. See guide.'),
+    }, ['action']),
+    annotations: MANAGE,
+  },
+  {
+    name: 'export',
+    description: 'Planstudio: writes the sheets as PDF, PNG, SVG or DXF, or returns a link to open the document. format names the output; see guide topic "vocabulary". Example: {"id":"my-plan","format":"pdf"}.',
+    inputSchema: schema({
+      id: str('The document.'),
+      format: str('Which output.'),
+      options: obj('Options of the format. See guide.'),
+    }, ['id', 'format']),
+    annotations: EXPORT,
+  },
+]
+
+// The ten tools in the order of the contract: guide, list, get, check, view, scan, edit, source, manage, export.
+export function connectorTools(): ToolSpec[] {
+  const all = [...READ_SPECS, ...WRITE_SPECS]
+  return TOOL_NAMES.map((name) => {
+    const matches = all.filter((spec) => spec.name === name)
+    if (matches.length !== 1) {
+      throw new Error(`Tool ${name} must be defined exactly once, found ${matches.length}`)
+    }
+    return matches[0]
+  })
+}
