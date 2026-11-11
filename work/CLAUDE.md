@@ -7,7 +7,8 @@ This is the Planstudio app: Next.js 16, React 19, TypeScript. It is the product;
 3. **Language.** Messages that reach Claude or a person are Swedish, as in the existing tools. Tool descriptions, the guide, finding codes, code comments and card text are English.
 4. **Style.** Follow the neighbouring code: no semicolons, single quotes, two-space indent, relative imports inside `lib/`, the `@/` alias in `e2e/` tests. Do not reformat files you only touch.
 5. **Tests.** Tests are Playwright specs in `e2e/`. A pure test imports from `@/lib/...` and needs no browser; an API test uses the `request` fixture against the running app. Add the spec the card names. Never change, skip or delete an existing test or fixture unless the card says so.
-6. **Check.** Run exactly the command in the card's "Done when". Typecheck and lint run on the whole project; the spec runs with `CI=1`, which builds and starts the app (about 40 s).
-7. **Never** add a dependency a card does not name, touch `package-lock.json`, edit files outside those the card lists, change a public function signature the card does not mention, or push to `main`.
-8. **Stage explicit paths** (`git add path …`), never `git add -A` or `git add .`.
-9. **When the card is unclear or wrong,** say so in your report and stop. Do not guess and do not bend a test to pass.
+6. **Types.** ESLint forbids `any` (`@typescript-eslint/no-explicit-any`), in tests too: use `unknown` and narrow, or the exported types. `Finding.data` and `Answer.data` are optional, so a test reads `findings![0].data!.nearest`. Cast a test result with `as` to the type you need, not to `any`.
+7. **Check.** Run exactly the command in the card's "Done when". Typecheck and lint run on the whole project; the spec runs with `CI=1`, which builds and starts the app (about 40 s).
+8. **Never** add a dependency a card does not name, touch `package-lock.json`, edit files outside those the card lists, change a public function signature the card does not mention, or push to `main`.
+9. **Stage explicit paths** (`git add path …`), never `git add -A` or `git add .`.
+10. **When the card is unclear or wrong,** say so in your report and stop. Do not guess and do not bend a test to pass.
