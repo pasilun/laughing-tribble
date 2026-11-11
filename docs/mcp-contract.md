@@ -66,7 +66,7 @@ Fixed fields are typed in the schema. Open slots are typed only as far as this t
 | `region` | `{ "id": string }` or `{ "rect_mm": [x, y, w, h] }` | Zoom to an element or a rectangle in plan mm |
 | `against` | object, properties free | What to compare with (another plan, a printed size, a source) |
 | `since` | integer | Only what changed after this revision |
-| `max_tokens` | integer | Size budget for a picture. Default 1600 |
+| `max_tokens` | integer | Size budget of a picture in tokens, where a token is 28×28 px: the long side is `round(28·√tokens)` px, at most 2576. Default 1600 (1120 px). For `overlay` and `source`; the sheet view has a fixed size. |
 | `dry_run` | boolean | Work everything out, save nothing |
 | `image` | boolean | Return a picture with the answer. Default false |
 | `message` | string | The revision note |

@@ -26,4 +26,11 @@ test('view', async ({ request }) => {
   expect(el.structuredContent!.ok, JSON.stringify(el.structuredContent)).toBe(true)
   expect((await connector(request, 'view', { id, view: 'overlay', region: { id: 'nope' } })).structuredContent!.findings![0].code).toBe('unknown-element')
   expect((await connector(request, 'view', { id, view: 'overlay', region: { rect_mm: [0, 0] } })).structuredContent!.findings![0].code).toBe('bad-argument')
+  const w = (await connector(request, 'view', { id, view: 'overlay', region: { rect_mm: [0, 0, 3000, 2000] } })).structuredContent!.data!.image as { size_px: number[]; mm_per_px: number; origin_mm: number[] }
+  expect(Math.max(...w.size_px)).toBe(1120); expect(w.mm_per_px).toBeCloseTo(3000 / 1120, 3); expect(w.origin_mm).toEqual([0, 0])
+  const small = (await connector(request, 'view', { id, view: 'overlay', max_tokens: 400, region: { rect_mm: [0, 0, 3000, 2000] } })).structuredContent!.data!.image as { size_px: number[] }
+  expect(Math.max(...small.size_px)).toBe(560)
+  const sheetImage = (await connector(request, 'view', { id })).structuredContent!.data!.image as { size_px: number[] }
+  expect(sheetImage.size_px.length).toBe(2)
+  expect((await connector(request, 'view', { id, max_tokens: 0 })).structuredContent!.findings![0].code).toBe('bad-argument')
 })

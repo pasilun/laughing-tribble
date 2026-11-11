@@ -35,6 +35,9 @@ function elementRect(plan: Plan, id: string): Rect | null {
   return null
 }
 
+// Width and height of a PNG, from its IHDR chunk.
+const sizeOf = (png: Buffer): [number, number] => [png.readUInt32BE(16), png.readUInt32BE(20)]
+
 export async function view(args: Args): Promise<ToolResult> {
   const id = args.id
   if (id === undefined || id === '') return fail([badArgument('id', 'krävs')])
@@ -43,6 +46,7 @@ export async function view(args: Args): Promise<ToolResult> {
   if (args.view !== undefined && typeof args.view !== 'string') return fail([badArgument('view', 'ska vara en sträng')])
   if (args.region !== undefined && (typeof args.region !== 'object' || args.region === null)) return fail([badArgument('region', 'ska vara ett objekt')])
   if (args.options !== undefined && (typeof args.options !== 'object' || args.options === null || Array.isArray(args.options))) return fail([badArgument('options', 'ska vara ett objekt')])
+  if (args.max_tokens !== undefined && (typeof args.max_tokens !== 'number' || !Number.isInteger(args.max_tokens) || args.max_tokens < 1)) return fail([badArgument('max_tokens', 'ska vara ett positivt heltal')])
   const which = VIEWS.resolve((args.view as string | undefined) ?? 'sheet')
   if ('finding' in which) return fail([which.finding])
   const options = (args.options ?? {}) as Record<string, unknown>
@@ -57,7 +61,8 @@ export async function view(args: Args): Promise<ToolResult> {
   const done = (image: ImageBlock, summary: string, data?: Record<string, unknown>) => toToolResult(answer({ ok: true, id, revision: rev.meta.n, ...(data ? { data } : {}) }), { summary, images: [image] })
   if (name === 'sheet') {
     if (args.region !== undefined) return fail([badArgument('region', 'gäller bara vyerna overlay och source')])
-    return done(await preview(plan, sheetView, false), `Revision ${rev.meta.n}`)
+    const img = await preview(plan, sheetView, false)
+    return done(img, `Revision ${rev.meta.n}`, { image: { size_px: sizeOf(Buffer.from(img.data, 'base64')) } })
   }
   if (name !== 'overlay' && name !== 'source') return fail([finding({ code: 'not-implemented', level: 'error', message: `Vyn ${name} är inte klar än.` })])
   const sid = sourceIdOf(plan, typeof options.source === 'string' ? options.source : undefined)
@@ -80,9 +85,9 @@ export async function view(args: Args): Promise<ToolResult> {
     } else return fail([badArgument('region', 'ge id eller rect_mm ([x, y, w, h] i mm)')])
   }
   try {
-    const v = await scanView(id, plan, raster, rect, { overlay: name === 'overlay', view: sheetView, maxPx: 1400 })
+    const v = await scanView(id, plan, raster, rect, { overlay: name === 'overlay', view: sheetView, maxPx: Math.min(2576, Math.max(100, Math.round(28 * Math.sqrt((args.max_tokens as number | undefined) ?? 1600)))) })
     const img: ImageBlock = { type: 'image', data: v.png.toString('base64'), mimeType: 'image/png' }
-    return done(img, `Revision ${rev.meta.n}, ${name === 'overlay' ? 'planen över ritningen' : 'ritningen'}; rutnätet är i mm.`, { rect_mm: [rect.x, rect.y, rect.w, rect.h], source: sid })
+    return done(img, `Revision ${rev.meta.n}, ${name === 'overlay' ? 'planen över ritningen' : 'ritningen'}; rutnätet är i mm.`, { rect_mm: [rect.x, rect.y, rect.w, rect.h], source: sid, image: { size_px: sizeOf(v.png), mm_per_px: Math.round((1 / v.scale) * 10000) / 10000, origin_mm: [rect.x, rect.y] } })
   } catch (e) {
     return fail([badArgument('region', (e as Error).message)])
   }
