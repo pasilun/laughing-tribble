@@ -1,0 +1,358 @@
+[
+  {
+    "name": "guide",
+    "description": "Planstudio: how to work and what the vocabulary is. Call it first in a session, and again when a call answers unknown-name. With no topic it returns the working order and the list of topics; topic \"ops\" lists the operations of edit.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "A topic name. Leave out for the working order and the list of topics."
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "list",
+    "description": "Planstudio: lists the person's documents (floor plans and site plans) with their latest revision and tags. With id and what \"revisions\" it lists the revisions of one document. Example: {\"what\":\"revisions\",\"id\":\"my-plan\"}.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "what": {
+          "type": "string",
+          "description": "What to list. Default \"plans\". See guide topic \"vocabulary\"."
+        },
+        "id": {
+          "type": "string",
+          "description": "A document, for lists that belong to one."
+        },
+        "query": {
+          "type": "string",
+          "description": "Only names and tags that contain this text."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "At most this many items. Default 50."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "From the previous answer, to get the next page."
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "get",
+    "description": "Planstudio: reads a document: a compact listing of its parts with ids and measurements, and the current revision (needed for edit). parts limits what is returned; since returns only what changed after a revision. Example: {\"id\":\"my-plan\",\"parts\":[\"walls\"]}.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The document."
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Only these parts. See guide topic \"vocabulary\"."
+        },
+        "since": {
+          "type": "integer",
+          "description": "Only what changed after this revision."
+        },
+        "format": {
+          "type": "string",
+          "description": "\"text\" (default) or \"json\" for the whole plan as data."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "check",
+    "description": "Planstudio: everything that is wrong or unfinished in a document, and the next call to make. Run it after each step and follow next. scope limits which families of checks run; against compares with something else. Example: {\"id\":\"my-plan\"}.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The document."
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Only these families of checks. See guide topic \"vocabulary\"."
+        },
+        "against": {
+          "type": "object",
+          "description": "What to compare with, for example a printed size. See guide."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "view",
+    "description": "Planstudio: one picture: the sheet, a zoomed region, or a source drawing with the plan over it, sized to max_tokens. A picture shows what is there; never read a measurement from it. Example: {\"id\":\"my-plan\",\"region\":{\"id\":\"v12\"}}.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The document."
+        },
+        "view": {
+          "type": "string",
+          "description": "Which picture. Default \"sheet\". See guide topic \"vocabulary\"."
+        },
+        "region": {
+          "type": "object",
+          "description": "Zoom: give id (an element) or rect_mm ([x, y, w, h] in plan mm).",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "rect_mm": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            }
+          }
+        },
+        "max_tokens": {
+          "type": "integer",
+          "description": "Size budget of the picture. Default 1600."
+        },
+        "options": {
+          "type": "object",
+          "description": "Options of the view. See guide."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "scan",
+    "description": "Planstudio: reads a source drawing without changing the document: finds walls, openings and doors, measures a profile. It returns proposals as operations for edit. action names the reading; see guide topic \"vocabulary\".",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The document."
+        },
+        "action": {
+          "type": "string",
+          "description": "Which reading."
+        },
+        "args": {
+          "type": "object",
+          "description": "Arguments of the action. See guide."
+        },
+        "max_tokens": {
+          "type": "integer",
+          "description": "Size budget of any picture. Default 1600."
+        }
+      },
+      "required": [
+        "id",
+        "action"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  },
+  {
+    "name": "edit",
+    "description": "Planstudio: changes a document with small operations, saved as a new revision all-or-nothing. Pass base_revision from get; a stale one is refused. Use dry_run to see the effect first. The operations are listed by guide topic \"ops\". Example: {\"id\":\"my-plan\",\"base_revision\":3,\"ops\":[{\"op\":\"update\",\"kind\":\"opening\",\"id\":\"d1\",\"patch\":{\"width\":900}}]}.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The document."
+        },
+        "base_revision": {
+          "type": "integer",
+          "description": "The revision you last read with get."
+        },
+        "ops": {
+          "type": "array",
+          "description": "The operations, applied in order, all or none.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "description": "The operation name."
+              }
+            },
+            "required": [
+              "op"
+            ]
+          }
+        },
+        "dry_run": {
+          "type": "boolean",
+          "description": "Work everything out, save nothing."
+        },
+        "message": {
+          "type": "string",
+          "description": "The revision note, in Swedish."
+        },
+        "image": {
+          "type": "boolean",
+          "description": "Also return a picture of the sheet. Default false."
+        }
+      },
+      "required": [
+        "id",
+        "base_revision",
+        "ops"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false
+    }
+  },
+  {
+    "name": "source",
+    "description": "Planstudio: gets a source drawing into a document and places it: an upload link, add, calibrate, straighten. action names the step; see guide topic \"vocabulary\". A chat attachment cannot reach a tool: ask the user to open the upload link.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The document."
+        },
+        "base_revision": {
+          "type": "integer",
+          "description": "The revision you last read, for actions that change the document."
+        },
+        "action": {
+          "type": "string",
+          "description": "Which step."
+        },
+        "args": {
+          "type": "object",
+          "description": "Arguments of the action. See guide."
+        },
+        "dry_run": {
+          "type": "boolean",
+          "description": "Work everything out, save nothing."
+        }
+      },
+      "required": [
+        "id",
+        "action"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false
+    }
+  },
+  {
+    "name": "manage",
+    "description": "Planstudio: creates, copies, renames, tags, shares, trashes and restores documents. action names what to do; see guide topic \"vocabulary\". Deleting moves a document to the trash. Example: {\"action\":\"create\",\"args\":{\"name\":\"Kallare Lundagatan\"}}.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "What to do."
+        },
+        "id": {
+          "type": "string",
+          "description": "The document, for actions that need one."
+        },
+        "args": {
+          "type": "object",
+          "description": "Arguments of the action. See guide."
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false
+    }
+  },
+  {
+    "name": "export",
+    "description": "Planstudio: writes the sheets as PDF, PNG, SVG or DXF, or returns a link to open the document. format names the output; see guide topic \"vocabulary\". Example: {\"id\":\"my-plan\",\"format\":\"pdf\"}.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The document."
+        },
+        "format": {
+          "type": "string",
+          "description": "Which output."
+        },
+        "options": {
+          "type": "object",
+          "description": "Options of the format. See guide."
+        }
+      },
+      "required": [
+        "id",
+        "format"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    }
+  }
+]

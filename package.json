@@ -14,7 +14,8 @@
     "smoke": "node scripts/smoke.mjs",
     "migrate:users": "tsx scripts/migrate-to-users.ts",
     "restore:backup": "tsx scripts/restore-backup.ts",
-    "eval:agent": "tsx scripts/eval-agent.mts"
+    "eval:agent": "tsx scripts/eval-agent.mts",
+    "freeze:connector": "tsx scripts/freeze-connector.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
