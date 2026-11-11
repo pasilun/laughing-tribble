@@ -5,26 +5,28 @@ Order of work, decided with the maintainer on 2026-11-10. It replaces the outloo
 | # | Work | Status |
 |---|---|---|
 | 1 | Kernel and CLI: model, DSL, solver, walls, openings, areas (week one) | Done |
-| 2 | Least squares, suggestions, renders sized for Claude, MCP server with check, get, apply, render (week two) | Done 2026-11-10 |
-| 3 | Audit fixes and validation; closed corners and door swings; PDF sheets; wall attributes and the permit review (week three, cards W3-01…W3-R3) | Done 2026-11-10 |
-| 4 | `.skp` export through OpenSKP | Skipped for now (maintainer, 2026-11-10) |
-| 5 | Diagnostic views: conflicts, missing measurements, diff (cards W4-01…W4-R1). Overlay on a source image moves to row 7 | Done 2026-11-10 |
-| 6 | Permit sheet: title block, Swedish texts, before/after sheets, dimension chains on two sides (cards W4-09…W4-R2) | Done 2026-11-10 |
-| 6b | Model extensions that v1 plans and the editor need: free-standing walls, wall stubs and partitions, non-rectangular rooms, fixtures (kitchen, WC, shower, furniture), balconies, several apartments and a stairwell in one plan (`docs/v2-agent-specs.md` §13). Angled walls are left for later (maintainer, 2026-11-10) | Done 2026-11-10 (W5-01…W5-R2): fixtures, stubs, rooms in parts, apartments, sheet style. Angled walls and free room outlines: later |
-| 7 | Source images, the v1 way (no LLM call in the server): the user uploads a drawing or photo through a link, the server stores it and hands it back to the calling model as an image or a crop, calibration against printed dimensions is deterministic, and the `overlay` view draws the plan over it. Plus the `find` and `history` tools and command-log storage | Cards written 2026-11-10 (W6-01…W6-R2): `source` statements and assets, upload link, least-squares calibration, `source_view`, `overlay`, `find`, `history`, JSONL command log. PDF and G4/CCITT TIFF: open |
-| 8 | Eval across Haiku, Sonnet and Opus on a fixed task set | Skipped (maintainer, 2026-11-10) |
+| 2 | Least squares, suggestions, renders sized for Claude, MCP server with check, get, apply, render (week two) | Done |
+| 3 | Audit fixes and validation; closed corners and door swings; PDF sheets; wall attributes and the permit review (week three) | Done |
+| 5 | Diagnostic views: conflicts, missing measurements, diff (week four) | Done |
+| 6 | Permit sheet: title block, Swedish texts, before/after sheets, dimension chains on two sides (week four) | Done |
+| 6b | Model extensions: fixtures, wall stubs, rooms in parts, apartments, balconies, black-and-white sheets (week five) | Done. Angled walls and free room outlines: later |
+| 7 | Source images the v1 way (no LLM call in the server): `source` statements, upload, calibration, `source_view`, `overlay`, `find`, `history`, command log | Cards written (W6-01…W6-R2), amended 2026-11-11; not built |
+| 12 | View-only viewer as one self-contained HTML file (`export --format html`): zoom, layers, tap for details. Opens on a phone with no server | Proposed 2026-11-11 (`docs/v2-deploy-plan.md`) |
+| 13 | `plan-tools` (pure tool layer, JSON in and out) and `plan-wasm`; CI for `wasm32` | Proposed |
+| 14 | Hosted v2 inside the existing Vercel app: Blob storage, MCP endpoint behind v1's OAuth, upload link, read-only view links `/v/<token>` | Proposed; needs the maintainer's decisions 1 and 2 in the deploy plan |
+| 6c | Angled walls and free room outlines | Later; needed before row 9 covers plans like Gnejsen 48 A/B |
 | 9 | Import of v1 plans and cut-over | Not started |
-| 10 | Desktop editor, SketchUp-style (egui/wgpu; lift snapping and the typed-value parser from BenchUp) | Last |
-| 11 | Accounts, sharing and MCP OAuth, then the mobile viewer (it needs share links) | Last |
+| 10 | The editor (technology to be decided again once row 14 runs: Rust egui, or a browser editor on the WebAssembly kernel) | Last |
+| 11 | Accounts and sharing | Nothing new if v2 is hosted inside the v1 app |
 
-**Dropped:** DXF export. **Skipped:** the cross-model eval, and `.skp` export for now.
+**Dropped:** DXF export. **Skipped:** the cross-model eval (row 8), and `.skp` export (row 4) for now.
 
 ## Open points
 
-- **`.skp` (row 4)** is skipped for now. When it comes back: OpenSKP is third-party C++ that a cloud run could not compile earlier, so it needs a local spike or Trimble's hosted connector.
-- **Solver reuse.** SolidCraft's sketch solver is not used. The in-house axis solver covers straight walls; revisit only when angled walls are needed (row 10).
+- **Deployment and the viewer** are planned in `docs/v2-deploy-plan.md`. Rows 12–14 are a proposal until the maintainer confirms the order and the two decisions.
+- **`.skp`** is skipped. When it comes back: OpenSKP is third-party C++ that a cloud run could not compile earlier, so it needs a local spike or Trimble's hosted connector.
+- **Solver reuse.** SolidCraft's sketch solver is not used. The in-house axis solver covers straight walls; revisit with angled walls (row 6c).
 - **Manual check still open:** add the MCP server to Claude Code on Haiku (`v2/crates/server/README.md`) and run `check` and `render` on `lgh154-b`.
-- **Free-standing walls, angled walls, non-rectangular rooms** (`docs/v2-agent-specs.md` §13) are needed before the editor; the spec run for row 10 decides the DSL.
-- **Not yet carded from rows 5–6:** door swings can cross a small room's label; interior dimension lines; chains on the south and east sides; v1's kitchen-plug, ventilation and property-name checks (they need fixtures).
-- **Row 7 has no LLM call (maintainer, 2026-11-10).** The model that calls the MCP tools reads the image itself, as in v1 (`plan_upload_link`, `plan_source_add`, `plan_view`). `docs/v2-kernel-plan.md` point 6 of "Giving the model vision" ("read with structured outputs") is superseded: the server never calls a model.
-- **Angled walls: later.** The real plans have a few (the stairwell walls of the Gnejsen 48 A/B plan taper), so they are needed before those plans can be imported in full, but not in the first batch of row 6b.
+- **Row 7 has no LLM call (maintainer, 2026-11-10).** The model that calls the MCP tools reads the image itself, as in v1. PDF sources and G4/CCITT TIFFs are open.
+- **Small flaws without cards:** no warning when a door swing crosses a fixture; stubs ignore the before/after filter on sheets; marks in the missing view can cross a room label; a title text cannot contain a double quote; a demolished room's name still prints on the after sheet; interior dimension lines and chains on the south and east sides.
+- **Out-of-date documents:** `docs/v2-kernel-plan.md` is the plan of 2026-11-09 and carries a note at its top saying what this roadmap replaced. The PDF copies in `docs/` are older still.
