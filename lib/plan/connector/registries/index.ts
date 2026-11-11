@@ -44,8 +44,27 @@ export const SHEETS = new Registry<Entry>('sheets', 'blad', [
   { name: 'fore', summary: 'The sheet as it is today' },
   { name: 'both', summary: 'Före and efter together (export only)' },
 ])
-export const SCAN_ACTIONS = new Registry<Entry>('scan', 'skanningsåtgärd', [])
-export const SOURCE_ACTIONS = new Registry<Entry>('source', 'källåtgärd', [])
+// An action that is carried out by one of the scan tools of lib/plan/scan. `tool` is that tool's name; `proposes` marks a tool that saves
+// when it is run, which scan runs in capture mode so that its result is a proposal for edit.
+export type ActionEntry = Entry & { tool: string; proposes?: boolean }
+export const SCAN_ACTIONS = new Registry<ActionEntry>('scan', 'skanningsåtgärd', [
+  { name: 'profile', tool: 'plan_scan_profile', summary: 'Ink profile along a line in the source: where the walls cross it' },
+  { name: 'diff', tool: 'plan_scan_diff', summary: 'What differs between two sources' },
+  { name: 'detect_walls', tool: 'plan_scan_detect_walls', summary: 'Wall candidates found in the source' },
+  { name: 'missing_walls', tool: 'plan_scan_missing_walls', summary: 'Drawn walls that the plan does not have' },
+  { name: 'snap_walls', tool: 'plan_scan_snap_walls', proposes: true, summary: 'Proposal: walls moved onto the drawn walls' },
+  { name: 'openings', tool: 'plan_scan_openings', proposes: true, summary: 'Proposal: doors and windows read from the plan view' },
+  { name: 'elevation', tool: 'plan_scan_elevation', proposes: true, summary: 'Proposal: windows read from a facade drawing' },
+  { name: 'doors', tool: 'plan_scan_doors', proposes: true, summary: 'Proposal: which way the doors open' },
+])
+export const SOURCE_ACTIONS = new Registry<ActionEntry>('source', 'källåtgärd', [
+  { name: 'upload_link', tool: '', summary: 'A link where the person adds a drawing' },
+  { name: 'add', tool: 'plan_source_add', summary: 'Add a drawing from data. args: { id, filename, data_base64, ... }' },
+  { name: 'calibrate', tool: 'plan_scan_calibrate', summary: 'Fit the scale to known distances' },
+  { name: 'calibrate_dimensions', tool: 'plan_scan_dimension', summary: 'Calibrate and straighten from printed dimension lines' },
+  { name: 'register', tool: 'plan_scan_register', summary: 'Align a source to another source' },
+  { name: 'trace', tool: '', summary: 'A first draft from a source: calibrates, finds walls, openings and windows. args: { source_id?, printed_outer_mm?, dimensions? }' },
+])
 export const MANAGE_ACTIONS = new Registry<Entry & { needsId: boolean }>('manage', 'hanteringsåtgärd', [
   { name: 'create', needsId: false, summary: 'A new document. args: { name, template?: "empty" | "demo" }' },
   { name: 'import', needsId: false, summary: 'A new document from a whole plan as data. args: { name, plan, copy_sources_from? }' },

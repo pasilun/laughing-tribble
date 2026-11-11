@@ -1,4 +1,5 @@
-import type { Op } from '../domain/ops'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { applyOps, type Op } from '../domain/ops'
 import type { Plan, Source, Wall } from '../domain/types'
 import { editPlan } from '../service'
 import type { Raster } from './raster'
@@ -49,7 +50,24 @@ export function sourceOps(plan: Plan, r: Raster, patch: Partial<Source>): Op[] {
   return [{ op: 'update', kind: 'source', id: r.id, patch }]
 }
 
+// While a capture is active, save() applies the operations to the plan as loaded and records them instead of saving. The connector's scan tool uses it to turn the tools that save into proposals.
+export type Captured = { ops: Op[]; message: string }
+const capturing = new AsyncLocalStorage<{ plan: Plan; n: number; taken: Captured[] }>()
+export async function capture<T>(plan: Plan, n: number, run: () => Promise<T>): Promise<{ result: T; taken: Captured[] }> {
+  const state = { plan, n, taken: [] as Captured[] }
+  const result = await capturing.run(state, run)
+  return { result, taken: state.taken }
+}
+
 export async function save(planId: string, base: unknown, ops: Op[], message: string): Promise<{ n: number; plan: Plan } | string> {
+  const cap = capturing.getStore()
+  if (cap) {
+    const res = applyOps(cap.plan, ops)
+    if (res.errors.length) return `Förslaget går inte att göra:\n${res.errors.join('\n')}`
+    cap.plan = res.plan
+    cap.taken.push({ ops, message })
+    return { n: cap.n, plan: res.plan }
+  }
   if (typeof base !== 'number') return 'base_revision krävs för att spara'
   const res = await editPlan(planId, ops, base, 'claude', message)
   if (res.status !== 200) return `Ingen ändring sparades:\n${res.errors.join('\n')}${res.status === 409 ? '\nLäs planen igen (plan_get) och använd senaste revision.' : ''}`

@@ -6,9 +6,9 @@ test('nextCalls follows the plan', () => {
   const empty = { ...demoPlan('p'), walls: [], openings: [], rooms: [], fixtures: [], dimensions: [], sources: [] }
   expect(nextCalls(empty, 1).next).toEqual([{ tool: 'source', arguments: { id: 'p', action: 'upload_link' }, why: expect.any(String) }])
   const src = { ...empty, sources: [{ id: 's1', name: 'x', role: 'archive' as const, src: 'a', widthPx: 1, heightPx: 1, mmPerPx: 1, x: 0, y: 0, rotation: 0 }] }
-  expect(nextCalls(src, 1).next[0]).toMatchObject({ tool: 'source', arguments: { id: 'p', action: 'calibrate' } })
+  expect(nextCalls(src, 1).next[0]).toMatchObject({ tool: 'source', arguments: { id: 'p', action: 'trace' } })
   const cal = { ...src, sources: [{ ...src.sources[0], calibration: '3 mått' }] }
-  expect(nextCalls(cal, 1).next[0]).toMatchObject({ tool: 'scan', arguments: { action: 'trace' } })
+  expect(nextCalls(cal, 1).next[0]).toMatchObject({ tool: 'source', arguments: { action: 'trace' } })
   const demo = demoPlan('d')
   const withSource = { ...demo, sources: cal.sources }
   expect(nextCalls(withSource, 4, { openIssues: 2 }).next[0]).toMatchObject({ tool: 'check', arguments: { id: 'd', scope: ['audit'] } })

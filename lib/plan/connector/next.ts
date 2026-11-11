@@ -20,13 +20,13 @@ export function nextCalls(plan: Plan, revision: number, state: { openIssues?: nu
     return { done, next: [{ tool: 'source', arguments: { id, action: 'upload_link' }, why: 'Ge länken till användaren och vänta tills de säger att ritningen är uppladdad. Rita inget före det.' }] }
   if (hasSource) done.push(`källritning: ${sources.map((s) => s.id).join(', ') || 'underlag'}`)
   if (hasSource && !calibrated)
-    return { done, next: [{ tool: 'source', arguments: { id, action: 'calibrate', args: printed }, why: 'Läs de tryckta yttermåtten i ritningen (view med vyn source) och kalibrera mot dem. Gissa inte skalan.' }] }
+    return { done, next: [{ tool: 'source', arguments: { id, base_revision: revision, action: 'trace', args: printed }, why: 'Läs de tryckta yttermåtten i ritningen (view med vyn source). Kalibrerar mot dem och ger ett första utkast. Gissa inte skalan.' }] }
   if (calibrated) done.push('kalibrerad')
   if (plan.walls.length === 0)
-    return { done, next: [{ tool: 'scan', arguments: { id, action: 'trace', args: printed }, why: 'Ger ett utkast av väggar och öppningar från ritningen.' }] }
+    return { done, next: [{ tool: 'source', arguments: { id, base_revision: revision, action: 'trace', args: printed }, why: 'Ger ett utkast av väggar och öppningar från ritningen.' }] }
   done.push(`${plan.walls.length} väggar`)
   if (plan.openings.length === 0)
-    return { done, next: [{ tool: 'scan', arguments: { id, action: 'trace' }, why: 'Läser öppningar och dörrar mot väggarna som finns (rör inte väggarna).' }] }
+    return { done, next: [{ tool: 'source', arguments: { id, base_revision: revision, action: 'trace' }, why: 'Läser öppningar och dörrar mot väggarna som finns (rör inte väggarna).' }] }
   done.push(`${plan.openings.length} öppningar`)
   if (hasSource && (state.openIssues === undefined || state.openIssues > 0))
     return { done, next: [{ tool: 'check', arguments: { id, scope: ['audit'] }, why: state.openIssues ? `${state.openIssues} anmärkningar mot ritningen: jämför och rätta.` : 'Jämför planen med ritningen och lista vad som avviker.' }] }

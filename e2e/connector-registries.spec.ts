@@ -7,7 +7,7 @@ test('parts are the six parts of a plan', () => {
 
 test('list kinds and topics', () => {
   expect(LIST_KINDS.names()).toEqual(['plans', 'revisions'])
-  expect(TOPICS.names()).toEqual(['work', 'ops', 'vocabulary', 'findings'])
+  expect(TOPICS.names()).toEqual(['work', 'ops', 'vocabulary', 'scan', 'source', 'findings'])
 })
 
 test('families are listed by their English keys', () => {
