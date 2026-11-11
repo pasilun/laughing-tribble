@@ -1,3 +1,4 @@
+import { cap, describeRef } from '../../domain/names'
 import { comparePlans } from '../../assist/compare'
 import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
@@ -47,14 +48,18 @@ export const compare: CheckEntry = { name: 'compare', summary: 'The plan against
     if (!ref) return { findings: [notFound(refId)] }
     const cmp = comparePlans(c.plan, ref.plan, { matchMm: num(c.against.match_mm) })
     const out: Finding[] = []
-    for (const w of cmp.walls) {
-      if (Math.abs(w.diffMm) > 30) out.push(finding({ code: 'compare-wall-position', level: 'warning', refs: [w.id], message: `Väggen ${w.id} ligger ${w.diffMm >= 0 ? '+' : ''}${w.diffMm} mm från referensen (${w.axis}).`, data: { diff_mm: w.diffMm, axis: w.axis } }))
-      if (Math.abs(w.thicknessDiffMm) > 40) out.push(finding({ code: 'compare-wall-thickness', level: 'warning', refs: [w.id], message: `Väggen ${w.id} är ${w.thickness} mm tjock mot ${w.refThickness} i referensen.`, data: { thickness: w.thickness, reference: w.refThickness } }))
+    const name = (plan: Plan, id: string) => {
+      const d = describeRef(plan, id)
+      return d === id ? id : `${cap(d)} (${id})`
     }
-    for (const m of cmp.openings.missed) out.push(finding({ code: 'compare-opening-missing', level: 'warning', refs: [m.refId], message: `Referensen har ${m.kind} ${m.refId} i ${m.wallId}; planen saknar den.` }))
-    for (const m of cmp.openings.extra) out.push(finding({ code: 'compare-opening-extra', level: 'info', refs: [m.id], message: `Planen har ${m.kind} ${m.id} i ${m.wallId} som referensen saknar.` }))
-    for (const id of cmp.wallsOnlyInRef) out.push(finding({ code: 'compare-wall-missing', level: 'warning', refs: [id], message: `Väggen ${id} finns bara i referensen.` }))
-    for (const id of cmp.wallsOnlyInPlan) out.push(finding({ code: 'compare-wall-extra', level: 'info', refs: [id], message: `Väggen ${id} finns bara i planen.` }))
+    for (const w of cmp.walls) {
+      if (Math.abs(w.diffMm) > 30) out.push(finding({ code: 'compare-wall-position', level: 'warning', refs: [w.id], message: `${name(c.plan, w.id)} ligger ${w.diffMm >= 0 ? '+' : ''}${w.diffMm} mm från referensen (${w.axis}).`, data: { diff_mm: w.diffMm, axis: w.axis } }))
+      if (Math.abs(w.thicknessDiffMm) > 40) out.push(finding({ code: 'compare-wall-thickness', level: 'warning', refs: [w.id], message: `${name(c.plan, w.id)} är ${w.thickness} mm tjock mot ${w.refThickness} i referensen.`, data: { thickness: w.thickness, reference: w.refThickness } }))
+    }
+    for (const m of cmp.openings.missed) out.push(finding({ code: 'compare-opening-missing', level: 'warning', refs: [m.refId], message: `Referensen har ${name(ref.plan, m.refId)}; planen saknar den.` }))
+    for (const m of cmp.openings.extra) out.push(finding({ code: 'compare-opening-extra', level: 'info', refs: [m.id], message: `Planen har ${name(c.plan, m.id)} som referensen saknar.` }))
+    for (const id of cmp.wallsOnlyInRef) out.push(finding({ code: 'compare-wall-missing', level: 'warning', refs: [id], message: `${name(ref.plan, id)} finns bara i referensen.` }))
+    for (const id of cmp.wallsOnlyInPlan) out.push(finding({ code: 'compare-wall-extra', level: 'info', refs: [id], message: `${name(c.plan, id)} finns bara i planen.` }))
     const fit = (f: { scale: number; rmsMm: number; n: number }) => `skala ${f.scale.toFixed(4)}, ${f.n} väggar, spridning ${f.rmsMm} mm`
     return { findings: out, text: `Jämförelse med ${refId}. Inpassning x: ${fit(cmp.fit.x)}; y: ${fit(cmp.fit.y)}. ${cmp.walls.length} gemensamma väggar, ${cmp.openings.matched.length} öppningar matchade.` }
   } }

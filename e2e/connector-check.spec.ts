@@ -49,6 +49,15 @@ test('check: compare with a reference plan', async ({ request }) => {
   expect((await connector(request, 'check', { id: a.id, scope: ['compare'], against: { id: 'no-such-plan' } })).structuredContent!.findings![0].code).toBe('not-found')
 })
 
+test('check: compare names walls by position and id', async ({ request }) => {
+  const a = await makePlan(request, 'Check cmp names')
+  const b = await makePlan(request, 'Check cmp ref')
+  await legacy(request, 'plan_edit', { plan_id: a.id, base_revision: 1, message: 'x', ops: [{ op: 'add', kind: 'wall', item: { id: 'extra1', a: { x: 1000, y: 1000 }, b: { x: 2500, y: 1000 }, thickness: 100, phase: 'existing' } }] })
+  const r = (await connector(request, 'check', { id: a.id, scope: ['compare'], against: { id: b.id } })).structuredContent!
+  const f = r.findings!.find((x) => x.code === 'compare-wall-extra' && x.refs?.[0] === 'extra1')!
+  expect(f.message).toContain('(extra1)'); expect(f.message).not.toMatch(/^Väggen extra1/)
+})
+
 test('check: finding ids are unique within an answer', async ({ request }) => {
   const a = await makePlan(request, 'Check ids')
   const au = (await connector(request, 'check', { id: a.id, scope: ['audit'] })).structuredContent!
