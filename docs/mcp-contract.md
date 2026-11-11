@@ -172,6 +172,7 @@ These are the engine's and are described by `guide`, not here:
 
 ## 11. Open points
 
+- **No vocabulary in field descriptions (maintainer, 2026-11-11).** A field description says what the field is for and points to `guide`; it never names a view, format, list kind or default value, because those are the engine's and can change. Examples in a tool's description are allowed: they are promises that the names in them will keep working (aliases if renamed). Decided after checkpoint S2-R1, before any client had registered the tool list; the list was frozen again (card S2-R1-f8).
 - **Site plans** are folded in as a kind of plan. If their operations turn out to share nothing with floor plans, they still fit: the vocabulary is per kind, and `guide` says which applies.
 - **Server instructions** (the text a client reads when the connector is added) are stored by clients like the tool list. They should be three lines that will not age: call `guide` first, call `check` after each step and follow `next`, never take a measurement from a picture.
 - **Runtime tool-list updates.** MCP has a notification for a changed tool list, but which clients act on it is not verified. The contract assumes none do.
