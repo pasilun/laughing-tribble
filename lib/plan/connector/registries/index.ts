@@ -1,6 +1,7 @@
 import { SECTIONS, type Section } from '../../mcp/format'
 import { Registry, type Entry } from '../names'
 import { OPERATIONS } from './operations'
+import { permit } from '../checks'
 import { TOPICS } from './topics'
 
 export { TOPICS } from './topics'
@@ -22,7 +23,7 @@ export const LIST_KINDS = new Registry<Entry>('list', 'lista', [
   { name: 'revisions', summary: 'The revisions of one document (needs id)' },
 ])
 export const VIEWS = new Registry<Entry>('views', 'vy', [])
-export const CHECKS = new Registry<Entry>('checks', 'kontroll', [])
+export const CHECKS = new Registry<Entry>('checks', 'kontroll', [permit])
 export const FORMATS = new Registry<Entry>('formats', 'format', [
   { name: 'text', summary: 'The listing as text' },
   { name: 'json', summary: 'The whole plan as data' },

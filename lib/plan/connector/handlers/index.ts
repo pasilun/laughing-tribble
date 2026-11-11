@@ -1,4 +1,5 @@
 import { answer, finding } from '../answer'
+import { check } from './check'
 import { edit } from './edit'
 import { get } from './get'
 import { guide } from './guide'
@@ -17,6 +18,6 @@ const notReady = (name: ToolName): Handler => async () =>
   )
 
 export const HANDLERS: Record<ToolName, Handler> = {
-  guide, list, get, check: notReady('check'), view: notReady('view'),
+  guide, list, get, check, view: notReady('view'),
   scan: notReady('scan'), edit, source: notReady('source'), manage: notReady('manage'), export: notReady('export'),
 }
