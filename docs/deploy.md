@@ -1,7 +1,7 @@
 # Deploying and sharing the app
 
 The app runs on Vercel (project `laughing-tribble`): `main` deploys to
-production, every other branch gets a preview. Several people can use it, each
+production. Other branches are not built: `vercel.json` has an `ignoreCommand` that skips every build whose branch is not `main` (decided 2026-11-11; the scheduled build runs push to `auto/v1-build` and need no preview). Several people can use it, each
 with their own key, their own plans and their own storage.
 
 ## What lives where
@@ -11,7 +11,7 @@ with their own key, their own plans and their own storage.
 | Plans, revisions, scanned drawings | Vercel Blob (private), under `u/<person>/plans/…` |
 | Who is who | `PLAN_USERS` in the Vercel project: `id:<hash of key>`, comma separated |
 | The key itself | With the person only. It is never stored, only its hash is. |
-| Deploys | Vercel's Git integration: `main` to production, other branches to previews |
+| Deploys | Vercel's Git integration: `main` to production; other branches are skipped by `ignoreCommand` in `vercel.json` |
 
 ## One-time setup
 
