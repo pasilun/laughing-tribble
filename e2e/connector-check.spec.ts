@@ -26,3 +26,10 @@ test('check: review and finish scopes', async ({ request }) => {
   const both = (await connector(request, 'check', { id: a.id, scope: ['permit', 'review'] })).structuredContent!
   expect((both.data as { scopes: string[] }).scopes).toEqual(['permit', 'review'])
 })
+
+test('check: audit without a source says so', async ({ request }) => {
+  const a = await makePlan(request, 'Check audit')
+  const au = (await connector(request, 'check', { id: a.id, scope: ['audit'] })).structuredContent!
+  expect(au.ok).toBe(true)
+  expect(au.findings!.some((f) => f.id === 'plan:no-source' && f.code === 'audit-plan')).toBe(true)
+})
