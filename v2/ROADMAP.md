@@ -12,7 +12,7 @@ Order of work, decided with the maintainer on 2026-11-10. It replaces the outloo
 | 5 | Diagnostic views: conflicts, missing measurements, diff (week four) | Done |
 | 6 | Permit sheet: title block, Swedish texts, before/after sheets, dimension chains on two sides (week four) | Done |
 | 6b | Model extensions: fixtures, wall stubs, rooms in parts, apartments, balconies, black-and-white sheets (week five) | Done. Angled walls and free room outlines: later |
-| 7 | Source images the v1 way (no LLM call in the server): `source` statements, upload, calibration, `source_view`, `overlay`, `find`, `history`, command log | Cards written (W6-01…W6-R2), amended 2026-11-11; not built |
+| 7 | Source images the v1 way (no LLM call in the server): `source` statements, upload, calibration, `source_view`, `overlay`, `find`, `history`, command log | Dropped 2026-11-11 (W6-01…W6-R2 are marked `dropped`) |
 | 12 | View-only viewer as one self-contained HTML file (`export --format html`): zoom, layers, tap for details. Opens on a phone with no server | Proposed 2026-11-11 (`docs/v2-deploy-plan.md`) |
 | 13 | `plan-tools` (pure tool layer, JSON in and out) and `plan-wasm`; CI for `wasm32` | Proposed |
 | 14 | Hosted v2 inside the existing Vercel app: Blob storage, MCP endpoint behind v1's OAuth, upload link, read-only view links `/v/<token>` | Proposed; needs the maintainer's decisions 1 and 2 in the deploy plan |

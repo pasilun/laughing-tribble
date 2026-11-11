@@ -16,7 +16,7 @@ Setup:
 3. Read `v2/CLAUDE.md`, this file, and only the frontmatter of `v2/cards/*.md`.
 
 Loop:
-4. Pick the first **ready** card in id order: status `ready`, and every card in `depends` has status `done`. If there is none, go to the stop rule and report "queue empty".
+4. Pick the first **ready** card in id order (a card with status `dropped` is never built): status `ready`, and every card in `depends` has status `done`. If there is none, go to the stop rule and report "queue empty".
 5. **Tier H card:**
    a. Set its status to `in_progress` and commit.
    b. Call the `v2-implementer` subagent. Give it only the card file, the spec sections the card names, and any files already in `v2/` that the card's work touches.
