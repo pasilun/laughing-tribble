@@ -33,3 +33,12 @@ test('check: audit without a source says so', async ({ request }) => {
   expect(au.ok).toBe(true)
   expect(au.findings!.some((f) => f.id === 'plan:no-source' && f.code === 'audit-plan')).toBe(true)
 })
+
+test('check: compare with a reference plan', async ({ request }) => {
+  const a = await makePlan(request, 'Check cmp')
+  const b = await makePlan(request, 'Check ref')
+  const cmp = await connector(request, 'check', { id: a.id, scope: ['compare'], against: { id: b.id } })
+  expect(cmp.structuredContent!.ok).toBe(true); expect(cmp.content[0].text).toContain(`Jämförelse med ${b.id}`)
+  expect((await connector(request, 'check', { id: a.id, scope: ['compare'] })).structuredContent!.findings![0].code).toBe('bad-argument')
+  expect((await connector(request, 'check', { id: a.id, scope: ['compare'], against: { id: 'no-such-plan' } })).structuredContent!.findings![0].code).toBe('not-found')
+})
