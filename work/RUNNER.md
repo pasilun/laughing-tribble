@@ -4,7 +4,7 @@ Scheduled sessions start with "Follow work/RUNNER.md, build run" or "Follow work
 
 ## Branches
 
-- All work lives on the branch `auto/v1-build`. If it is missing, create it from `origin/claude/drawing-154-measurements-6pt6ko` (that branch carries the docs, the cards and this file; the app code is the same as on `main`). Each Vercel preview deployment uses its own store, so a run cannot touch real plans.
+- All work lives on the branch `auto/v1-build`. If it is missing, create it from `origin/claude/drawing-154-measurements-6pt6ko` (that branch carries the docs, the cards and this file; the app code is the same as on `main`). Vercel does not build this branch (`ignoreCommand` in `vercel.json`: only `main` is built), so a run cannot touch real plans.
 - Start every run by merging `origin/main` into the work branch (the maintainer fixes the app on `main` in other sessions). If the merge conflicts in a file outside `work/` and `lib/plan/connector/`, abort the merge, write the run log and stop.
 - **No pull requests.** Never push to `main` or to `claude/drawing-154-measurements-6pt6ko`. Commit and push to `auto/v1-build`.
 
