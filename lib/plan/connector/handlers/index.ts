@@ -4,6 +4,7 @@ import { edit } from './edit'
 import { get } from './get'
 import { guide } from './guide'
 import { list } from './list'
+import { manage } from './manage'
 import { view } from './view'
 import { toToolResult, type ToolResult } from '../result'
 import type { ToolName } from '../types'
@@ -20,5 +21,5 @@ const notReady = (name: ToolName): Handler => async () =>
 
 export const HANDLERS: Record<ToolName, Handler> = {
   guide, list, get, check, view,
-  scan: notReady('scan'), edit, source: notReady('source'), manage: notReady('manage'), export: notReady('export'),
+  scan: notReady('scan'), edit, source: notReady('source'), manage, export: notReady('export'),
 }

@@ -34,10 +34,19 @@ export const FORMATS = new Registry<Entry>('formats', 'format', [
 ])
 export const SCAN_ACTIONS = new Registry<Entry>('scan', 'skanningsåtgärd', [])
 export const SOURCE_ACTIONS = new Registry<Entry>('source', 'källåtgärd', [])
-export const MANAGE_ACTIONS = new Registry<Entry>('manage', 'hanteringsåtgärd', [])
+export const MANAGE_ACTIONS = new Registry<Entry & { needsId: boolean }>('manage', 'hanteringsåtgärd', [
+  { name: 'create', needsId: false, summary: 'A new document. args: { name, template?: "empty" | "demo" }' },
+  { name: 'import', needsId: false, summary: 'A new document from a whole plan as data. args: { name, plan, copy_sources_from? }' },
+  { name: 'rename', needsId: true, summary: 'Rename a document (a new revision). args: { name }' },
+  { name: 'tags', needsId: true, summary: 'Set the tags of a document (replaces them). args: { tags: string[] }' },
+  { name: 'share', needsId: true, summary: 'Share with a person, take one out, or show who has it. args: { with? } or { remove? } or none' },
+  { name: 'delete', needsId: true, summary: 'Move a document to the trash (for a member: leave it)' },
+  { name: 'restore', needsId: true, summary: 'Take a document back from the trash' },
+  { name: 'trash', needsId: false, summary: 'List what the person has deleted' },
+])
 
 // Every family, by its English key. The guide's `vocabulary` topic is written from this.
 export const FAMILIES: Record<string, Registry<Entry>> = {
   operations: OPERATIONS as Registry<Entry>, parts: PARTS, list: LIST_KINDS, views: VIEWS, checks: CHECKS,
-  formats: FORMATS, scan: SCAN_ACTIONS, source: SOURCE_ACTIONS, manage: MANAGE_ACTIONS, topics: TOPICS as Registry<Entry>,
+  formats: FORMATS, scan: SCAN_ACTIONS, source: SOURCE_ACTIONS, manage: MANAGE_ACTIONS as Registry<Entry>, topics: TOPICS as Registry<Entry>,
 }
