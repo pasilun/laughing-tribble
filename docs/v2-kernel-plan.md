@@ -1,5 +1,7 @@
 # Planstudio v2: a CAD-style kernel in Rust, MCP-first, with a SketchUp-style desktop editor and a mobile viewer
 
+> **Status, 2026-11-11.** This is the plan as written on 2026-11-09. The order of work and several choices have changed since; `v2/ROADMAP.md` on the branch `auto/v2-build` is current, with the decisions in `docs/v2-agent-specs.md` §15 and the hosting and viewer proposal in `docs/v2-deploy-plan.md`. Superseded here: DXF export (dropped); the eval gate (skipped); `.skp` export (skipped for now); reading photos with structured outputs (the server never calls a model; the calling model reads the image, as in v1); the phase order and the "new repo" (v2 is built under `v2/` in this repo); a provider for accounts (hosting inside the v1 app is proposed, which keeps v1's accounts). The research sections still stand.
+
 ## Context
 
 v1 (this repo) stores a wall as a free centre line `a→b` plus a thickness. Joints are two wall ends within 1 mm of each other, openings sit at an `offset` along `wall.a`, room areas come from a raster flood fill, and a `Dimension` is two loose points that drive nothing. That fits tracing a scan. It fits badly the work of drawing from laser measurements, which are clear sizes between wall faces.

@@ -263,3 +263,24 @@ At the same pace on Pro, with the reviewer kept for the hard parts, the rest of 
 | 10 | Viewer, v1 import, cut-over |
 
 That's about **10 weeks in total on Pro** if Haiku keeps up. The editor weeks are where Pro's limits are most likely to bind, because UI work needs more back-and-forth. If you hit the weekly limit repeatedly then, Anthropic's options are usage credits or the Max plan.
+
+## 9. Week two: cards and acceptance
+
+The week-two cards are in `v2/cards/W2-*.md` (24 Haiku cards, 4 reviewer checkpoints), written by the spec run of 2026-11-09. Design decisions are in the agent specs §15.
+
+| Group | Cards | Checkpoint |
+|---|---|---|
+| Core entry points, weighted least squares (P1-08) | W2-01…05 | W2-R1 |
+| DSL round-trip proptest, measurement suggestions | W2-06…11 | W2-R2 |
+| Renders sized for Claude: viewport, labels, crops, PNG, `plan png` | W2-12…18 | W2-R3 |
+| MCP server (`rmcp`): `check`, `get`, `apply`, `render`, stdio end to end | W2-19…24 | W2-R4 |
+
+**Week-two acceptance** (run by W2-R4 and the next spec run):
+- Week-one acceptance (§7) still passes unchanged.
+- `plan solve --json fixtures/dist-1.plan` matches `dist-1.expected.json`, and `plan check` prints `W004 Adjusted to fit within tolerance: measure B.east to A.east 520→500.`
+- `cargo test -p plan-core --test roundtrip` passes 1000 cases.
+- `plan suggest fixtures/lgh154-a.plan` prints the three I020 lines of card W2-11.
+- `plan png fixtures/lgh154-a.plan -o a.png` writes a PNG of at most 1600 tokens and 2576 px; looking at it, every room, wall and opening id is readable and no two labels overlap.
+- `cargo test -p plan-server` passes, including the stdio session test.
+- In Claude Code, after `claude mcp add planstudio -- …/plan-mcp --root …`, Claude (on Haiku) can check `lgh154-b`, explain the conflict, and fetch a labelled render.
+

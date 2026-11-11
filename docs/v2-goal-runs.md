@@ -1,5 +1,7 @@
 # Planstudio v2: scheduled goal runs on Claude Pro
 
+> **Status, 2026-11-11.** The scheduled runs are paused. The runner prompt in §3 is the first draft and still mentions pull requests; the prompt in use is `v2/RUNNER.md` on `auto/v2-build` (no pull requests, pushes to `auto/v2-build`).
+
 Addendum to [`v2-week1-pro.md`](v2-week1-pro.md), written 2026-11-09.
 
 **Goal:** use each 5-hour Pro window while you are away. A scheduled Claude Code session starts at the beginning of a window, works through task cards on its own (Haiku builds, Opus reviews), pushes to the `auto/v2-build` branch, and stops.

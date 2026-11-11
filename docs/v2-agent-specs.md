@@ -315,10 +315,18 @@ pub struct AxisGraphSolver;      // §6.2, Phase 1
 file        = { line } ;
 line        = [ statement ] [ comment ] NEWLINE ;
 comment     = "#" { any } ;
-statement   = plan | default | room | relation | align | measure | opening | wall ;
+statement   = plan | default | title | source | room | relation | align | measure | opening | wall | stub | fixture ;
+stub        = "stub" face "at" INT "length" INT [ "thickness" INT ] [ "offset" INT ] [ "bearing" ] [ phase ] ;   (* §15 D45 *)
+fixture     = "fixture" KIND face "at" INT [ "width" INT ] [ "depth" INT ] [ "offset" INT ] [ "label" STRING ] [ phase ] ;   (* §15 D44 *)
+title       = "title" KEY STRING ;   (* KEY: property, address, applicant, drawing, drawn_by, date, description; §15 D41 *)
+source      = "source" NAME STRING [ "mm_per_px" DEC ] [ "at" [ "-" ] INT "," [ "-" ] INT ] [ "role" ROLE ]
+              [ "year" INT ] [ "view" VIEW ] ;   (* §15 D50 *)
+ROLE        = "archive" | "before" | "after" | "other" ;   (* other is the default *)
+VIEW        = "plan" | "elevation" ;                        (* plan is the default *)
+DEC         = digit { digit } "." digit [ digit [ digit ] ] ;   (* mm per pixel, thousandths; 6.35 = 6350 *)
 plan        = "plan" STRING ;
 default     = ("default_wall" | "default_outer_wall") qty ;
-room        = "room" NAME size "x" size [ src ] [ "apartment" STRING ] [ phase ] ;
+room        = "room" NAME size "x" size [ src ] [ "apartment" STRING ] [ "part" NAME ] [ phase ] ;   (* part: §15 D46 *)
 size        = INT | "?" ;
 relation    = INDENT? NAME? rel_kw NAME gapspec ;      (* indented lines belong to the last room *)
 rel_kw      = "east_of" | "west_of" | "south_of" | "north_of" ;
@@ -327,7 +335,7 @@ align       = INDENT? "align" side NAME { NAME } ;     (* indented: last room is
 measure     = "measure" face "to" face "=" INT [ src ] [ "reference" ] ;
 opening     = ("door" | "window" | "passage") face "at" INT "width" INT [ "height" INT ]
               [ "hinge" side ] [ "opens" NAME ] [ src ] [ phase ] ;
-wall        = "wall" face "thickness" INT [ src ] ;
+wall        = "wall" face [ "thickness" INT [ src ] ] [ "bearing" ] [ "fire" STRING ] [ phase ] ;   (* at least one part; §15 D34 *)
 face        = NAME "." side ;
 side        = "north" | "east" | "south" | "west" ;
 qty         = INT [ src ] ;
@@ -343,6 +351,7 @@ Notes:
 - Keywords are lower case. Room names are case-sensitive.
 - `INDENT` is any leading whitespace. An indented relation without a subject applies to the last declared room.
 - Lengths: plain integers are mm. `1.86m` is 1860. Anything else is E006.
+- `at` in a `source` line takes a leading `-` on either coordinate, so a drawing may sit west or north of the plan origin; `mm_per_px` is the only decimal (thousandths).
 
 ### 7.2 Printer (canonical form)
 
@@ -350,8 +359,9 @@ Notes:
 
 Canonical form:
 1. `plan`, then the defaults.
-2. Rooms in declaration order. Each room's relations are indented by two spaces under it, in this order: east_of, west_of, south_of, north_of, then align.
-3. Then `measure`, `wall`, `door`, `window`, `passage` lines, each group sorted by face then `at`.
+2. `title` lines (key order of D41), then `source` lines in declaration order (§15 D50).
+3. Rooms in declaration order. Each room's relations are indented by two spaces under it, in this order: east_of, west_of, south_of, north_of, then align.
+4. Then `measure`, `wall`, `door`, `window`, `passage` lines, each group sorted by face then `at`.
 
 Omit a `source` equal to the default (`assumed` for defaults, none for exact relations), and omit `tol` equal to the source default. Comments are not preserved in canonical form; the raw text is kept in storage separately.
 
@@ -518,9 +528,31 @@ pub struct Diagnostic {
 | E021 | Error | Invalid plan id (MCP) | `Invalid plan_id "{id}": use 1 to 64 letters, digits, "-" or "_".` |
 | E022 | Error | Render view not available yet | `View "{view}" is not available yet; use "plan" or "labels".` |
 | E023 | Error | Plan file read or write failed (MCP) | `Could not {action} plan "{id}": {reason}.` |
+| E024 | Error | Source file unreadable or unsupported | `Source "{name}" could not be read: {reason}.` |
+| E025 | Error | Unknown source | `Unknown source "{name}".{ Did you mean "{suggestion}"?} Use a source name from get.` |
+| E026 | Error | Duplicate source | `Source "{name}" is declared twice (lines {a} and {b}).` |
 | I020 | Info | Measurement suggested (not in `check` output; `plan suggest` and MCP next steps only) | `{what} {value} mm has source {source} (±{tol} mm); measure {from} to {to} with the laser.` |
+| E014 | Error | Size below 1 mm | `{what} is {value} mm; it must be at least 1 mm.` |
+| E015 | Error | Relation of a room to itself | `"{subject} {relation} {of}" relates a room to itself.` |
+| E016 | Error | Openings overlap in one wall | `Openings {a} and {b} overlap by {d} mm on wall {wall}.` |
+| E017 | Error | Door opens into a room not at its wall | `Door on {face} cannot open into "{room}"; use {options}.` |
+| E018 | Error | Plan does not fit the sheet | `Plan does not fit on {paper} at 1:{scale}.{ Use 1:{fit}.}` |
+| W030 | Warning | Review: load-bearing wall demolished | `Wall {id} is load-bearing and is demolished; this needs a structural engineer's drawings and calculation.` |
+| W031 | Warning | Review: fire-cell boundary demolished | `Wall {id} is a fire-cell boundary ({fire}) and is demolished; a fire protection description is required.` |
+| W032 | Warning | Review: new opening in a load-bearing wall | `{kind} {id} is new and sits in load-bearing wall {wall}; this needs a structural engineer's statement.` |
+| W033 | Warning | Review: new opening in a fire-cell boundary | `{kind} {id} is new and sits in fire-cell boundary {wall} ({fire}); a fire protection description is required.` |
+| I030 | Info | Review: new opening without height | `{kind} {id} is new and has no height; add "height <mm>" if the engineer needs it.` |
+| I031 | Info | Review: title block entry missing | `Title block has no {key}; add: title {key} "…"` |
+| E019 | Error | Fixture or stub outside its room | `{what} on {face} at {at} runs outside {room}.` |
+| W034 | Warning | Review: kitchen demolished, no capped connection | `Kitchen fixtures are demolished but no capped connection is marked; add a "plug" fixture where the pipes are capped.` |
+| W040 | Warning | Source axes disagree after calibration | `Source "{name}": the x and y scales differ by {pct} %; check the printed dimensions.` |
+| I032 | Info | Review: ventilation changes | `Ventilation changes: the flows must be re-balanced against the latest OVK and a new OVK made.` |
+| I033 | Info | Source not calibrated | `Source "{name}" is not calibrated; give at least one printed dimension to source_calibrate.` |
 
 Codes E011–E023 (E013 added in D19) and I020 were added by the spec run of 2026-11-09 (§15 D10, D13, D17, D8).
+Codes E024–E026, W040 and I033 were added by the row-7 spec run (§15 D50–D56); E026 is the duplicate-source error of §7.4, and E024/E025 are the source errors of the tools.
+
+Codes E014–E018, W030–W033 and I030 were added by the spec run of 2026-11-10 (§15 D26, D31, D35). W030–W033 and I030 come from `review`, never from `resolve`. W005 and W020 are emitted from week three on (cards W3-06, W3-07).
 
 ---
 
@@ -713,11 +745,30 @@ Done when: tests …
 { "plan_id": "string",
   "view": "plan|labels|conflicts|missing|diff|overlay",
   "region": { "id": "W:…" } | { "rect_mm": [x,y,w,h] },
-  "max_tokens": 1600 }
-// → image + { mm_per_px, origin_mm, size_px }
+  "max_tokens": 1600,
+  "source": "name (overlay only; default the first source)",
+  "grid": false }
+// → image + { mm_per_px, origin_mm, size_px, source?, calibrated? }
 
 // find
-{ "plan_id": "string", "query": "room or wall name, partial ok" }
+{ "plan_id": "string", "query": "room or wall name, partial ok", "limit": 20 }
+// → { plan_id, query, count, matches[]: { id, kind, rect, label } }
+
+// upload
+{ "plan_id": "string" }
+// → { url, expires_in_s, note }   (a localhost link; the user drops a file; it becomes a source)
+
+// source_calibrate
+{ "plan_id": "string", "source": "name",
+  "measurements": [ { "a": {"x":0,"y":0}, "b": {"x":0,"y":0}, "mm": 6080, "label": "6,08 m" } ],
+  "anchor": { "x": 0, "y": 0 }, "dry_run": false }
+// → { factor_x, factor_y, mm_per_px_x, mm_per_px_y, rms_mm, residuals[], axes_disagree, patch, saved, rev, diagnostics[] }
+
+// source_view
+{ "plan_id": "string", "source": "name (default the first)",
+  "region": { "id": "Rum" } | { "rect_mm": [x,y,w,h] },
+  "max_tokens": 1600, "overlay": true, "grid": true }
+// → image + { source, calibrated, mm_per_px, origin_mm, size_px, source_rect_mm, tokens }
 
 // import
 { "plan_id": "string", "kind": "photo|sketch|v1|dxf|skp", "file_id": "string", "note": "free text" }
@@ -725,10 +776,13 @@ Done when: tests …
 
 // history
 { "plan_id": "string", "limit": 20 }
+// → { plan_id, rev, entries[]: { rev, at, author, patch, changes, summary } }   (newest first)
 ```
 
+Sources live beside the plan: `<root>/sources/<plan_id>/<name>.png` for the server, `<plan dir>/sources/<plan stem>/<name>.png` for the CLI; uploads land in `<root>/uploads/`. The `source` statement, the asset rules and the tools are §15 D50–D56. `render` views `overlay` and `source_view` are screen renders, not sheets.
+
 - **P4-01 (B):** `rmcp` server skeleton plus the tools above over `core`.
-- **P4-02 (B):** storage as a command log plus snapshots in SQLite.
+- **P4-02 (B):** storage as a command log plus snapshots. Row 7 uses JSONL plus `NNNN.plan` snapshots (§15 D55); SQLite replaces it behind the same `Store` methods when there are concurrent writers (row 11).
 - **P4-03 (A):** `import` for photos.
   - Structured-output schema for laser readings.
   - Labelled render alongside, so the model proposes which faces each reading spans.
@@ -815,3 +869,52 @@ Decisions taken by the spec runs where the sections above left a choice open. Ea
 - **D22. Refs on diagnostics.** `Diagnostic.refs` holds semantic ids, one meaning per code: I010 has the wall id, `["W:Garderob.east|Vardagsrum.west"]`; W003 has the two faces as `<Room>.<side>` strings, `["Sovrum.south","Vardagsrum.south"]`; E001/E002/E004/E007/E013 have the room, face or opening id they are about; E003 has the faces at the two ends of the cycle. `diagnose.rs` stores the wall id for I010 (not the two room names). `solve --json` writes `refs` only when the list is non-empty.
 - **D23. W004 shows the coordinates actually drawn.** `adjusted` and W004 report `coords_out[to] − coords_out[from]` (the rounded coordinates the solver writes), and an edge is listed only when that differs from its stated value. An edge whose drawn value equals the stated one is not listed even if the unrounded solution moved it. The expected text of the W1-14 test was updated accordingly (card W2-R1-f2 authorises that single edit).
 
+**Spec run 2026-11-10 (week-three cards, after an audit of the kernel by the spec owner):**
+
+- **D24. Unknown size, not tied.** A room whose two faces on an axis are in different components (a `?` size that nothing else fixes) is left out of the build: no rectangle, walls, area or openings. Its W001 stays. Before, it was drawn with zero size and a 0 mm wall. A sized room that is merely not tied is still drawn where it was. Card W3-03.
+- **D25. W020 threshold.** A reference measure is reported only when the drawn distance differs from it by more than the measure's own tolerance. Card W3-06.
+- **D26. Validation before solving.** `validate(plan)` runs first in `resolve`: sizes, opening widths, wall thicknesses and the default walls must be at least 1 mm (E014), and a placement relation may not relate a room to itself (E015). Overlapping openings in one wall are E016 and a door that opens into a room not at its wall is E017, both from `place_openings`. Cards W3-02, W3-08, W3-09.
+- **D27. E005 skips loose rooms.** Overlap is checked for pairs of placed rooms only; a room in a loose component (it has a W001) is not compared, so one missing relation is not reported twice. Card W3-04.
+- **D28. Corners are closed in the drawing, not in the model.** Outer walls on north and south faces are drawn longer by the thickness of the adjoining east or west outer wall of the same room. Wall ids, nodes, extents and the expected JSON do not change. This replaces the "extend both rectangles" wording of §9.4 for now; mitred joints wait for the editor. Card W3-12.
+- **D29. Door swing.** A hinged door is drawn as its leaf (perpendicular to the wall, from the hinge, into the room named by `opens`, default the door's own room) and a quarter circle to the other jamb, on the wall face of that room. Card W3-13.
+- **D30. Very large plans.** A span of 1 000 km fails to rasterise (grid density). Not fixed: no real plan is that large, and E012 is a clear answer.
+- **D31. Sheets.** Landscape A4 or A3, 10 mm margin, a 15 mm title strip, scales 1:20, 25, 50, 100, 200, 500, 1000 (the first that fits, or the one asked for; E018 when it does not fit). Room names, areas and clear sizes are printed; element ids are not. Texts are English for now; Swedish sheet texts and a full title block (property, applicant, drawing number) come with the permit work. Card W3-14.
+- **D32. PDF.** `svg2pdf` 0.13 on the sheet SVG, with DejaVu Sans embedded and `PageOptions { dpi: 96.0 }` so the page is the true paper size. Compiled and run by the spec owner (A3 page, 1190.55 × 841.89 pt, selectable text). Cards W3-15, W3-16.
+- **D33. MCP `export`.** A fifth tool writes `<root>/exports/<plan_id>.pdf` and returns the path, paper and scale. The file is not returned inline: MCP clients handle a path better than a base64 PDF. DXF export is dropped from the plan (maintainer, 2026-11-10). Card W3-17.
+- **D34. Wall attributes.** `wall FACE [thickness N [src]] [bearing] [fire "EI60"] [demolish|new]`. The attributes apply to every wall segment made from that face, and to an interior wall when either of its two faces has them. Thickness still only affects outer walls (interior thickness is the relation's gap). This is the part of §13 "phases on walls" that the permit review needs; free-standing walls stay deferred. Cards W3-18…20.
+- **D35. Permit review.** `review(resolved)` ports the v1 checks the v2 model can express (load-bearing, fire, opening height) as W030–W033 and I030. It is separate from `resolve`: `plan review`, and a `review` list in MCP `check`. The other v1 checks (title block, property name, kitchen plugs, ventilation, room names) need a title block and fixtures, which v2 does not have yet. Cards W3-21…23.
+- **D36. Order of work (maintainer, 2026-11-10).** No DXF. The desktop editor, accounts and sharing, and the mobile viewer (which needs share links) come last. The order is kept in `v2/ROADMAP.md`, which replaces `docs/v2-week1-pro.md` §8 for the spec runs.
+
+**Spec run 2026-11-10, second (week-four cards: diagnostic views and the permit sheet):**
+
+- **D37. Draft geometry.** `resolve_draft` builds the model even when measurements conflict: an axis with E003 keeps its first-pass (spanning-tree) coordinates, and openings that cannot be placed are left out. Only E014, E015, E010 and E005 leave nothing to draw. `resolve` is unchanged and still returns nothing on any error. Card W4-02.
+- **D38. Marks and the conflict view.** A mark is a line between two parallel faces with a label, drawn over the plain plan view and labelled through the same placer as room names. E003 `data` gains `from`, `to`, `stated`, `implied` (the stated edge's faces and values). A mark between faces sits at the middle of the rooms' overlap on the other axis, or of the gap between them. Cards W4-01, W4-03, W4-04.
+- **D39. Missing view.** For the picture only, each room that is not tied is placed where its first W001 suggests (the suggested relation with the default wall, and an alignment on the other axis), so it is drawn beside its neighbour and not on top of the first room. The picture marks that measurement in amber, and up to three I020 suggestions in blue. Rooms with an unknown size that nothing fixes are not drawn (D24). Cards W4-05, W4-06.
+- **D40. Diff view.** Walls and openings are compared by id between two resolved plans: added green, removed red dashed, changed amber. The MCP `render` view `diff` compares the stored plan with a dry-run `patch`. Ids can change when a room is renamed or a wall splits; such a wall shows as one removed and one added. `overlay` (plan over a source image) still answers E022; it comes with image import. Cards W4-07, W4-08.
+- **D41. Title block.** `title KEY "text"` statements with seven fixed keys, stored as a map on the plan and printed after the defaults. The sheet prints them in a two-row strip, in English or Swedish. The review adds I031 for a missing property, drawing, applicant or date (v1's `title-block` check). Cards W4-09, W4-10, W4-13.
+- **D42. Dimension chains.** Two chains on the sheet, along the north and the west side: ticks at the faces of the rooms that have an outer wall on that side, segment lengths printed when they are at least 6 mm long on paper, and a total. They reserve 14 mm of paper on those two sides. Interior dimension lines and chains on all four sides are left for later. Card W4-11.
+- **D43. Before and after sheets.** `phase_view` filters a resolved plan: "before" drops what is new and draws what will be demolished as ordinary walls; "after" drops what is demolished and draws what is new as ordinary walls. The geometry is shared (rooms do not change size between the two), as in v1. Card W4-12.
+- **D37 and D38 amended (same day).** The first-pass tree reaches a face by the shortest path, which is often the stated edge itself (fixture B: Sovrum south is drawn at 4490, through the measure). The draft keeps those coordinates; the tree rule is not changed. A conflict mark therefore takes its numbers from the E003 data: `stated {stated}, chain gives {implied} ({r} mm)`. A mark between two faces at the same coordinate is drawn 1 mm long. Cards W4-02, W4-04.
+- **D38 amended again.** A mark shorter than 40 px gets its label 20 px to the side (east of a vertical mark, north of a horizontal one), so the label does not hide it. Card W4-R1-f2.
+- **D43 amended.** `phase_view` never removes rooms: the floor is the same before and after, and the outer corners need the room rectangles. Only walls and openings are filtered. A demolished room's name still prints on the after sheet; merging rooms across a removed partition comes with non-rectangular rooms (roadmap row 6b). Card W4-R2-f2.
+
+**Spec run 2026-11-10, third (week-five cards: roadmap row 6b, model extensions without angled walls):**
+
+- **D44. Fixtures.** `fixture KIND FACE at N [width N] [depth N] [offset N] [label "…"] [phase]`, with v1's twelve kinds. A fixture is a rectangle standing against a room face, addressed like an opening: `at` along the face, `depth` out from it, `offset` away from it. Common kinds have default sizes. A balcony is the one kind that lies outside: it starts at the outer side of the wall on that face. A fixture outside its room is E019. Ids are `F:<Room>.<side>:<n>`. Cards W5-02…04.
+- **D45. Wall stubs.** `stub FACE at N length N [thickness N] [offset N] [bearing] [phase]`: a piece of wall that runs straight into the room from a face, or stands free with an offset. This covers wall ends and nibs, and partitions that do not close a room. Stubs are kept apart from the generated walls (`Resolved.stubs`, ids `S:…`), so wall generation, ids and expected JSON do not change. Rooms' areas ignore them. Card W5-05.
+- **D46. Rooms in parts.** `room B … part A`: B's rectangle belongs to room A. It prints no name, and A prints the summed area. One level only. The solver and wall generation treat the parts as today (two rectangles, usually joined by `open`). This is how L-shaped rooms are written; rooms with free outlines wait for angled walls. Card W5-06.
+- **D47. Apartments.** A wall between rooms of different apartments (or a flat and a room with none, such as the stairwell) is `separating`; the review treats it as a fire-cell boundary. Each apartment's area is the sum of its rooms. Bearing and separating walls are drawn darker. Card W5-07.
+- **D48. Review with fixtures.** v1's `plug` and `ventilation` checks: W034 when kitchen fixtures are demolished and no plug is marked, I032 when an exhaust is new or demolished. Card W5-08.
+- **D49. Sheet style.** Sheets are black and white (grey walls): rooms untinted, openings black, windows a framed double line. The clear-size text needs 25 × 14 mm of paper, and a room's texts move off door swings to the first free of five positions. Screen renders keep their colours. Cards W5-09, W5-10.
+- **Angled walls** are left for later (maintainer, 2026-11-10); the Gnejsen 48 A/B stairwell has two.
+
+**Spec run 2026-11-10, fourth (row 7: source images, overlay, find, history, command log):**
+
+- **D50. Sources in the DSL and on disk.** `source NAME "FILE" [mm_per_px DEC] [at X,Y] [role archive|before|after|other] [year N] [view plan|elevation]`. NAME is `[A-Za-zÅÄÖåäö0-9_-]{1,64}` and unique (E026); FILE is the original upload's basename, for provenance only. `mm_per_px` is thousandths of a millimetre per pixel (6.35 → 6350), `None` when not calibrated; `at` is the top-left corner in plan mm (negative allowed); role defaults to `other`, view to `plan`. The stored asset is `<root>/sources/<plan_id>/<NAME>.png` (server) or `<plan dir>/sources/<plan stem>/<NAME>.png` (CLI), an 8-bit greyscale PNG converted on arrival; originals are not kept; limit 12 000 px on the long edge. A source name or file that could escape the folder is E006. Cards W6-01…03, W6-11.
+- **D51. Upload link.** The tool `upload {plan_id}` starts, once per server process, a tiny HTTP listener on `127.0.0.1:0` (random port) and returns `http://127.0.0.1:<port>/u/<token>` (valid 3600 s, one upload). The page is plain HTML with a drag-and-drop script that PUTs the raw bytes with `?name=&scale=&dpi=&role=&year=`; no multipart. Limit 30 MB checked before reading. On receipt the file is decoded and added like `source_add`, and the page names the source (or shows the E024 message); the model sees it on the next `get`/`check`. PNG, JPEG and TIFF; PDF is not supported yet (E024 asks for a PNG/TIFF export). Cards W6-03, W6-04.
+- **D52. Calibration.** `source_calibrate {plan_id, source, measurements, anchor?, dry_run?}`. Points are plan mm under the source's current scale, read off `source_view`. A measurement is horizontal when `|dx| ≥ |dy|`, vertical otherwise; each set gets `k = Σ(d·mm)/Σ(d²)`; an empty set copies the other (isotropic). The source is rescaled around `anchor` (default 0,0): `mm_per_px *= k` and `at = anchor + (at − anchor)·k` per axis. Residuals and RMS are reported in mm; W040 when both sets exist and the factors differ by more than 0.5 %. Card W6-05.
+- **D53. Source view and overlay.** One renderer (`plan_render::underlay`) draws the stored PNG under the plan: image opacity 0.55, the plan's ordinary colours, a 1 m grid with labels on the top and left edges every 1000 mm, sized by the viewport rules of D9 (default budget 1600). `source_view` crops by an element id (300 mm pad) or a `rect_mm`, default the whole source, and returns `{source, calibrated, mm_per_px, origin_mm, size_px, source_rect_mm, tokens}`. `render` view `overlay` uses the plan's content rectangle (or `region`) with the same underlay; `source` selects the source, the first one by default. An uncalibrated source uses a nominal 1 mm/px and returns I033. Cards W6-06, W6-07.
+- **D54. Find.** `find {plan_id, query, limit?}` searches `element_ids` case-insensitively: exact (rank 0), prefix (1), contains (2); ties by kind (room, wall, opening, fixture, stub), then id. Each match is `{id, kind, rect, label}`. A wall's label is its two `between` faces; an opening's or fixture's is its kind; a stub's is none. No match is an empty list, not an error. Card W6-08.
+- **D55. History.** The command log is JSONL plus snapshots, not SQLite yet: `<root>/.history/<plan_id>/log.jsonl` holds `{rev, at, author, patch, changes, summary}` and `NNNN.plan` holds the canonical text after each save. Every successful, non-dry-run save appends (apply, source add, upload, calibration); a failed apply writes nothing; plans made before history start at rev 0. `apply` returns `rev`, `get`/`check` JSON carry `rev`, and `history {plan_id, limit=20}` returns the newest entries first. SQLite stays for row 11 (concurrent writers, accounts) behind the same `Store` methods. Cards W6-09, W6-10.
+- **D56. Tool names and dependencies.** New tools: `upload`, `source_calibrate`, `source_view`, `find`, `history`; `render` gains `source` and `grid` and implements `overlay`; `get` gains the `sources` field group. New crate `plan-scan` (lib `plan_scan`) holds image decoding, scale conversion, calibration math, asset helpers and history files; `plan-server` adds `tiny_http` and `getrandom`; `plan-render` adds `base64`; `plan-scan` adds `image`, `serde`, `serde_json` and `chrono`; `plan-cli` depends on `plan-scan`. Cards W6-02…11.
+- **D57. Row-7 acceptance.** A synthetic 600×400 PNG at 6.35 mm/px with two printed dimensions, one on each axis, and a 1 m square: upload (or `source add`) → calibrate (residual ≤ 2 mm, no W040) → `source_view` (the square measures 1000 mm) → overlay in MCP and CLI → `find` returns the room and wall → `history` lists the three writes in order → `./ci.sh` green. Card W6-R2. Open: PDF sources (needs pdfium or an external converter), G4/CCITT TIFFs when the decoder refuses them, wall/opening detection from scans (not row 7), and `import` for photos (P4-03).

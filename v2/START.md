@@ -62,3 +62,5 @@ Scheduled tasks start build runs on weekdays at 07:41 and 12:47 (Europe/Stockhol
 - Lengths are whole millimetres; x points east, y points south.
 - One card at a time; the card says which files it may touch.
 - If a spec question blocks a card, mark the card `blocked` with a short reason instead of guessing. The spec run settles it.
+
+**Order of work and what is left:** `v2/ROADMAP.md`.
