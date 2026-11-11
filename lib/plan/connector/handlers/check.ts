@@ -6,6 +6,7 @@ import { badArgument, notFound } from '../findings'
 import { CHECKS } from '../registries'
 import type { CheckEntry } from '../checks'
 import { nextCalls } from '../next'
+import { modernWords } from '../wording'
 import { toToolResult, type ToolResult } from '../result'
 import type { Finding, Next } from '../types'
 import type { Args } from './index'
@@ -35,8 +36,12 @@ export async function check(args: Args): Promise<ToolResult> {
   const texts: string[] = []
   for (const e of entries) {
     const out = await e.run({ id, plan: rev.plan, revision: rev.meta.n, against })
-    findings.push(...out.findings)
-    if (out.text) texts.push(out.text)
+    findings.push(...out.findings.map((f) => ({
+      ...f,
+      message: modernWords(f.message),
+      ...(typeof f.data?.fix_text === 'string' ? { data: { ...f.data, fix_text: modernWords(f.data.fix_text) } } : {}),
+    })))
+    if (out.text) texts.push(modernWords(out.text))
   }
   // Where the plan stands: the audit count decides whether to compare with the drawing again.
   const p = rev.plan

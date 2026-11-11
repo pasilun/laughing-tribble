@@ -57,3 +57,11 @@ test('check: finding ids are unique within an answer', async ({ request }) => {
   for (const f of au.findings!) expect(f.code.startsWith('audit-')).toBe(true)
   expect(au.findings!.some((f) => f.code === 'audit-plan')).toBe(false)
 })
+
+test('check: messages do not name the old tools', async ({ request }) => {
+  const a = await makePlan(request, 'Check words')
+  for (const scope of [['permit'], ['review'], ['audit'], ['finish']]) {
+    const r = (await connector(request, 'check', { id: a.id, scope })).structuredContent!
+    for (const f of r.findings ?? []) expect(f.message, `${scope}: ${f.id}`).not.toMatch(/plan_[a-z]/)
+  }
+})
