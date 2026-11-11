@@ -32,9 +32,12 @@ Related documents:
             Registries: operations · actions · views · checks · formats
               │               │                │                │
             Plan domain     Scan code        Sheets and       Measurement kernel
-            model on wall   reads a          export           chains, conflicts,
-            faces, ops,     scanned          PDF, PNG,        what to measure next
-            checks, rooms   drawing          SVG, DXF         (Rust → WebAssembly)
+            walls stored    reads a          export           chains, conflicts,
+            on a face;      scanned          PDF, PNG,        what to measure next
+            wall bodies     drawing          SVG, DXF         (Rust → WebAssembly)
+            computed from
+            them; ops,
+            checks, rooms
               │
             Storage and accounts
 ```
@@ -43,6 +46,7 @@ Related documents:
 - **The connector contract is the one fixed part.** Its tool list does not change when anything in the engine does.
 - **The four parts in the bottom row do not call each other.** The use cases join them, so one can be replaced without the others noticing.
 - **The editor and Claude use the same use cases**, as today.
+- **A wall's body comes from one function** in the plan domain. The scan code, the sheets, the checks and the editor all ask it for a wall's faces, and none of them computes half a thickness itself. During the move (section 3) a temporary centre-line view stands in front of the code that has not been moved yet; it is not part of the end state.
 
 ## 3. Walls on faces
 
@@ -50,14 +54,21 @@ Related documents:
 
 **The change.** A wall gets an optional reference side. With it, the stored line is one of the wall's faces and the body lies on the other side. Without it, the stored line is the centre line, as today, so every existing plan stays valid.
 
-**How the rest of v1 keeps working.** The plan domain offers a centre-line view of a plan: each wall moved by half its thickness, corners and T-joints run to where the centre lines meet, opening offsets adjusted. The scan code, the sheet, the checks and the room areas read that view. Only the operations, and later the editor's handles, work on the stored faces.
+**The end state: one function for a wall's body.** The plan domain gets a single function that returns a wall's real body (its two faces and its ends, with corners and T-joints resolved). Everything that draws, measures or checks a wall asks it. The centre line stops being stored and is only a value that can be computed.
+
+**The move, in three steps.** There are 32 places in 12 files that assume a body centred on the stored line (the sheet, the scan's opening and door readers, the checks, the export and two in the editor).
+1. **Add the reference side and a temporary centre-line view.** The view moves each wall by half its thickness and runs corners and T-joints to where the centre lines meet, and the old code reads it. This is the spike. It keeps every existing plan working and every existing test passing, and it can ship on its own.
+2. **Move the 32 places to the body function, a few at a time,** starting with the sheet and the scan readers, then the checks, then the editor. Each move is a small change with the existing tests as the check. The scan's opening reader, which measures ink across a wall, needs the most care.
+3. **Delete the view** when nothing reads it.
+
+**Why not keep the view for good.** Two representations of one wall can drift apart (the spike's half-millimetre rounding was exactly that). A new check or reader would read the easy one, the centre line, and throw the faces away again. And a reader that wants "the inner face" would have to work it back out from the centre line and the thickness.
 
 **Spike result** (`spikes/face-walls/`, lgh 154 with every wall stored on a room face, v1's own code unchanged):
 - v1 validated the view with no errors and no findings, drew a normal sheet, and computed the same room areas as before.
 - Making the south wall 100 mm thinner kept its inner face and the room's area. The same edit on the centre-line plan moved both faces 50 mm and changed the room from 3.887 to 3.980 m².
 - A face-referenced wall met a centre-line wall, and a wall at 45°, at one point.
 
-**Not yet tested:** the editor with face-referenced walls; the scan readers writing back to stored walls; shallow angles and three walls at one point. A wall with an odd thickness has its centre on a half millimetre, which the view must carry or avoid.
+**Not yet tested:** the editor with face-referenced walls; the scan readers writing back to stored walls; shallow angles and three walls at one point; whether every one of the 32 places moves cleanly to the body function (the opening reader that measures ink across a wall is the doubtful one). A wall with an odd thickness has its centre on a half millimetre; the body function should compute from the face and never round it.
 
 ## 4. Remaining work
 
@@ -68,7 +79,7 @@ Sizes are estimates. Almost all of it is TypeScript in v1.
 | 0 | Housekeeping | The dropped v2 cards marked as dropped; the plan documents on one branch | Under a day |
 | 1 | Baseline eval | `npm run eval:agent` with a real model on today's connector, so later changes can be compared | A few dollars of API use |
 | 2 | The connector contract | The ten tools, one answer shape, registries, a generated guide, the frozen-list test, today's 37 tools mapped across | 25–35 cards |
-| 3 | Walls on faces, and better words | The reference side and the centre-line view in the domain; operations that speak in faces; compass words for hinges and swings; openings anchored to a face; things named by position as well as by id; checks for stale dimensions and for text over walls | 15–20 cards |
+| 3 | Walls on faces, and better words | The reference side and the temporary centre-line view; the move of the 32 places to one body function, then the view deleted; operations that speak in faces; compass words for hinges and swings; openings anchored to a face; things named by position as well as by id; checks for stale dimensions and for text over walls | 20–28 cards |
 | 4 | Measurements as input | State a clear distance between two named faces; the plan's value reported against each; apply by moving a named face | 8–12 cards |
 | 5 | The measurement kernel | Measurements checked against each other in chains; conflicts with both chains; what to measure next. Later: a new apartment drawn from measurements alone | 15–25 cards, after a spike |
 | 6 | View link for the phone | A read-only link without an account, with revoke and expiry | 3–5 cards |
