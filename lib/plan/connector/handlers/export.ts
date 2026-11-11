@@ -1,5 +1,6 @@
 import { hasChanges } from '../../domain/sheet'
 import { host } from '../../mcp/format'
+import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
 import { answer } from '../answer'
 import { badArgument, notFound } from '../findings'
@@ -14,7 +15,9 @@ const SHEETS = new Registry<Entry>('sheets', 'blad', [{ name: 'both', summary: '
 
 export async function exportDoc(args: Args): Promise<ToolResult> {
   const id = args.id
-  if (typeof id !== 'string' || !id) return fail([badArgument('id', 'krävs')])
+  if (id === undefined || id === '') return fail([badArgument('id', 'krävs')])
+  if (typeof id !== 'string') return fail([badArgument('id', 'ska vara en sträng')])
+  if (!PLANS.id.test(id)) return fail([badArgument('id', 'ogiltigt id')])
   if (typeof args.format !== 'string' || !args.format) return fail([badArgument('format', 'krävs')])
   if (args.options !== undefined && (typeof args.options !== 'object' || args.options === null || Array.isArray(args.options))) return fail([badArgument('options', 'ska vara ett objekt')])
   const f = EXPORTS.resolve(args.format)

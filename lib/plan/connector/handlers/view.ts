@@ -4,6 +4,7 @@ import type { Plan, View } from '../../domain/types'
 import { preview } from '../../mcp/format'
 import { resolveSource } from '../../scan/raster'
 import { scanView } from '../../scan/view'
+import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
 import { answer } from '../answer'
 import { badArgument, notFound } from '../findings'
@@ -38,7 +39,9 @@ function elementRect(plan: Plan, id: string): Rect | null {
 
 export async function view(args: Args): Promise<ToolResult> {
   const id = args.id
-  if (typeof id !== 'string' || !id) return fail([badArgument('id', 'krävs')])
+  if (id === undefined || id === '') return fail([badArgument('id', 'krävs')])
+  if (typeof id !== 'string') return fail([badArgument('id', 'ska vara en sträng')])
+  if (!PLANS.id.test(id)) return fail([badArgument('id', 'ogiltigt id')])
   if (args.view !== undefined && typeof args.view !== 'string') return fail([badArgument('view', 'ska vara en sträng')])
   if (args.region !== undefined && (typeof args.region !== 'object' || args.region === null)) return fail([badArgument('region', 'ska vara ett objekt')])
   if (args.options !== undefined && (typeof args.options !== 'object' || args.options === null || Array.isArray(args.options))) return fail([badArgument('options', 'ska vara ett objekt')])

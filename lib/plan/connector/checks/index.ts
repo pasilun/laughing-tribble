@@ -1,4 +1,5 @@
 import { comparePlans } from '../../assist/compare'
+import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
 import { auditPlan } from '../../assist/audit'
 import { hasChanges } from '../../domain/sheet'
@@ -39,7 +40,9 @@ export const finish: CheckEntry = { name: 'finish', summary: 'The last mechanica
 export const compare: CheckEntry = { name: 'compare', summary: 'The plan against a reference plan of the same floor (against: {id})',
   run: async (c) => {
     const refId = c.against.id
-    if (typeof refId !== 'string' || !refId) return { findings: [badArgument('against', 'id på referensplanen krävs')] }
+    if (refId === undefined || refId === '') return { findings: [badArgument('against', 'id på referensplanen krävs')] }
+    if (typeof refId !== 'string') return { findings: [badArgument('against', 'ska vara en sträng')] }
+    if (!PLANS.id.test(refId)) return { findings: [badArgument('against', 'ogiltigt id')] }
     const ref = await loadPlan(refId)
     if (!ref) return { findings: [notFound(refId)] }
     const cmp = comparePlans(c.plan, ref.plan, { matchMm: num(c.against.match_mm) })

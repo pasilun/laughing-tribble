@@ -1,4 +1,5 @@
 import { auditPlan, sourceIdOf } from '../../assist/audit'
+import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
 import { answer } from '../answer'
 import { badArgument, notFound } from '../findings'
@@ -13,7 +14,9 @@ const fail = (findings: Finding[]) => toToolResult(answer({ ok: false, findings 
 
 export async function check(args: Args): Promise<ToolResult> {
   const id = args.id
-  if (typeof id !== 'string' || !id) return fail([badArgument('id', 'krävs')])
+  if (id === undefined || id === '') return fail([badArgument('id', 'krävs')])
+  if (typeof id !== 'string') return fail([badArgument('id', 'ska vara en sträng')])
+  if (!PLANS.id.test(id)) return fail([badArgument('id', 'ogiltigt id')])
   if (args.scope !== undefined && (!Array.isArray(args.scope) || args.scope.some((s) => typeof s !== 'string'))) return fail([badArgument('scope', 'ska vara en lista av strängar')])
   if (args.against !== undefined && (typeof args.against !== 'object' || args.against === null || Array.isArray(args.against))) return fail([badArgument('against', 'ska vara ett objekt')])
   const scopes = (args.scope as string[] | undefined)?.length ? (args.scope as string[]) : ['permit']
