@@ -11,7 +11,7 @@ test('list kinds and topics', () => {
 })
 
 test('families are listed by their English keys', () => {
-  expect(Object.keys(FAMILIES)).toEqual(['operations', 'parts', 'list', 'views', 'checks', 'formats', 'scan', 'source', 'manage', 'topics'])
+  expect(Object.keys(FAMILIES)).toEqual(['operations', 'parts', 'list', 'views', 'checks', 'formats', 'exports', 'scan', 'source', 'manage', 'topics'])
 })
 
 test('every family names itself by its key', () => {

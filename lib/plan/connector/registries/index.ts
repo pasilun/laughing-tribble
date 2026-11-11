@@ -32,6 +32,13 @@ export const FORMATS = new Registry<Entry>('formats', 'format', [
   { name: 'text', summary: 'The listing as text' },
   { name: 'json', summary: 'The whole plan as data' },
 ])
+export const EXPORTS = new Registry<Entry>('exports', 'utdata', [
+  { name: 'link', summary: 'Links to the editor, the PDF and the DXF (default)' },
+  { name: 'pdf', summary: 'The sheets as a PDF; options.sheet is "both", "efter" or "fore"' },
+  { name: 'png', summary: 'The sheet as a PNG' },
+  { name: 'svg', summary: 'The sheet as an SVG' },
+  { name: 'dxf', summary: 'The drawing as DXF' },
+])
 export const SCAN_ACTIONS = new Registry<Entry>('scan', 'skanningsåtgärd', [])
 export const SOURCE_ACTIONS = new Registry<Entry>('source', 'källåtgärd', [])
 export const MANAGE_ACTIONS = new Registry<Entry & { needsId: boolean }>('manage', 'hanteringsåtgärd', [
@@ -48,5 +55,5 @@ export const MANAGE_ACTIONS = new Registry<Entry & { needsId: boolean }>('manage
 // Every family, by its English key. The guide's `vocabulary` topic is written from this.
 export const FAMILIES: Record<string, Registry<Entry>> = {
   operations: OPERATIONS as Registry<Entry>, parts: PARTS, list: LIST_KINDS, views: VIEWS, checks: CHECKS,
-  formats: FORMATS, scan: SCAN_ACTIONS, source: SOURCE_ACTIONS, manage: MANAGE_ACTIONS as Registry<Entry>, topics: TOPICS as Registry<Entry>,
+  formats: FORMATS, exports: EXPORTS, scan: SCAN_ACTIONS, source: SOURCE_ACTIONS, manage: MANAGE_ACTIONS as Registry<Entry>, topics: TOPICS as Registry<Entry>,
 }
