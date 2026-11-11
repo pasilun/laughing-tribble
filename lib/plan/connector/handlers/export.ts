@@ -2,16 +2,14 @@ import { hasChanges } from '../../domain/sheet'
 import { host } from '../../mcp/format'
 import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
-import { answer } from '../answer'
+import { answer, finding } from '../answer'
 import { badArgument, notFound } from '../findings'
-import { Registry, type Entry } from '../names'
-import { EXPORTS } from '../registries'
+import { EXPORTS, SHEETS } from '../registries'
 import { toToolResult, type ToolResult } from '../result'
 import type { Finding } from '../types'
 import type { Args } from './index'
 
 const fail = (findings: Finding[]) => toToolResult(answer({ ok: false, findings }), { summary: findings[0].message })
-const SHEETS = new Registry<Entry>('sheets', 'blad', [{ name: 'both', summary: 'Före and efter' }, { name: 'efter', summary: 'The sheet with changes' }, { name: 'fore', summary: 'The sheet as it is today' }])
 
 export async function exportDoc(args: Args): Promise<ToolResult> {
   const id = args.id
@@ -38,6 +36,7 @@ export async function exportDoc(args: Args): Promise<ToolResult> {
   const changes = hasChanges(rev.plan)
   const links: Record<string, string> = { editor: `${h}/plans/${id}` }
   const name = f.entry.name
+  if (!['link', 'pdf', 'png', 'svg', 'dxf'].includes(name)) return fail([finding({ code: 'not-implemented', level: 'error', message: `Utdata ${name} är inte klar än.` })])
   if (name === 'link') {
     links.pdf = url('pdf', sheet ?? (changes ? 'both' : 'efter'))
     links.dxf = url('dxf', sheet === 'both' ? 'efter' : (sheet ?? 'efter'))

@@ -39,6 +39,11 @@ export const EXPORTS = new Registry<Entry>('exports', 'utdata', [
   { name: 'svg', summary: 'The sheet as an SVG' },
   { name: 'dxf', summary: 'The drawing as DXF' },
 ])
+export const SHEETS = new Registry<Entry>('sheets', 'blad', [
+  { name: 'efter', summary: 'The sheet with changes (default)' },
+  { name: 'fore', summary: 'The sheet as it is today' },
+  { name: 'both', summary: 'Före and efter together (export only)' },
+])
 export const SCAN_ACTIONS = new Registry<Entry>('scan', 'skanningsåtgärd', [])
 export const SOURCE_ACTIONS = new Registry<Entry>('source', 'källåtgärd', [])
 export const MANAGE_ACTIONS = new Registry<Entry & { needsId: boolean }>('manage', 'hanteringsåtgärd', [
@@ -59,5 +64,5 @@ export const TEMPLATES = new Registry<Entry>('templates', 'mall', [
 // Every family, by its English key. The guide's `vocabulary` topic is written from this.
 export const FAMILIES: Record<string, Registry<Entry>> = {
   operations: OPERATIONS as Registry<Entry>, parts: PARTS, list: LIST_KINDS, views: VIEWS, checks: CHECKS,
-  formats: FORMATS, exports: EXPORTS, scan: SCAN_ACTIONS, source: SOURCE_ACTIONS, manage: MANAGE_ACTIONS as Registry<Entry>, topics: TOPICS as Registry<Entry>,
+  formats: FORMATS, exports: EXPORTS, sheets: SHEETS, scan: SCAN_ACTIONS, source: SOURCE_ACTIONS, manage: MANAGE_ACTIONS as Registry<Entry>, topics: TOPICS as Registry<Entry>,
 }

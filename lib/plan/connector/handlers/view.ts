@@ -8,15 +8,13 @@ import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
 import { answer } from '../answer'
 import { badArgument, notFound } from '../findings'
-import { Registry, type Entry } from '../names'
-import { VIEWS } from '../registries'
+import { SHEETS, VIEWS } from '../registries'
 import { toToolResult, type ImageBlock, type ToolResult } from '../result'
 import { finding } from '../answer'
 import type { Finding } from '../types'
 import type { Args } from './index'
 
 type Rect = { x: number; y: number; w: number; h: number }
-const SHEETS = new Registry<Entry>('sheets', 'blad', [{ name: 'efter', summary: 'The sheet with changes (default)' }, { name: 'fore', summary: 'The sheet as it is today' }])
 const fail = (findings: Finding[]) => toToolResult(answer({ ok: false, findings }), { summary: findings[0].message })
 
 // The rectangle of an element, in plan mm, padded 500 mm: a wall, an opening (its wall) or a room (its label point).
@@ -50,6 +48,7 @@ export async function view(args: Args): Promise<ToolResult> {
   const options = (args.options ?? {}) as Record<string, unknown>
   const sheet = SHEETS.resolve(typeof options.sheet === 'string' ? options.sheet : 'efter')
   if ('finding' in sheet) return fail([sheet.finding])
+  if (sheet.entry.name === 'both') return fail([badArgument('options.sheet', 'both gäller bara export')])
   const sheetView = sheet.entry.name as View
   const rev = await loadPlan(id)
   if (!rev) return fail([notFound(id)])
@@ -60,6 +59,7 @@ export async function view(args: Args): Promise<ToolResult> {
     if (args.region !== undefined) return fail([badArgument('region', 'gäller bara vyerna overlay och source')])
     return done(await preview(plan, sheetView, false), `Revision ${rev.meta.n}`)
   }
+  if (name !== 'overlay' && name !== 'source') return fail([finding({ code: 'not-implemented', level: 'error', message: `Vyn ${name} är inte klar än.` })])
   const sid = sourceIdOf(plan, typeof options.source === 'string' ? options.source : undefined)
   if (!sid) {
     const f = finding({ code: 'no-source', level: 'error', message: 'Planen har ingen källritning att visa.' })

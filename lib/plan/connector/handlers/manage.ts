@@ -5,7 +5,7 @@ import { deleteDoc, PLANS, restoreDoc, TRASH_DAYS } from '../../storage/docs'
 import { addShare, participants, removeShare } from '../../storage/shares'
 import { listPlansAndTrash } from '../../storage/store'
 import type { Plan } from '../../domain/types'
-import { answer } from '../answer'
+import { answer, finding } from '../answer'
 import { badArgument, invalidOperation, notFound } from '../findings'
 import type { Entry } from '../names'
 import { MANAGE_ACTIONS, TEMPLATES } from '../registries'
@@ -78,9 +78,11 @@ export async function manage(args: Args): Promise<ToolResult> {
       if (!(await restoreDoc(PLANS, id))) return fail([notFound(id)])
       return toToolResult(answer({ ok: true, id }), { summary: `Planen ${id} är tillbaka i listan.` })
     }
-    // trash
-    const trash = (await listPlansAndTrash({ shared: false })).trash
-    return toToolResult(answer({ ok: true, data: { items: trash.map((t) => ({ id: t.id, name: t.name, days_left: t.daysLeft, ...(t.sharedWith?.length ? { shared_with: t.sharedWith } : {}) })) } }), { summary: trash.length ? trash.map((t) => `${t.id}: ${t.name} – ${t.daysLeft} dagar kvar${t.sharedWith?.length ? `, delas med ${t.sharedWith.join(', ')}` : ''}`).join('\n') : 'Papperskorgen är tom.' })
+    if (name === 'trash') {
+      const trash = (await listPlansAndTrash({ shared: false })).trash
+      return toToolResult(answer({ ok: true, data: { items: trash.map((t) => ({ id: t.id, name: t.name, days_left: t.daysLeft, ...(t.sharedWith?.length ? { shared_with: t.sharedWith } : {}) })) } }), { summary: trash.length ? trash.map((t) => `${t.id}: ${t.name} – ${t.daysLeft} dagar kvar${t.sharedWith?.length ? `, delas med ${t.sharedWith.join(', ')}` : ''}`).join('\n') : 'Papperskorgen är tom.' })
+    }
+    return fail([finding({ code: 'not-implemented', level: 'error', message: `Åtgärden ${name} är inte klar än.` })])
   } catch (e) {
     return fail([invalidOperation((e as Error).message)])
   }
