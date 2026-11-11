@@ -9,9 +9,9 @@ import { changedList } from '@/lib/plan/connector/changes'
 // Pure adapter tests — no browser needed.
 
 test.describe('findings from the checks', () => {
-  test('a check finding without a ref is its code, with no refs', () => {
+  test('a check finding without a ref gets its code and a hash of its message, with no refs', () => {
     const f = fromCheck({ level: 'error', code: 'title-block', message: 'm' })
-    expect(f.id).toBe('title-block')
+    expect(f.id).toMatch(/^title-block:[0-9a-f]{6}$/)
     expect(f.refs).toBeUndefined()
   })
 

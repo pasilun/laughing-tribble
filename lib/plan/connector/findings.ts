@@ -2,15 +2,25 @@ import { finding } from './answer'
 import type { Finding as CheckFinding } from '../domain/checks'
 import type { Finding } from './types'
 
-// A finding of `checkPlan` as a contract finding: id = code, plus ':' + ref when it has one; refs = [ref] when it has one.
+// A finding of `checkPlan` as a contract finding: id = `${code}:${ref}` when it has a ref, otherwise `${code}:${h}` where h
+// is a hash of the message, so two causes with one code get two ids; refs = [ref] when it has one.
 export function fromCheck(f: CheckFinding): Finding {
   return finding({
-    id: f.ref ? `${f.code}:${f.ref}` : f.code,
+    id: f.ref ? `${f.code}:${f.ref}` : `${f.code}:${messageHash(f.message)}`,
     code: f.code,
     level: f.level,
     message: f.message,
     ...(f.ref ? { refs: [f.ref] } : {}),
   })
+}
+
+// FNV-1a 32-bit over the UTF-8 bytes of `text`, masked to 24 bits and written as 6 lowercase hex digits.
+function messageHash(text: string): string {
+  let hash = 0x811c9dc5
+  for (const byte of new TextEncoder().encode(text)) {
+    hash = Math.imul(hash ^ byte, 0x01000193) >>> 0
+  }
+  return (hash & 0xffffff).toString(16).padStart(6, '0')
 }
 
 // What an edit changed in the findings. The key of a finding is `${level}|${message}`; `fresh` are the findings of
