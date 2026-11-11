@@ -19,33 +19,35 @@ Where does a thing belong? If it changes when we learn something about drawing p
 
 ## 2. The ten tools
 
+The names are bare verbs with no prefix: the same tools serve floor plans, site plans and any later kind, and clients already qualify a tool with the connector's name. Each description opens with "Planstudio:" so a tool is recognisable where a client shows the bare name.
+
 The list is fixed. So are the names, the fields in the table, and the three hints (read-only, destructive, idempotent), because clients store them when the connector is added and use them for permission prompts. That is also why reading and writing are separate tools.
 
 | Tool | Reads or writes | Fixed fields | Open slot (the engine's vocabulary) |
 |---|---|---|---|
-| `plan_guide` | reads | `topic?` | topics |
-| `plan_list` | reads | `what?`, `plan_id?`, `query?`, `limit?`, `cursor?` | what can be listed |
-| `plan_get` | reads | `plan_id`, `parts?`, `since?`, `format?` | parts, formats |
-| `plan_check` | reads | `plan_id`, `scope?`, `against?` | check families |
-| `plan_view` | reads | `plan_id`, `view?`, `region?`, `max_tokens?`, `options?` | views, options |
-| `plan_scan` | reads | `plan_id`, `action`, `args?`, `max_tokens?` | scan actions |
-| `plan_edit` | writes | `plan_id`, `base_revision`, `ops`, `dry_run?`, `message?`, `image?` | operations |
-| `plan_source` | writes | `plan_id`, `base_revision?`, `action`, `args?`, `dry_run?` | source actions |
-| `plan_manage` | writes, can remove | `action`, `plan_id?`, `args?` | manage actions |
-| `plan_export` | writes a file or link | `plan_id`, `format`, `options?` | formats, options |
+| `guide` | reads | `topic?` | topics |
+| `list` | reads | `what?`, `plan_id?`, `query?`, `limit?`, `cursor?` | what can be listed |
+| `get` | reads | `plan_id`, `parts?`, `since?`, `format?` | parts, formats |
+| `check` | reads | `plan_id`, `scope?`, `against?` | check families |
+| `view` | reads | `plan_id`, `view?`, `region?`, `max_tokens?`, `options?` | views, options |
+| `scan` | reads | `plan_id`, `action`, `args?`, `max_tokens?` | scan actions |
+| `edit` | writes | `plan_id`, `base_revision`, `ops`, `dry_run?`, `message?`, `image?` | operations |
+| `source` | writes | `plan_id`, `base_revision?`, `action`, `args?`, `dry_run?` | source actions |
+| `manage` | writes, can remove | `action`, `plan_id?`, `args?` | manage actions |
+| `export` | writes a file or link | `plan_id`, `format`, `options?` | formats, options |
 
 What each is for:
 
-- **`plan_guide`**: how to work, and the engine's current vocabulary with examples. With no topic it returns the working order and the list of topics.
-- **`plan_list`**: the person's plans, and for one plan its revisions, shares and tags. Site plans are plans of another kind and are listed here too.
-- **`plan_get`**: a plan's content, whole or in parts, or only what changed since a revision.
-- **`plan_check`**: everything that is wrong or unfinished, and the next call to make. It gathers what `plan_check`, `plan_review`, `plan_audit`, `plan_next`, `plan_finish` and `plan_compare` do today.
-- **`plan_view`**: one picture: the plan, the plan over a source drawing, a source alone, a sheet, a diagnostic view.
-- **`plan_scan`**: reading a source drawing without changing the plan: find walls, read openings and doors, measure a profile, propose a trace. Proposals come back as operations for `plan_edit`.
-- **`plan_edit`**: every change to a plan's content, as a list of operations applied all-or-nothing against a known revision.
-- **`plan_source`**: getting a drawing in and placing it: an upload link, add, calibrate, straighten, register.
-- **`plan_manage`**: create, copy, rename, tag, share, trash and restore.
-- **`plan_export`**: the sheets as PDF, PNG, SVG or DXF, and a link to open the plan.
+- **`guide`**: how to work, and the engine's current vocabulary with examples. With no topic it returns the working order and the list of topics.
+- **`list`**: the person's plans, and for one plan its revisions, shares and tags. Site plans are plans of another kind and are listed here too.
+- **`get`**: a plan's content, whole or in parts, or only what changed since a revision.
+- **`check`**: everything that is wrong or unfinished, and the next call to make. It gathers what today's `plan_check`, `plan_review`, `plan_audit`, `plan_next`, `plan_finish` and `plan_compare` do.
+- **`view`**: one picture: the plan, the plan over a source drawing, a source alone, a sheet, a diagnostic view.
+- **`scan`**: reading a source drawing without changing the plan: find walls, read openings and doors, measure a profile, propose a trace. Proposals come back as operations for `edit`.
+- **`edit`**: every change to a plan's content, as a list of operations applied all-or-nothing against a known revision.
+- **`source`**: getting a drawing in and placing it: an upload link, add, calibrate, straighten, register.
+- **`manage`**: create, copy, rename, tag, share, trash and restore.
+- **`export`**: the sheets as PDF, PNG, SVG or DXF, and a link to open the plan.
 
 ## 3. Field shapes
 
@@ -70,7 +72,7 @@ Fixed fields are typed in the schema. Open slots are typed only as far as this t
 | `message` | string | The revision note |
 | `query`, `limit`, `cursor` | string, integer, string | Search and paging |
 
-A tool's **description** is part of the contract too. It says what the tool is for in two or three sentences, gives at most three examples that will never be withdrawn, and points to `plan_guide` for the rest. It never lists the vocabulary.
+A tool's **description** is part of the contract too. It says what the tool is for in two or three sentences, gives at most three examples that will never be withdrawn, and points to `guide` for the rest. It never lists the vocabulary.
 
 ## 4. Answers
 
@@ -119,16 +121,16 @@ One shape for everything the engine has to say: a refused call, a broken rule, a
 `next` is the engine telling Claude what to do, as calls ready to make:
 
 ```jsonc
-{ "tool": "plan_edit", "arguments": { "plan_id": "…", "base_revision": 31, "ops": [ … ] }, "why": "…" }
+{ "tool": "edit", "arguments": { "plan_id": "…", "base_revision": 31, "ops": [ … ] }, "why": "…" }
 ```
 
-A session can therefore use an operation it has never heard of. `plan_check` always returns `next`; the other tools return it when there is something to say.
+A session can therefore use an operation it has never heard of. `check` always returns `next`; the other tools return it when there is something to say.
 
 ## 7. What may change, and how
 
 | Change | Allowed? |
 |---|---|
-| A new operation, action, view, part, check, format, topic or finding code | Yes, at any time. It appears in `plan_guide` the same day |
+| A new operation, action, view, part, check, format, topic or finding code | Yes, at any time. It appears in `guide` the same day |
 | A new optional field inside an operation or `args` | Yes |
 | Renaming an operation or action | The old name stays as an alias for good |
 | A new optional fixed field on a tool | Only with a new contract version, and old calls must still work |
@@ -139,7 +141,7 @@ A session can therefore use an operation it has never heard of. `plan_check` alw
 ## 8. How the contract is kept
 
 1. **A frozen tool list.** One test compares the published tool names, schemas, descriptions and hints with a file in the repo. Any difference fails the build, so the list cannot change by accident.
-2. **The guide is generated.** Operations, actions, views, parts, checks and formats are held in registries in the engine. `plan_guide` is written from those registries, and a test fails if the engine accepts a name the guide does not list.
+2. **The guide is generated.** Operations, actions, views, parts, checks and formats are held in registries in the engine. `guide` is written from those registries, and a test fails if the engine accepts a name the guide does not list.
 3. **One function per tool.** The connector layer is an adapter from a tool call to one of ten engine functions with the same fields, each returning the answer of §4. It holds no rules, no defaults that depend on a plan, and no text about plans.
 4. **Two versions in every answer.** `contract` changes only by §7; `engine` changes with every release.
 5. **Golden conversations.** A few recorded sessions (a measured flat, a traced cellar) are replayed against each engine release; the calls must still be accepted.
@@ -148,20 +150,20 @@ A session can therefore use an operation it has never heard of. `plan_check` alw
 
 | Today | In the contract |
 |---|---|
-| `plan_guide` | `plan_guide` |
-| `plan_list`, `plan_revisions`, `site_list` | `plan_list` |
-| `plan_get`, `site_get`, `plan_openings_report` | `plan_get` (parts) |
-| `plan_check`, `plan_review`, `plan_audit`, `plan_next`, `plan_compare`, the checking half of `plan_finish` | `plan_check` (scope, against) |
-| `plan_view`, `plan_scan_view` | `plan_view` (views) |
-| `plan_scan_detect_walls`, `plan_scan_missing_walls`, `plan_scan_openings`, `plan_scan_doors`, `plan_scan_elevation`, `plan_scan_profile`, `plan_scan_diff`, the reading half of `plan_trace` | `plan_scan` (actions) |
-| `plan_edit`, `site_edit`, `plan_fix`, `plan_scan_snap_walls`, the fitting half of `plan_finish`, the writing half of `plan_trace` | `plan_edit` (operations; a finding is applied with an operation that names its id) |
-| `plan_upload_link`, `plan_source_add`, `plan_scan_calibrate`, `plan_scan_dimension`, `plan_scan_register` | `plan_source` (actions) |
-| `plan_create`, `site_create`, `plan_import`, `plan_tags`, the share tools, `doc_trash` | `plan_manage` (actions) |
-| The sheet and file links returned by several tools | `plan_export` |
+| `plan_guide` | `guide` |
+| `plan_list`, `plan_revisions`, `site_list` | `list` |
+| `plan_get`, `site_get`, `plan_openings_report` | `get` (parts) |
+| `plan_check`, `plan_review`, `plan_audit`, `plan_next`, `plan_compare`, the checking half of `plan_finish` | `check` (scope, against) |
+| `plan_view`, `plan_scan_view` | `view` (views) |
+| `plan_scan_detect_walls`, `plan_scan_missing_walls`, `plan_scan_openings`, `plan_scan_doors`, `plan_scan_elevation`, `plan_scan_profile`, `plan_scan_diff`, the reading half of `plan_trace` | `scan` (actions) |
+| `plan_edit`, `site_edit`, `plan_fix`, `plan_scan_snap_walls`, the fitting half of `plan_finish`, the writing half of `plan_trace` | `edit` (operations; a finding is applied with an operation that names its id) |
+| `plan_upload_link`, `plan_source_add`, `plan_scan_calibrate`, `plan_scan_dimension`, `plan_scan_register` | `source` (actions) |
+| `plan_create`, `site_create`, `plan_import`, `plan_tags`, the share tools, `doc_trash` | `manage` (actions) |
+| The sheet and file links returned by several tools | `export` |
 
 ## 10. Not part of the contract
 
-These are the engine's and are described by `plan_guide`, not here:
+These are the engine's and are described by `guide`, not here:
 
 - the operations and their fields, including the planned measurement operations (a clear distance between two named faces; moving a wall face while the other stays) and compass words for hinges and swings;
 - the names of views, parts, scan actions, checks and formats;
@@ -170,7 +172,7 @@ These are the engine's and are described by `plan_guide`, not here:
 
 ## 11. Open points
 
-- **Site plans** are folded in as a kind of plan. If their operations turn out to share nothing with floor plans, they still fit: the vocabulary is per kind, and `plan_guide` says which applies.
-- **Server instructions** (the text a client reads when the connector is added) are stored by clients like the tool list. They should be three lines that will not age: call `plan_guide` first, call `plan_check` after each step and follow `next`, never take a measurement from a picture.
+- **Site plans** are folded in as a kind of plan. If their operations turn out to share nothing with floor plans, they still fit: the vocabulary is per kind, and `guide` says which applies.
+- **Server instructions** (the text a client reads when the connector is added) are stored by clients like the tool list. They should be three lines that will not age: call `guide` first, call `check` after each step and follow `next`, never take a measurement from a picture.
 - **Runtime tool-list updates.** MCP has a notification for a changed tool list, but which clients act on it is not verified. The contract assumes none do.
 - **Untested:** how well models work with open operation lists and named actions compared with today's typed tools. `npm run eval:agent` can measure it once it runs with a real key.
