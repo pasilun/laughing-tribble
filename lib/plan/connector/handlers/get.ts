@@ -39,7 +39,7 @@ export async function get(args: Args): Promise<ToolResult> {
   // 2. Format: 'text' by default; any other name is an unknown-name finding.
   const format = (args.format as string | undefined) ?? 'text'
   const f = FORMATS.resolve(format)
-  if ('finding' in f) return toToolResult(answer({ ok: false, findings: [f.finding] }), { summary: f.finding.message })
+  if ('finding' in f) return toToolResult(answer({ ok: false, id, findings: [f.finding] }), { summary: f.finding.message })
 
   // 3. Parts: every unknown part is reported, nothing is read.
   const unknown: Finding[] = []
@@ -49,13 +49,13 @@ export async function get(args: Args): Promise<ToolResult> {
     if ('finding' in r) unknown.push({ ...r.finding, data: { ...r.finding.data, index: i } })
     else names.push(r.entry.name)
   }
-  if (unknown.length) return toToolResult(answer({ ok: false, findings: unknown }), { summary: unknown[0].message })
+  if (unknown.length) return toToolResult(answer({ ok: false, id, findings: unknown }), { summary: unknown[0].message })
 
   // 4. Load
   const rev = await loadPlan(id).catch(() => null)
   if (!rev) {
     const nf = notFound(id)
-    return toToolResult(answer({ ok: false, findings: [nf] }), { summary: nf.message })
+    return toToolResult(answer({ ok: false, id, findings: [nf] }), { summary: nf.message })
   }
 
   // 5. Body
@@ -64,7 +64,7 @@ export async function get(args: Args): Promise<ToolResult> {
     const old = await loadPlan(id, since)
     if (!old) {
       const bf = badArgument('since', 'revisionen finns inte')
-      return toToolResult(answer({ ok: false, findings: [bf] }), { summary: bf.message })
+      return toToolResult(answer({ ok: false, id, revision: rev.meta.n, findings: [bf] }), { summary: bf.message })
     }
     body = `Ändrat sedan revision ${since}:\n${changedSince(old.plan, rev.plan) || 'Inget har ändrats sedan dess.'}`
   } else {

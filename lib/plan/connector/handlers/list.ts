@@ -85,7 +85,7 @@ async function revisions(args: Args, limit: number, offset: number): Promise<Too
   const all = (stored ?? []).sort((p, q) => q.n - p.n)
   if (!all.length) {
     const nf = notFound(id)
-    return toToolResult(answer({ ok: false, findings: [nf] }), { summary: nf.message })
+    return toToolResult(answer({ ok: false, id, findings: [nf] }), { summary: nf.message })
   }
   const shown = all.slice(offset, offset + limit)
   const items = shown.map((r: Revision) =>

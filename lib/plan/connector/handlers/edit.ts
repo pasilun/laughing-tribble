@@ -13,9 +13,9 @@ import type { Args } from './index'
 
 // Changes a document's content by operations and saves them as a new revision (or only checks them, with dry_run).
 
-// Answers a refused call: nothing was saved, the summary names the first finding.
-const refuse = (findings: Finding[], next?: Next[]): ToolResult =>
-  toToolResult(answer({ ok: false, findings, next }), { summary: `Ingen ändring sparades: ${findings[0].message}` })
+// Answers a refused call: nothing was saved, the summary names the first finding. `known` carries the plan id, and the revision when it is known.
+const refuse = (findings: Finding[], next?: Next[], known: { id?: string; revision?: number } = {}): ToolResult =>
+  toToolResult(answer({ ok: false, ...known, findings, next }), { summary: `Ingen ändring sparades: ${findings[0].message}` })
 
 // The first bad argument, or undefined when all of them are fine.
 function argumentFinding(args: Args): Finding | undefined {
@@ -54,28 +54,28 @@ export async function edit(args: Args): Promise<ToolResult> {
     const r = OPERATIONS.resolve(named[i].op)
     if ('finding' in r) unknown.push({ ...r.finding, data: { ...r.finding.data, index: i } })
   }
-  if (unknown.length) return refuse(unknown)
+  if (unknown.length) return refuse(unknown, undefined, { id })
 
   // 3. Load
   let loaded: Awaited<ReturnType<typeof loadPlan>>
   try {
     loaded = await loadPlan(id)
   } catch (e) {
-    return refuse([invalidOperation(e instanceof Error ? e.message : String(e))])
+    return refuse([invalidOperation(e instanceof Error ? e.message : String(e))], undefined, { id })
   }
-  if (!loaded) return refuse([notFound(id)])
+  if (!loaded) return refuse([notFound(id)], undefined, { id })
   const before = loaded.plan
   const current = loaded.meta.n
 
   // 4. Stale
   if (base !== current) {
-    return refuse([staleRevision(base, current)], [{ tool: 'get', arguments: { id, since: base }, why: 'Läs vad som ändrats och gör om ändringen' }])
+    return refuse([staleRevision(base, current)], [{ tool: 'get', arguments: { id, since: base }, why: 'Läs vad som ändrats och gör om ändringen' }], { id, revision: current })
   }
 
   // 5. Dry run
   if (args.dry_run === true) {
     const res = applyOps(before, ops)
-    if (res.errors.length) return refuse(res.errors.map((m) => invalidOperation(m)))
+    if (res.errors.length) return refuse(res.errors.map((m) => invalidOperation(m)), undefined, { id, revision: current })
     return toToolResult(
       answer({
         ok: true,
@@ -94,11 +94,11 @@ export async function edit(args: Args): Promise<ToolResult> {
   try {
     res = await editPlan(id, ops, base, 'claude', (args.message as string | undefined) ?? 'Ändring av Claude')
   } catch (e) {
-    return refuse([invalidOperation(e instanceof Error ? e.message : String(e))])
+    return refuse([invalidOperation(e instanceof Error ? e.message : String(e))], undefined, { id, revision: current })
   }
-  if (res.status === 404) return refuse([notFound(id)])
-  if (res.status === 409) return refuse([staleRevision(base, res.head)])
-  if (res.status !== 200) return refuse(res.errors.map((m) => invalidOperation(m)))
+  if (res.status === 404) return refuse([notFound(id)], undefined, { id })
+  if (res.status === 409) return refuse([staleRevision(base, res.head)], undefined, { id, revision: res.head })
+  if (res.status !== 200) return refuse(res.errors.map((m) => invalidOperation(m)), undefined, { id, revision: current })
 
   const n = res.revision.n
   const { fresh, gone } = freshFindings(checkPlan(before), checkPlan(res.plan))
