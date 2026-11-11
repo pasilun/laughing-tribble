@@ -1,5 +1,7 @@
 # Planstudio v2 roadmap
 
+> **Direction changed, 2026-11-11.** v1 stays the product and the v2 kernel becomes its measurement engine: see `docs/v2-engine-plan.md`. The table below is the earlier parity plan. Rows 1–6b are built; rows 7 and 9–14 are dropped under the new direction (the row-7 cards W6-01…W6-R2 stay in `v2/cards` as `ready` but are not to be built). The scheduled runs are paused.
+
 Order of work, decided with the maintainer on 2026-11-10. It replaces the outlook in `docs/v2-week1-pro.md` §8 and the phase order in `docs/v2-kernel-plan.md`. Spec runs write cards in this order and update the status column.
 
 | # | Work | Status |
