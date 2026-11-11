@@ -17,6 +17,9 @@ const eslintConfig = defineConfig([
     "test-results/**",
     // Bundled third-party worker files copied from node_modules
     "public/fragments-worker.mjs",
+    // Throwaway spike code and the Rust folder: not part of the app
+    "spikes/**",
+    "v2/**",
   ]),
 ]);
 
