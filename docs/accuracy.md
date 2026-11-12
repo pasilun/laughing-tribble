@@ -89,3 +89,23 @@ Door markings in this survey that a reader has to know: a doorway in a solid wal
 bars; in a double-line wall it is a gap between two ticks; a dashed stretch of wall is a doorway too. A round symbol by a
 wet room is a stack (stam), drawn as a solid mass. Counters, WC bowls, basins and the boxes inside closets are drawn
 fixtures, not walls.
+
+### Benchmark: tracing the survey from scratch
+
+`e2e/bench-trace-1999.spec.ts` (`@slow`) runs `source trace` on an empty plan with the crop at its known scale and
+scores the result against the fixture with `lib/plan/bench/score.ts` (walls by length within 50/100/200 mm of a
+reference centre line, precision within 100 mm; doorways and windows by centre within 300 mm on the right wall line;
+door swings not scored). The scores go to `test-results/bench-trace-1999.json`. Baseline 2026-11-12:
+
+| | Result |
+|---|---|
+| Wall length found within 100 mm | 24.7 % (34 of 112 m traced; 19.3 % within 50, 26.6 % within 200) |
+| Traced length that is on a reference wall | 80.8 % |
+| Median offset of walls found | 59 mm |
+| Doorways found | 1 of 23 (6 extra) |
+| Windows found | 2 of 7 (1 extra) |
+
+What is missing, from the picture of the trace: the east and west exterior walls, most of the north and south walls,
+nearly all partitions drawn as two thin lines (the room-dividing walls in 152 and 153, the hall walls), the wet-room
+block, and every doorway drawn as a hollow stretch, a dashed stretch or between ticks. Some traced walls are text
+underlines and room labels ("102 vent", "Hall").
