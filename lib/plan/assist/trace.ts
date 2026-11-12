@@ -184,14 +184,28 @@ export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced
   const g = await loadGray(planId, r)
   if (rev!.plan.walls.length === 0) {
     // Only the house: not the scale bar, the title or specks on the sheet.
-    const box = houseBox(detectWalls(g, r, {}))
+    const box = houseBox(detectWalls(g, r, { maxProposals: 1000 }))
     const rect = box ? { x: box.x0 - 400, y: box.y0 - 400, w: box.x1 - box.x0 + 800, h: box.y1 - box.y0 + 800 } : undefined
-    const props = detectWalls(g, r, { rect }).filter((p) => plen(p) >= MIN_WALL)
-    const walls = joinPieces(props.map((p) => ({ a: p.a, b: p.b, thickness: p.thickness })), 200).map((p, i): Wall => ({ id: `w${i + 1}`, ...p, phase: 'existing' }))
+    // A wall is found in pieces (broken by doors and crossing walls): join the pieces first, then drop what is still
+    // short. Dropping short pieces first loses most of every wall that a door or a crossing wall interrupts.
+    const props = detectWalls(g, r, { rect, maxProposals: 1000 })
+    const walls = joinPieces(props.map((p) => ({ a: p.a, b: p.b, thickness: p.thickness })), 60)
+      .filter((p) => Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) >= MIN_WALL)
+      .map((p, i): Wall => ({ id: `w${i + 1}`, ...p, phase: 'existing' }))
     if (!walls.length) decide.push('Inga väggar hittades i källan. Titta på bilden (plan_view) och lägg in väggarna för hand med plan_edit.')
     else {
       const snapped = snapWalls(g, r, rev!.plan, { ids: [], add: walls }, {})
       const bad = new Set(snapped.reports.filter((x) => !x.ok).map((x) => x.id))
+      // A long wall the detector found from ink (an exterior wall broken up by window niches, say) is kept where it
+      // was detected when the snapper cannot confirm it, rather than dropped: losing it loses its windows too.
+      const LONG = 3000
+      for (const w of walls) {
+        if (!bad.has(w.id) || wallLength(w) < LONG) continue
+        bad.delete(w.id)
+        const k = snapped.walls.findIndex((x) => x.id === w.id)
+        if (k >= 0) snapped.walls[k] = w
+        for (const o of snapped.ops) if (o.op === 'add' && o.kind === 'wall' && o.item.id === w.id) Object.assign(o.item, { a: w.a, b: w.b, thickness: w.thickness })
+      }
       reportsBad = [...bad]
       // Pieces found twice end up on one line after snapping: keep the longer.
       const alike = (p: Wall, q: Wall) => {

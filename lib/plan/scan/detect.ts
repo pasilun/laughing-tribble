@@ -14,6 +14,8 @@ export type DetectOptions = {
   minThicknessMm?: number
   maxThicknessMm?: number
   threshold?: number
+  // At most this many proposals, longest first (default 150: what a person or Claude can review).
+  maxProposals?: number
 }
 
 type Band = { y0: number; y1: number; x0: number; x1: number; rows: number }
@@ -59,7 +61,7 @@ function transpose(g: Gray): Gray {
 }
 
 // Walls along rows of `g`, in that image's px: [x0, x1, yCentre, thicknessPx, style, confidence].
-function rowWalls(g: Gray, box: { x0: number; x1: number; y0: number; y1: number }, mmPerPx: number, o: Required<Omit<DetectOptions, 'rect'>>) {
+function rowWalls(g: Gray, box: { x0: number; x1: number; y0: number; y1: number }, mmPerPx: number, o: Required<Omit<DetectOptions, 'rect' | 'maxProposals'>>) {
   const minRun = Math.max(5, Math.round(o.minLengthMm / mmPerPx))
   const all = bands(g, box.x0, box.x1, box.y0, box.y1, minRun, o.threshold)
   // Archive scans draw walls with pens up to ~1 mm at 1:100, i.e. lines up
@@ -71,32 +73,31 @@ function rowWalls(g: Gray, box: { x0: number; x1: number; y0: number; y1: number
   const tMin = o.minThicknessMm / mmPerPx
   const tMax = o.maxThicknessMm / mmPerPx
   const mid = (b: Band) => (b.y0 + b.y1) / 2
-  // Pair lines: nearest partner below, wall thickness measured line centre
-  // to line centre (lines straddle the wall faces).
+  // Pair lines: two face lines a wall thickness apart, thickness measured line centre to line centre (lines
+  // straddle the wall faces). A face is often broken where a crossing wall meets it while the opposite face runs
+  // on, so a long line pairs with each shorter line along it, over the stretch they share: the overlap must be
+  // most of the shorter line, not of the longer. The pair must be neighbours: no third line between them over
+  // that stretch (else the outer face of one wall would pair with the far face of the next).
   const lines = all.filter((b) => b.y1 - b.y0 <= lineMax).sort((p, q) => p.y0 - q.y0)
   const used = new Set<Band>()
-  for (const l of lines) {
-    if (used.has(l)) continue
-    let best: { m: Band; ov: number } | null = null
-    for (const m of lines) {
-      if (m === l || used.has(m) || m.y0 <= l.y1) continue
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]
+    for (let j = i + 1; j < lines.length; j++) {
+      const m = lines[j]
+      if (m.y0 <= l.y1) continue
       const span = mid(m) - mid(l)
       if (span < tMin) continue
       if (span > tMax) break
-      const ov = Math.min(l.x1, m.x1) - Math.max(l.x0, m.x0)
-      const ratio = ov / Math.max(l.x1 - l.x0, m.x1 - m.x0)
-      if (ov >= minRun && ratio >= 0.5 && (!best || ratio > best.ov)) best = { m, ov: ratio }
+      const x0 = Math.max(l.x0, m.x0)
+      const x1 = Math.min(l.x1, m.x1)
+      const ov = x1 - x0
+      const ratio = ov / Math.min(l.x1 - l.x0, m.x1 - m.x0)
+      if (ov < minRun || ratio < 0.7) continue
+      const between = lines.some((k) => k !== l && k !== m && mid(k) > mid(l) && mid(k) < mid(m) && Math.min(k.x1, x1) - Math.max(k.x0, x0) >= 0.5 * ov)
+      if (between) continue
+      used.add(l).add(m)
+      out.push({ x0, x1, y: (mid(l) + mid(m)) / 2, t: span, style: 'outline', confidence: Math.round(Math.min(1, ov / Math.max(l.x1 - l.x0, m.x1 - m.x0) + 0.3) * 100) / 100 })
     }
-    if (!best) continue
-    used.add(l).add(best.m)
-    out.push({
-      x0: Math.max(l.x0, best.m.x0),
-      x1: Math.min(l.x1, best.m.x1),
-      y: (mid(l) + mid(best.m)) / 2,
-      t: mid(best.m) - mid(l),
-      style: 'outline',
-      confidence: Math.round(best.ov * 100) / 100,
-    })
   }
   // Unpaired bands thick enough to be a wall: a filled wall. One as thin as
   // a pen line is more likely a lone line (furniture, a dimension), so it
@@ -137,5 +138,5 @@ export function detectWalls(g: Gray, r: Raster, opts: DetectOptions = {}): Propo
   for (const w of rowWalls(tg, { x0: box.y0, x1: box.y1, y0: box.x0, y1: box.x1 }, r.mmPerPx, o))
     out.push({ a: mm({ x: w.y, y: w.x0 }), b: mm({ x: w.y, y: w.x1 }), thickness: Math.round(w.t * r.mmPerPx), style: w.style, confidence: w.confidence })
   const len = (p: Proposal) => Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y)
-  return out.sort((p, q) => len(q) - len(p)).slice(0, 150)
+  return out.sort((p, q) => len(q) - len(p)).slice(0, opts.maxProposals ?? 150)
 }
