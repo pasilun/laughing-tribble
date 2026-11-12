@@ -4,7 +4,7 @@ import { pairPrinted } from './finish'
 import type { Op } from '../domain/ops'
 import { spaceGrid } from '../domain/rooms'
 import { detectWalls } from '../scan/detect'
-import { joinPieces } from '../scan/pieces'
+import { joinPieces, mergeStacked } from '../scan/pieces'
 import { loadGray, resolveSource, type Raster } from '../scan/raster'
 import { snapWalls } from '../scan/snap'
 import { handleScanTool } from '../scan/tools'
@@ -189,7 +189,7 @@ export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced
     // A wall is found in pieces (broken by doors and crossing walls): join the pieces first, then drop what is still
     // short. Dropping short pieces first loses most of every wall that a door or a crossing wall interrupts.
     const props = detectWalls(g, r, { rect, maxProposals: 1000 })
-    const walls = joinPieces(props.map((p) => ({ a: p.a, b: p.b, thickness: p.thickness })), 60)
+    const walls = mergeStacked(joinPieces(props.map((p) => ({ a: p.a, b: p.b, thickness: p.thickness })), 60))
       .filter((p) => Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) >= MIN_WALL)
       .map((p, i): Wall => ({ id: `w${i + 1}`, ...p, phase: 'existing' }))
     if (!walls.length) decide.push('Inga väggar hittades i källan. Titta på bilden (plan_view) och lägg in väggarna för hand med plan_edit.')
