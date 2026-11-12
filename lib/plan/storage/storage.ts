@@ -116,13 +116,31 @@ async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
   throw last ?? new Error('ingen Blob-nyckel')
 }
 
+// "fetch failed" is all Node says when a connection breaks; the reason is in `cause`.
+export function describeError(e: unknown): string {
+  const err = e as { message?: string; cause?: unknown }
+  const cause = err?.cause as { code?: string; message?: string } | undefined
+  const why = cause ? [cause.code, cause.message].filter(Boolean).join(': ') : ''
+  return `${err?.message ?? String(e)}${why ? ` (${why})` : ''}`
+}
+export const isNetworkError = (e: unknown) => (e as Error)?.message === 'fetch failed' || /^(ECONNRESET|ETIMEDOUT|EPIPE|UND_ERR_)/.test(String(((e as { cause?: { code?: string } })?.cause)?.code ?? ''))
+
 // Reads go to the origin, not the CDN: a "not found" seen while a plan was being
 // created, or the old head.json after an edit, would otherwise be served for a while.
 class BlobBackend implements Backend {
   async read(key: string) {
-    const res = await withToken((token) => get(key, { access: 'private', token, useCache: false }))
-    if (!res || res.statusCode !== 200) return null
-    return Buffer.from(await new Response(res.stream).arrayBuffer())
+    // A read can be repeated: a dropped connection to the store is retried, twice, before it is reported.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const res = await withToken((token) => get(key, { access: 'private', token, useCache: false }))
+        if (!res || res.statusCode !== 200) return null
+        return Buffer.from(await new Response(res.stream).arrayBuffer())
+      } catch (e) {
+        if (attempt >= 3 || !isNetworkError(e)) throw e
+        console.warn(`Blob-läsning av ${key} misslyckades (försök ${attempt}): ${describeError(e)}`)
+        await new Promise((r) => setTimeout(r, 200 * attempt))
+      }
+    }
   }
   async write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }) {
     try {

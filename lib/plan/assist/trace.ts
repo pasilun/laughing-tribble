@@ -25,7 +25,8 @@ export type TraceArgs = {
   dimensions?: Array<{ a: Pt; b: Pt; mm: number; label?: string }>
 }
 
-export type Traced = { text: string; png?: Buffer; isError?: boolean }
+// `failed` names the steps that could not be done; what was done before them is saved.
+export type Traced = { text: string; png?: Buffer; isError?: boolean; failed?: string[] }
 
 const MIN_WALL = 1000
 // A scan's resolution is often not what its header says (a 1:100 sheet at "300 dpi" can be
@@ -108,6 +109,7 @@ export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced
   if (!sourceId) return { text: 'Planen har ingen källritning. Anropa plan_upload_link och be användaren ladda upp ritningen först.', isError: true }
   const done: string[] = []
   const decide: string[] = []
+  const failed: string[] = []
   const reload = async () => {
     rev = (await loadPlan(planId))!
     return rev
@@ -225,17 +227,17 @@ export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced
   // 3. Openings and doors.
   if (rev!.plan.walls.length) {
     const opened = await handleScanTool('plan_scan_openings', { plan_id: planId, source_id: sourceId, base_revision: rev!.meta.n, apply: true })
-    if (opened?.isError) decide.push(`Öppningar kunde inte läsas: ${textOf(opened).split('\n')[0]}`)
+    if (opened?.isError) failed.push(`Öppningar kunde inte läsas: ${textOf(opened).split('\n')[0]}`)
     await reload()
     const doors = await handleScanTool('plan_scan_doors', { plan_id: planId, source_id: sourceId, base_revision: rev!.meta.n, apply: true })
-    if (doors?.isError) decide.push(`Dörrarna kunde inte läsas: ${textOf(doors).split('\n')[0]}`)
+    if (doors?.isError) failed.push(`Dörrarna kunde inte läsas: ${textOf(doors).split('\n')[0]}`)
     await reload()
     const o = rev!.plan.openings
     const count = (k: string) => o.filter((x) => x.kind === k).length
-    done.push(`${o.length} öppningar: ${count('door')} dörrar, ${count('window')} fönster, ${count('opening')} öppningar utan känd typ`)
+    if (!failed.length) done.push(`${o.length} öppningar: ${count('door')} dörrar, ${count('window')} fönster, ${count('opening')} öppningar utan känd typ`)
     const plain = o.filter((x) => x.kind === 'opening')
     if (plain.length) decide.push(`${plain.length} öppningar är dörr eller passage, typ okänd: ${plain.slice(0, 6).map((x) => x.id).join(', ')}${plain.length > 6 ? ' …' : ''}. Titta i bilden: sätt kind till door (med hinge/swing) eller lämna som öppning.`)
-    if (!o.some((x) => x.kind === 'window') && rev!.plan.walls.some((w) => w.exterior))
+    if (!failed.length && !o.some((x) => x.kind === 'window') && rev!.plan.walls.some((w) => w.exterior))
       decide.push('Inga fönster hittades. Har ritningen fasadbilder, lägg till dem som källa (view elevation) och kör plan_scan_elevation; annars markera fönster för hand.')
   }
 
@@ -259,6 +261,6 @@ export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced
     // The text is the result; the picture is a help.
   }
   void reportsBad
-  const text = [`plan_trace klar, revision ${rev!.meta.n}.`, 'Gjort:', ...done.map((d) => `- ${d}`), decide.length ? `\nAtt avgöra:\n${decide.map((d) => `- ${d}`).join('\n')}` : '\nInget att avgöra.', '\nNästa steg: plan_next.'].join('\n')
-  return { text, png }
+  const text = [`plan_trace klar, revision ${rev!.meta.n}.`, 'Gjort:', ...done.map((d) => `- ${d}`), ...(failed.length ? ['\nMisslyckades (inte samma sak som att inget hittades):', ...failed.map((d) => `- ${d}`), '- Läs om med scan (action "openings" eller "doors"), gärna några väggar i taget med wall_ids.'] : []), decide.length ? `\nAtt avgöra:\n${decide.map((d) => `- ${d}`).join('\n')}` : '\nInget att avgöra.', '\nNästa steg: plan_next.'].join('\n')
+  return { text, png, ...(failed.length ? { failed } : {}) }
 }

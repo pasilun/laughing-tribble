@@ -3,7 +3,7 @@ import { host } from '../../mcp/format'
 import { handleScanTool } from '../../scan/tools'
 import { loadPlan } from '../../service'
 import { PLANS } from '../../storage/docs'
-import { answer } from '../answer'
+import { answer, finding } from '../answer'
 import { changedList } from '../changes'
 import { badArgument, invalidOperation, notFound, staleRevision } from '../findings'
 import { SOURCE_ACTIONS } from '../registries'
@@ -48,6 +48,7 @@ export async function source(args: Args): Promise<ToolResult> {
   let text: string
   let images: ImageBlock[] = []
   let isError = false
+  let failedSteps: string[] = []
   if (name === 'trace') {
     const po = given.printed_outer_mm as { width?: unknown; length?: unknown } | undefined
     const printed = po && typeof po.width === 'number' && typeof po.length === 'number' ? { width: po.width, length: po.length } : undefined
@@ -55,6 +56,7 @@ export async function source(args: Args): Promise<ToolResult> {
     const out = await autoTrace(id, { sourceId: typeof given.source_id === 'string' ? given.source_id : undefined, printed, dimensions: dims })
     text = modernWords(out.text)
     isError = out.isError === true
+    failedSteps = out.failed ?? []
     if (out.png) images = [{ type: 'image', data: out.png.toString('base64'), mimeType: 'image/png' }]
   } else {
     const res = await handleScanTool(resolved.entry.tool, { ...given, plan_id: id, base_revision: n, apply: !dry })
@@ -69,7 +71,7 @@ export async function source(args: Args): Promise<ToolResult> {
   const revision = after?.meta.n ?? n
   const data = { action: name, ...(dry ? { dry_run: true } : {}) }
   return toToolResult(
-    answer({ ok: true, id, revision, ...(after && after.meta.n !== n ? { changed: changedList(before.plan, after.plan) } : {}), data }),
+    answer({ ok: true, id, revision, ...(failedSteps.length ? { findings: failedSteps.map((m, i) => finding({ id: `trace-step-failed:${i}`, code: 'trace-step-failed', level: 'error', message: m })), next: [{ tool: 'scan', arguments: { id, action: 'openings' }, why: 'Läs öppningarna igen, gärna några väggar i taget (args.wall_ids)' }] } : {}), ...(after && after.meta.n !== n ? { changed: changedList(before.plan, after.plan) } : {}), data }),
     { summary: dry ? `Provkörning: inget sparades. Revision ${n} är kvar.\n${text}` : text, images },
   )
 }

@@ -1,4 +1,5 @@
 import { loadPlan } from '../service'
+import { describeError } from '../storage/storage'
 import { err, type Result } from './kit'
 import { FIND_TOOLS } from './tools-find'
 import { SOURCE_TOOLS } from './tools-source'
@@ -21,6 +22,7 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
   try {
     return await tool.run({ planId, plan: rev.plan, args })
   } catch (e) {
-    return err((e as Error).message)
+    console.error(`${name} misslyckades: ${describeError(e)}`)
+    return err(describeError(e))
   }
 }
