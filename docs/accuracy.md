@@ -75,3 +75,17 @@ size and the expected windows as the truth.
 what `plan_finish` would still flag, and (with a reference plan of the same floor) the
 wall and opening match from `e2e/golden.ts`. The reference is another tracing, not the
 truth; room areas are compared by room id, so they match only between plans that share ids.
+
+## The 1999 survey as drawn (fixture)
+
+`e2e/fixtures/flat/drawing-1999.json` is lgh 152–154 exactly as the 1999 survey (A00:24, straightened, crop
+`a00-crop.png`, placement `case.json`) draws it: no laser measurements, no later changes (the kitchen wall in 153 is
+whole, no shower cabins), no rooms, fixtures or door swings (the survey does not show which way a door opens; every door
+is a plain opening). 35 walls, 2 masses (the tapered stair wall in 152 and the stack beside its G), 23 doorways and
+7 windows. It was built with the maintainer room by room on 2026-11-12 and is the reference for scoring a trace of the
+survey from scratch. `e2e/plan-flat-1999.spec.ts` checks it stays valid. Change it only with the maintainer.
+
+Door markings in this survey that a reader has to know: a doorway in a solid wall is a hollow stretch between two cross
+bars; in a double-line wall it is a gap between two ticks; a dashed stretch of wall is a doorway too. A round symbol by a
+wet room is a stack (stam), drawn as a solid mass. Counters, WC bowls, basins and the boxes inside closets are drawn
+fixtures, not walls.
