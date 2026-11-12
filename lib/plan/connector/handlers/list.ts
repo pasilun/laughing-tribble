@@ -7,6 +7,7 @@ import { LIST_KINDS } from '../registries'
 import { toToolResult, type ToolResult } from '../result'
 import type { Finding } from '../types'
 import type { Args } from './index'
+import { siteList } from './site'
 
 // Lists the person's documents, or the revisions of one: a page at a time, with a cursor for the next page.
 
@@ -47,6 +48,7 @@ export async function list(args: Args): Promise<ToolResult> {
   const kind = LIST_KINDS.resolve((args.what as string | undefined) ?? 'plans')
   if ('finding' in kind) return toToolResult(answer({ ok: false, findings: [kind.finding] }), { summary: kind.finding.message })
 
+  if (kind.entry.name === 'sites') return siteList(limit, offset, args.query as string | undefined)
   // 3. Plans, or the revisions of one plan.
   if (kind.entry.name === 'revisions') return revisions(args, limit, offset)
   return plans(args, limit, offset)

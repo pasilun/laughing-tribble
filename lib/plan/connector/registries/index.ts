@@ -21,6 +21,14 @@ export const PARTS = new Registry<Entry>('parts', 'del',
 export const LIST_KINDS = new Registry<Entry>('list', 'lista', [
   { name: 'plans', summary: 'The documents the person can open, with revision and tags (default)' },
   { name: 'revisions', summary: 'The revisions of one document (needs id)' },
+  { name: 'sites', summary: 'The site plans (a property seen from above); their ids start with "site:"' },
+])
+// What a site plan is edited with. A document id that starts with "site:" is a site plan; the vocabulary is per kind.
+export const SITE_OPERATIONS = new Registry<Entry>('site_operations', 'platsoperation', [
+  { name: 'add', summary: 'Add an item: { op: "add", item: { type: "area" | "line" | "point", name, kind, status, rect | points } }' },
+  { name: 'update', summary: 'Change an item: { op: "update", id, patch }' },
+  { name: 'delete', summary: 'Remove an item: { op: "delete", id }' },
+  { name: 'set_building', summary: 'Correct a building read from the map: { op: "set_building", id, rect | corners, label?, note? }' },
 ])
 export const VIEWS = new Registry<Entry>('views', 'vy', [
   { name: 'sheet', summary: 'The drawing sheet (default); options.sheet is "efter" or "fore"' },
@@ -66,6 +74,7 @@ export const SOURCE_ACTIONS = new Registry<ActionEntry>('source', 'källåtgärd
   { name: 'trace', tool: '', summary: 'A first draft from a source: calibrates, finds walls, openings and windows. args: { source_id?, printed_outer_mm?, dimensions? }' },
 ])
 export const MANAGE_ACTIONS = new Registry<Entry & { needsId: boolean }>('manage', 'hanteringsåtgärd', [
+  { name: 'create_site', needsId: false, summary: 'A new site plan from a property designation. args: { designation }' },
   { name: 'create', needsId: false, summary: 'A new document. args: { name, template?: "empty" | "demo" }' },
   { name: 'import', needsId: false, summary: 'A new document from a whole plan as data. args: { name, plan, copy_sources_from? }' },
   { name: 'rename', needsId: true, summary: 'Rename a document (a new revision). args: { name }' },
@@ -82,6 +91,6 @@ export const TEMPLATES = new Registry<Entry>('templates', 'mall', [
 
 // Every family, by its English key. The guide's `vocabulary` topic is written from this.
 export const FAMILIES: Record<string, Registry<Entry>> = {
-  operations: OPERATIONS as Registry<Entry>, parts: PARTS, list: LIST_KINDS, views: VIEWS, checks: CHECKS,
+  operations: OPERATIONS as Registry<Entry>, site_operations: SITE_OPERATIONS, parts: PARTS, list: LIST_KINDS, views: VIEWS, checks: CHECKS,
   formats: FORMATS, exports: EXPORTS, sheets: SHEETS, scan: SCAN_ACTIONS, source: SOURCE_ACTIONS, manage: MANAGE_ACTIONS as Registry<Entry>, topics: TOPICS as Registry<Entry>,
 }

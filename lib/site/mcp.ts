@@ -61,7 +61,7 @@ ops: {"op":"add","item":{"type":"area","name":"Växthus","kind":"byggnad","statu
   },
 ]
 
-function describe(doc: SiteDoc, full: boolean): string {
+export function describe(doc: SiteDoc, full: boolean): string {
   const prop = doc.property.reduce((t, poly) => t + area(poly[0]), 0)
   const lines = [
     `Tomt ${doc.designation} (${doc.slug}). Fastighetsarea ca ${Math.round(prop)} m². Lokala koordinater i meter: x öster, y norr om fastighetens sydvästra hörn; fastigheten är ${m(bbox(doc.property.flatMap((p) => p[0])).maxX - bbox(doc.property.flatMap((p) => p[0])).minX)} m bred och ${m(bbox(doc.property.flatMap((p) => p[0])).maxY - bbox(doc.property.flatMap((p) => p[0])).minY)} m lång.`,
@@ -84,7 +84,7 @@ function describe(doc: SiteDoc, full: boolean): string {
   return lines.join('\n')
 }
 
-async function picture(doc: SiteDoc, underlay: unknown): Promise<Content[number][]> {
+export async function picture(doc: SiteDoc, underlay: unknown): Promise<Content[number][]> {
   const u = underlay === 'flyg' || underlay === 'karta' ? underlay : 'none'
   const { svg } = await renderDoc(doc, { underlay: u })
   return [{ type: 'image', data: svgToPng(svg, 1500).toString('base64'), mimeType: 'image/png' }]
@@ -95,6 +95,55 @@ function rectPoints(r: { x: number; y: number; w: number; d: number; angle?: num
   const c = Math.cos(a)
   const s = Math.sin(a)
   return [[0, 0], [r.w, 0], [r.w, r.d], [0, r.d]].map(([x, y]) => ({ x: r.x + x * c - y * s, y: r.y + x * s + y * c }))
+}
+
+// What a list of site operations does to a site, worked out without saving. `problems` is empty when all of them could be done.
+export function applySiteOps(doc: SiteDoc, ops: Array<Record<string, unknown>>): { items: SiteItem[]; buildings: SiteBuilding[] | undefined; problems: string[] } {
+  const cur = { doc }
+  let items = cur.doc.items.map((i) => ({ ...i }))
+  const ids = new Set(items.map((i) => i.id))
+  const next = () => {
+    let k = 1
+    while (ids.has(`i${k}`)) k++
+    ids.add(`i${k}`)
+    return `i${k}`
+  }
+  const problems: string[] = []
+  let buildings: SiteBuilding[] | undefined
+  ;ops.forEach((op, i) => {
+    const at = `op ${i + 1}`
+    if (op.op === 'add') {
+      const it = (op.item ?? {}) as Record<string, unknown>
+      const points = it.rect ? rectPoints(it.rect as { x: number; y: number; w: number; d: number; angle?: number }) : (it.points as P[] | undefined)
+      items.push({ id: typeof it.id === 'string' ? it.id : next(), type: it.type as SiteItem['type'], name: String(it.name ?? ''), kind: String(it.kind ?? 'annat'), status: it.status as SiteItem['status'], color: String(it.color ?? '#d40000'), note: it.note ? String(it.note) : undefined, points: points ?? [] })
+    } else if (op.op === 'update') {
+      const k = items.findIndex((x) => x.id === op.id)
+      if (k < 0) return void problems.push(`${at}: ${String(op.id)} finns inte`)
+      const patch = { ...((op.patch ?? {}) as Record<string, unknown>) }
+      if (patch.rect) patch.points = rectPoints(patch.rect as { x: number; y: number; w: number; d: number; angle?: number })
+      delete patch.rect
+      delete patch.id
+      items[k] = { ...items[k], ...patch } as SiteItem
+    } else if (op.op === 'delete') {
+      if (!items.some((x) => x.id === op.id)) return void problems.push(`${at}: ${String(op.id)} finns inte`)
+      items = items.filter((x) => x.id !== op.id)
+    } else if (op.op === 'set_building') {
+      buildings = buildings ?? cur.doc.buildings.map((q) => ({ ...q }))
+      const k = buildings.findIndex((q) => q.id === op.id)
+      if (k < 0) return void problems.push(`${at}: byggnaden ${String(op.id)} finns inte (${cur.doc.buildings.map((q) => q.id).join(', ')})`)
+      const corners = op.rect ? rectPoints(op.rect as { x: number; y: number; w: number; d: number; angle?: number }) : (op.corners as P[] | undefined)
+      if (corners && (!Array.isArray(corners) || corners.length < 3 || !corners.every((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y)))) return void problems.push(`${at}: corners behöver minst 3 punkter med x och y`)
+      const next = { ...buildings[k] }
+      if (corners) {
+        next.corners = corners.map((p) => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 }))
+        next.area = Math.round(area(next.corners))
+      }
+      if (typeof op.label === 'string') next.label = op.label || undefined
+      if (typeof op.note === 'string') next.note = op.note || undefined
+      buildings[k] = next
+    } else problems.push(`${at}: okänd op "${String(op.op)}" (add, update, delete, set_building)`)
+  })
+  return { items, buildings, problems }
 }
 
 export async function handleSiteTool(name: string, args: Record<string, unknown>): Promise<Result | null> {
@@ -119,49 +168,7 @@ export async function handleSiteTool(name: string, args: Record<string, unknown>
     const cur = await getSite(slug)
     if (!cur) return err(`Tomten ${slug} finns inte`)
     if (!Array.isArray(args.ops) || typeof args.base_revision !== 'number') return err('ops (lista) och base_revision (nummer) krävs')
-    let items = cur.doc.items.map((i) => ({ ...i }))
-    const ids = new Set(items.map((i) => i.id))
-    const next = () => {
-      let k = 1
-      while (ids.has(`i${k}`)) k++
-      ids.add(`i${k}`)
-      return `i${k}`
-    }
-    const problems: string[] = []
-    let buildings: SiteBuilding[] | undefined
-    ;(args.ops as Array<Record<string, unknown>>).forEach((op, i) => {
-      const at = `op ${i + 1}`
-      if (op.op === 'add') {
-        const it = (op.item ?? {}) as Record<string, unknown>
-        const points = it.rect ? rectPoints(it.rect as { x: number; y: number; w: number; d: number; angle?: number }) : (it.points as P[] | undefined)
-        items.push({ id: typeof it.id === 'string' ? it.id : next(), type: it.type as SiteItem['type'], name: String(it.name ?? ''), kind: String(it.kind ?? 'annat'), status: it.status as SiteItem['status'], color: String(it.color ?? '#d40000'), note: it.note ? String(it.note) : undefined, points: points ?? [] })
-      } else if (op.op === 'update') {
-        const k = items.findIndex((x) => x.id === op.id)
-        if (k < 0) return void problems.push(`${at}: ${String(op.id)} finns inte`)
-        const patch = { ...((op.patch ?? {}) as Record<string, unknown>) }
-        if (patch.rect) patch.points = rectPoints(patch.rect as { x: number; y: number; w: number; d: number; angle?: number })
-        delete patch.rect
-        delete patch.id
-        items[k] = { ...items[k], ...patch } as SiteItem
-      } else if (op.op === 'delete') {
-        if (!items.some((x) => x.id === op.id)) return void problems.push(`${at}: ${String(op.id)} finns inte`)
-        items = items.filter((x) => x.id !== op.id)
-      } else if (op.op === 'set_building') {
-        buildings = buildings ?? cur.doc.buildings.map((q) => ({ ...q }))
-        const k = buildings.findIndex((q) => q.id === op.id)
-        if (k < 0) return void problems.push(`${at}: byggnaden ${String(op.id)} finns inte (${cur.doc.buildings.map((q) => q.id).join(', ')})`)
-        const corners = op.rect ? rectPoints(op.rect as { x: number; y: number; w: number; d: number; angle?: number }) : (op.corners as P[] | undefined)
-        if (corners && (!Array.isArray(corners) || corners.length < 3 || !corners.every((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y)))) return void problems.push(`${at}: corners behöver minst 3 punkter med x och y`)
-        const next = { ...buildings[k] }
-        if (corners) {
-          next.corners = corners.map((p) => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 }))
-          next.area = Math.round(area(next.corners))
-        }
-        if (typeof op.label === 'string') next.label = op.label || undefined
-        if (typeof op.note === 'string') next.note = op.note || undefined
-        buildings[k] = next
-      } else problems.push(`${at}: okänd op "${String(op.op)}" (add, update, delete, set_building)`)
-    })
+    const { items, buildings, problems } = applySiteOps(cur.doc, args.ops as Array<Record<string, unknown>>)
     if (problems.length) return err(`Ingen ändring sparades:\n${problems.join('\n')}`)
     const check = cleanItems(items)
     if (check.errors.length) return err(`Ingen ändring sparades:\n${check.errors.join('\n')}`)

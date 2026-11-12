@@ -12,6 +12,8 @@ import { MANAGE_ACTIONS, TEMPLATES } from '../registries'
 import { toToolResult, type ToolResult } from '../result'
 import type { Finding, Next } from '../types'
 import type { Args } from './index'
+import { isSite, siteCreate, slugOf } from './site'
+import { SITES, type DocKind } from '../../storage/docs'
 
 const fail = (findings: Finding[]) => toToolResult(answer({ ok: false, findings }), { summary: findings[0].message })
 export type ManageEntry = Entry & { needsId: boolean }
@@ -25,8 +27,15 @@ export async function manage(args: Args): Promise<ToolResult> {
   const a = (args.args ?? {}) as Record<string, unknown>
   const name = r.entry.name
   const id = typeof args.id === 'string' ? args.id : ''
+  // A site plan: its id starts with "site:"; only sharing, the trash and listing apply to it.
+  const site = isSite(id)
+  if (site && !['share', 'delete', 'restore'].includes(name)) return fail([finding({ code: 'wrong-kind', level: 'error', message: `Åtgärden ${name} gäller bara planritningar, inte tomten ${id}.`, refs: [id] })])
+  const kind: DocKind = site ? SITES : PLANS
+  const docId = site ? slugOf(id) : id
+  const noun = site ? 'tomten' : 'planen'
   if ((r.entry as ManageEntry).needsId && !id) return fail([badArgument('id', `krävs för åtgärden ${name}`)])
   try {
+    if (name === 'create_site') return siteCreate(a.designation)
     if (name === 'create') {
       let template: 'empty' | 'demo' = 'empty'
       if (a.template !== undefined) {
@@ -61,22 +70,22 @@ export async function manage(args: Args): Promise<ToolResult> {
     if (name === 'share') {
       const who = typeof a.with === 'string' ? a.with : ''
       const out = typeof a.remove === 'string' ? a.remove : ''
-      const err = who ? await addShare(PLANS, id, who) : out ? await removeShare(PLANS, id, out) : null
+      const err = who ? await addShare(kind, docId, who) : out ? await removeShare(kind, docId, out) : null
       if (err) return fail([invalidOperation(err)])
-      if (out && out === currentUser()?.id) return toToolResult(answer({ ok: true, id }), { summary: `Du har tagit bort planen ${id} för dig. De andra har kvar den.` })
-      const p = await participants(PLANS, id)
+      if (out && out === currentUser()?.id) return toToolResult(answer({ ok: true, id }), { summary: `Du har tagit bort ${noun} ${id} för dig. De andra har kvar den.` })
+      const p = await participants(kind, docId)
       if (!p) return fail([notFound(id)])
       const people = [p.ownerRemoved ? `${p.owner} (har tagit bort den för sig)` : `${p.owner} (ägare)`, ...p.members]
-      return toToolResult(answer({ ok: true, id, data: { owner: p.owner, members: p.members, me: p.me } }), { summary: `Planen delas av: ${people.join(', ')}. Du är ${p.me}.` })
+      return toToolResult(answer({ ok: true, id, data: { owner: p.owner, members: p.members, me: p.me } }), { summary: `${noun[0].toUpperCase()}${noun.slice(1)} delas av: ${people.join(', ')}. Du är ${p.me}.` })
     }
     if (name === 'delete') {
-      const how = await deleteDoc(PLANS, id)
+      const how = await deleteDoc(kind, docId)
       if (!how) return fail([notFound(id)])
-      return toToolResult(answer({ ok: true, id, data: { result: how } }), { summary: how === 'trashed' ? `Planen ${id} ligger nu i papperskorgen och kan återställas i ${TRASH_DAYS} dagar.` : `Du har tagit bort planen ${id} för dig. De andra har kvar den.` })
+      return toToolResult(answer({ ok: true, id, data: { result: how } }), { summary: how === 'trashed' ? `${noun[0].toUpperCase()}${noun.slice(1)} ${id} ligger nu i papperskorgen och kan återställas i ${TRASH_DAYS} dagar.` : `Du har tagit bort ${noun} ${id} för dig. De andra har kvar den.` })
     }
     if (name === 'restore') {
-      if (!(await restoreDoc(PLANS, id))) return fail([notFound(id)])
-      return toToolResult(answer({ ok: true, id }), { summary: `Planen ${id} är tillbaka i listan.` })
+      if (!(await restoreDoc(kind, docId))) return fail([notFound(id)])
+      return toToolResult(answer({ ok: true, id }), { summary: `${noun[0].toUpperCase()}${noun.slice(1)} ${id} är tillbaka i listan.` })
     }
     if (name === 'trash') {
       const trash = (await listPlansAndTrash({ shared: false })).trash

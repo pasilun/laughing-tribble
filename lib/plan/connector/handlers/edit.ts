@@ -10,6 +10,7 @@ import { OPERATIONS } from '../registries/operations'
 import { toToolResult, type ImageBlock, type ToolResult } from '../result'
 import type { Finding, Next } from '../types'
 import type { Args } from './index'
+import { isSite, siteEdit } from './site'
 
 // Changes a document's content by operations and saves them as a new revision (or only checks them, with dry_run).
 
@@ -40,6 +41,7 @@ function argumentFinding(args: Args): Finding | undefined {
 }
 
 export async function edit(args: Args): Promise<ToolResult> {
+  if (isSite(args.id)) return siteEdit(args)
   // 1. Arguments
   const bad = argumentFinding(args)
   if (bad) return refuse([bad])

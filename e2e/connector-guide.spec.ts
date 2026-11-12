@@ -7,7 +7,7 @@ test('guide without a topic gives the working order and the topics', async ({ re
   expect(r.structuredContent!.ok).toBe(true)
   const text = r.content[0].text!
   expect(text).toContain('Planstudio: working order')
-  expect(text).toContain('Ämnen: work, ops, vocabulary, scan, source, findings')
+  expect(text).toContain('Ämnen: work, ops, vocabulary, scan, source, sites, findings')
 })
 
 test('guide ops lists every operation', async ({ request }) => {

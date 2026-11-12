@@ -7,6 +7,7 @@ import { FORMATS, PARTS } from '../registries'
 import { toToolResult, type ToolResult } from '../result'
 import type { Finding } from '../types'
 import type { Args } from './index'
+import { isSite, siteGet } from './site'
 
 // Reads a document: its listing as text (whole, in parts, or what changed since a revision), or the whole plan as data.
 
@@ -23,6 +24,7 @@ function argumentFinding(args: Args): Finding | undefined {
 }
 
 export async function get(args: Args): Promise<ToolResult> {
+  if (isSite(args.id)) return siteGet(args)
   // 1. Arguments
   const bad = argumentFinding(args)
   if (bad) return toToolResult(answer({ ok: false, findings: [bad] }), { summary: bad.message })

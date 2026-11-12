@@ -13,6 +13,7 @@ import { toToolResult, type ImageBlock, type ToolResult } from '../result'
 import { finding } from '../answer'
 import type { Finding } from '../types'
 import type { Args } from './index'
+import { isSite, siteView } from './site'
 
 type Rect = { x: number; y: number; w: number; h: number }
 const fail = (findings: Finding[]) => toToolResult(answer({ ok: false, findings }), { summary: findings[0].message })
@@ -39,6 +40,7 @@ function elementRect(plan: Plan, id: string): Rect | null {
 const sizeOf = (png: Buffer): [number, number] => [png.readUInt32BE(16), png.readUInt32BE(20)]
 
 export async function view(args: Args): Promise<ToolResult> {
+  if (isSite(args.id)) return siteView(args)
   const id = args.id
   if (id === undefined || id === '') return fail([badArgument('id', 'krävs')])
   if (typeof id !== 'string') return fail([badArgument('id', 'ska vara en sträng')])

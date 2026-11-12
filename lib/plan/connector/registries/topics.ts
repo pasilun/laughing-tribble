@@ -51,6 +51,8 @@ export const TOPICS = new Registry<TopicEntry>('topics', 'ämne', [
     text: (families) => ({ summary: `Anropa scan med id, action och args. Inget sparas: en läsning som skulle ändra planen kommer som ett förslag (data.proposals) och ett färdigt anrop till edit i next.\n\n${actionsDoc(families.scan, {})}`, data: { actions: families.scan.names() } }) },
   { name: 'source', summary: 'The source actions: getting a drawing in and placing it',
     text: (families) => ({ summary: `Anropa source med id, base_revision, action och args. Sparar en ny revision; med dry_run sparas inget (inte för add och trace).\n\n${actionsDoc(families.source, { upload_link: LINK_DOC, trace: TRACE_DOC })}`, data: { actions: families.source.names() } }) },
+  { name: 'sites', summary: 'Site plans: a property seen from above',
+    text: (families) => ({ summary: `En tomt har id som börjar med "site:" (till exempel site:lovinge-3-2). get, view, edit, list (what "sites") och manage (share, delete, restore, create_site) tar det. check, scan, source och export gäller bara planritningar.\nKoordinater är lokala meter: x öster, y norr om fastighetens sydvästra hörn.\n\nOperationer för edit på en tomt: ${families.site_operations.names().join(', ')}\n${families.site_operations.entries.map((e) => `- ${e.summary}`).join('\n')}\nExempel: { "op": "add", "item": { "type": "area", "name": "Växthus", "kind": "byggnad", "status": "idé", "rect": { "x": 30, "y": 112, "w": 6, "d": 4 } } }\nView-alternativ: options.underlay är "flyg", "karta" eller utelämnat.`, data: { operations: families.site_operations.names() } }) },
   { name: 'findings', summary: 'The shape of a finding and the standard codes', text: () => ({ summary: FINDINGS }) },
 ])
 export const WORK_TEXT = WORK
