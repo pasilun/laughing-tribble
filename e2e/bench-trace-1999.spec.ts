@@ -10,7 +10,7 @@ import { connector, legacy } from './connector-helpers'
 // The scores are written to test-results/bench-trace-1999.json.
 
 const F = 'e2e/fixtures/flat'
-const BASELINE = { recall100: 0.59, precision100: 0.83, doorways: 4, windows: 7 }
+const BASELINE = { recall100: 0.61, precision100: 0.83, doorways: 6, windows: 7 }
 
 test('trace the 1999 survey from scratch and score it', { tag: '@slow' }, async ({ request }) => {
   test.setTimeout(180_000)

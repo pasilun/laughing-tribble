@@ -80,6 +80,10 @@ function rowWalls(g: Gray, box: { x0: number; x1: number; y0: number; y1: number
   // that stretch (else the outer face of one wall would pair with the far face of the next).
   const lines = all.filter((b) => b.y1 - b.y0 <= lineMax).sort((p, q) => p.y0 - q.y0)
   const used = new Set<Band>()
+  // A face broken by crossing walls or window niches leaves several pieces on one line; a fixture edge drawn beside a
+  // wall (a bathtub's rim, a box in a hall) is a lone short piece. Such a lone piece must not pair with a wall face.
+  const shortUneven = 1000 / mmPerPx
+  const lone = (b: Band) => !lines.some((k) => k !== b && Math.abs(mid(k) - mid(b)) <= 2 && (k.x1 <= b.x0 || k.x0 >= b.x1))
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]
     for (let j = i + 1; j < lines.length; j++) {
@@ -93,6 +97,8 @@ function rowWalls(g: Gray, box: { x0: number; x1: number; y0: number; y1: number
       const ov = x1 - x0
       const ratio = ov / Math.min(l.x1 - l.x0, m.x1 - m.x0)
       if (ov < minRun || ratio < 0.7) continue
+      const short = l.x1 - l.x0 <= m.x1 - m.x0 ? l : m
+      if (ov / Math.max(l.x1 - l.x0, m.x1 - m.x0) < 0.5 && ov < shortUneven && lone(short)) continue
       const between = lines.some((k) => k !== l && k !== m && mid(k) > mid(l) && mid(k) < mid(m) && Math.min(k.x1, x1) - Math.max(k.x0, x0) >= 0.5 * ov)
       if (between) continue
       used.add(l).add(m)

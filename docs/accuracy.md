@@ -109,3 +109,14 @@ What is missing, from the picture of the trace: the east and west exterior walls
 nearly all partitions drawn as two thin lines (the room-dividing walls in 152 and 153, the hall walls), the wet-room
 block, and every doorway drawn as a hollow stretch, a dashed stretch or between ticks. Some traced walls are text
 underlines and room labels ("102 vent", "Hall").
+
+After the double-line work (2026-11-12): wall length found within 100 mm **61.9 %** (from 24.7 %), precision 84.1 %,
+median offset 12 mm, windows **7 of 7**, doorways 6 of 23. Three changes in `lib/plan/scan/detect.ts`,
+`lib/plan/scan/pieces.ts` and `lib/plan/assist/trace.ts`:
+- a long face line pairs with each shorter piece of the opposite face (a face broken by crossing walls), unless the
+  piece is a lone short line (a fixture edge beside a wall: a bathtub rim, a box in a hall);
+- pieces are joined before short ones are dropped, and the detector may return more than 150 proposals to trace;
+- a thick wall found as two strips side by side (an exterior wall with window sills between its faces) is merged into
+  one, and a long detected wall the snapper cannot confirm is kept where it was detected.
+The golden case (`e2e/plan-golden.spec.ts`) is a synthetic drawing made from its reference: exact, but clean, so it
+guards against regressions (it caught the fixture edges above) rather than measuring real scans.
