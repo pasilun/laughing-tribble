@@ -1,6 +1,7 @@
 import { CONNECTOR_INSTRUCTIONS, callConnectorTool, connectorList } from '@/lib/plan/connector'
 import { presentedCredential, resolveRequest } from '@/lib/plan/auth/access'
 import { runAs } from '@/lib/plan/auth/user'
+import { reportError } from '@/lib/monitor'
 import { PublicError } from '@/lib/plan/storage/storage'
 
 export const runtime = 'nodejs'
@@ -81,8 +82,12 @@ export async function POST(request: Request) {
         const result = await runAs(person, () => callConnectorTool(name, args))
         if (result) return mcpResp({ jsonrpc: '2.0', id, result })
       } catch (err) {
-        if (!(err instanceof PublicError)) console.error('[mcp]', name, err)
-        return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: err instanceof PublicError ? err.message : 'Internal error' } })
+        let trace: string | undefined
+        if (!(err instanceof PublicError)) {
+          console.error('[mcp]', name, err)
+          trace = await reportError(err, { tool: name, action: typeof args.action === 'string' ? args.action : undefined, doc: typeof args.id === 'string' ? args.id : undefined })
+        }
+        return mcpResp({ jsonrpc: '2.0', id, error: { code: -32603, message: err instanceof PublicError ? err.message : `Internal error${trace ? ` [spår ${trace}]` : ''}` } })
       }
     }
 

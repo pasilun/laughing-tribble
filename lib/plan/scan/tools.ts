@@ -1,4 +1,5 @@
 import { loadPlan } from '../service'
+import { reportError } from '../../monitor'
 import { describeError } from '../storage/storage'
 import { err, type Result } from './kit'
 import { FIND_TOOLS } from './tools-find'
@@ -23,6 +24,7 @@ export async function handleScanTool(name: string, args: Record<string, unknown>
     return await tool.run({ planId, plan: rev.plan, args })
   } catch (e) {
     console.error(`${name} misslyckades: ${describeError(e)}`)
-    return err(describeError(e))
+    const trace = await reportError(e, { tool: name, plan: planId })
+    return err(`${describeError(e)}${trace ? ` [spår ${trace}]` : ''}`)
   }
 }
