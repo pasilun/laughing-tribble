@@ -16,7 +16,7 @@ test('manage', async ({ request }) => {
   const imp = (await connector(request, 'manage', { action: 'import', args: { name: `${name} kopia`, plan } })).structuredContent!
   expect(imp.ok, JSON.stringify(imp)).toBe(true); expect(imp.id).not.toBe(id)
   const del = (await connector(request, 'manage', { action: 'delete', id })).structuredContent!
-  expect(del.data).toEqual({ result: 'trashed' })
+  expect(del.data).toMatchObject({ result: 'trashed' })
   const tr = (await connector(request, 'manage', { action: 'trash' })).structuredContent!
   expect((tr.data!.items as Array<{ id: string }>).some((i) => i.id === id)).toBe(true)
   expect((await connector(request, 'manage', { action: 'restore', id })).structuredContent!.ok).toBe(true)

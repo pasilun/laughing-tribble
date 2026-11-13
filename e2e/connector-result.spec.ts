@@ -17,12 +17,12 @@ test.describe('connector tool results', () => {
     })
   })
 
-  test('ok answer without lists is the summary only, with no isError and the answer as structuredContent', () => {
+  test('ok answer without lists is the summary only, with no isError and the answer plus the summary as structuredContent', () => {
     const a = answer({ ok: true })
     const r = toToolResult(a, { summary: 'Klart.' })
     expect(r.content).toEqual([{ type: 'text', text: 'Klart.' }])
     expect(Object.keys(r)).not.toContain('isError')
-    expect(r.structuredContent).toEqual(a)
+    expect(r.structuredContent).toEqual({ ...a, data: { text: 'Klart.' } })
   })
 
   test('a failed answer sets isError', () => {

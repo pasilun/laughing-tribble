@@ -7,8 +7,9 @@ export type ToolResult = {
   structuredContent?: Answer
 }
 
-// Packs an answer for MCP. The text block holds everything Claude needs, since clients differ in whether they
-// read `structuredContent`; the structured object repeats the answer unchanged for programs.
+// Packs an answer for MCP. The text block holds everything Claude needs. Clients differ in which part they show:
+// some read only the text, some only `structuredContent`. So the structured object is the answer with the summary
+// (the listing, the reading, the guide text) also in `data.text`; the lists (changed, findings, next) are there anyway.
 export function toToolResult(a: Answer, opts: { summary: string; images?: ImageBlock[] }): ToolResult {
   const parts: string[] = []
   if (opts.summary) parts.push(opts.summary)
@@ -25,6 +26,6 @@ export function toToolResult(a: Answer, opts: { summary: string; images?: ImageB
   for (const img of opts.images ?? []) content.push(img)
   const result: ToolResult = { content }
   if (!a.ok) result.isError = true
-  result.structuredContent = a
+  result.structuredContent = opts.summary ? { ...a, data: { ...(a.data ?? {}), text: opts.summary } } : a
   return result
 }
