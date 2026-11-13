@@ -103,10 +103,20 @@ export async function loadGray(planId: string, r: Raster): Promise<Gray> {
   return g
 }
 
+// The drawing's bytes, kept for the next tool on the same drawing. A tool that reads the drawing, computes for a long
+// time and then draws a picture from it would otherwise fetch it twice, and the second fetch can land on a connection
+// the store has closed meanwhile ("fetch failed", other side closed).
+const pngCache = new Map<string, Buffer>()
+
 export async function loadPng(planId: string, r: Raster): Promise<Buffer> {
   if (r.src.startsWith('data:')) return Buffer.from(r.src.split(',')[1], 'base64')
+  const key = `${planId}/${r.src}`
+  const hit = pngCache.get(key)
+  if (hit) return hit
   const buf = await getAsset(planId, assetName(r.src))
   if (!buf) throw new Error(`källbilden ${r.src} saknas`)
+  pngCache.set(key, buf)
+  if (pngCache.size > 4) pngCache.delete(pngCache.keys().next().value!)
   return buf
 }
 

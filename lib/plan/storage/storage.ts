@@ -123,7 +123,44 @@ export function describeError(e: unknown): string {
   const why = cause ? [cause.code, cause.message].filter(Boolean).join(': ') : ''
   return `${err?.message ?? String(e)}${why ? ` (${why})` : ''}`
 }
-export const isNetworkError = (e: unknown) => (e as Error)?.message === 'fetch failed' || /^(ECONNRESET|ETIMEDOUT|EPIPE|UND_ERR_)/.test(String(((e as { cause?: { code?: string } })?.cause)?.code ?? ''))
+export function isNetworkError(e: unknown): boolean {
+  // Libraries wrap the fetch error: look through the chain of causes.
+  for (let x: unknown = e, i = 0; x && i < 5; x = (x as { cause?: unknown }).cause, i++) {
+    const err = x as { message?: string; code?: string }
+    if (err.message === 'fetch failed' || /other side closed|socket hang up/i.test(err.message ?? '')) return true
+    if (/^(ECONNRESET|ETIMEDOUT|EPIPE|UND_ERR_)/.test(String(err.code ?? ''))) return true
+  }
+  return false
+}
+
+// Reads repeated when the connection breaks (twice, after 200 and 400 ms), for any store. Writes are not repeated:
+// a write whose answer was lost may have happened.
+export class Retrying implements Backend {
+  constructor(private inner: Backend) {}
+  private async again<T>(what: string, fn: () => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await fn()
+      } catch (e) {
+        if (attempt >= 3 || !isNetworkError(e)) throw e
+        console.warn(`${what} misslyckades (försök ${attempt}): ${describeError(e)}`)
+        await new Promise((r) => setTimeout(r, 200 * attempt))
+      }
+    }
+  }
+  read(key: string) {
+    return this.again(`Läsning av ${key}`, () => this.inner.read(key))
+  }
+  write(key: string, data: Buffer | string, contentType: string, opts?: { createOnly?: boolean }) {
+    return this.inner.write(key, data, contentType, opts)
+  }
+  remove(keys: string[]) {
+    return this.inner.remove(keys)
+  }
+  keys(prefix: string) {
+    return this.again(`Listning av ${prefix}`, () => this.inner.keys(prefix))
+  }
+}
 
 // Reads go to the origin, not the CDN: a "not found" seen while a plan was being
 // created, or the old head.json after an edit, would otherwise be served for a while.
@@ -208,7 +245,7 @@ export function blobBackend(): Backend & { page(cursor?: string, limit?: number)
 
 export function systemBackend(): Backend {
   const kind = storageKind()
-  if (kind === 'turso') return tursoBackend()
+  if (kind === 'turso') return new Retrying(tursoBackend())
   if (kind === 'blob') return new BlobBackend()
   return new FsBackend(path.resolve(process.env.PLAN_DATA_DIR ?? '.data'))
 }
