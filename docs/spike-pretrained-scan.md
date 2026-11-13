@@ -71,3 +71,13 @@ In every case the connector contract does not change: a better tracer is a bette
 - CubiCasa5k: https://github.com/CubiCasa/CubiCasa5k and https://arxiv.org/abs/1904.01920
 - Raster-to-Graph: https://diglib.eg.org/handle/10.1111/cgf15007
 - FloorplanTransformation (Raster-to-Vector): https://github.com/art-programmer/FloorplanTransformation
+
+## Result (2026-11-13)
+
+FloorplanVLM itself is not released (no code or weights; the paper promises only its benchmark). The only runnable form,
+the community LoRA adapter `minemaster01/qwen25-vl-3b-floorplan-grpo` on Qwen2.5-VL-3B, was run on the crop on a cloud
+CPU (bf16): 4096 tokens in 17 minutes (3.9 tokens/s), cut off at the limit. The 92 walls and 15 openings recovered from
+it score **0 % of wall length within 100 mm** (11 % within 200), median offset 184 mm, 0 of 7 windows, 0 of 23 doorways;
+its outline is about 600 mm wider than the image. Dropped. Next decision: a workflow for the user's own Claude, see
+`docs/trace-workflow-plan.md`. `Yytsi/floorplan-to-3d-walls` (MIT, a 98 MB UNet on CubiCasa5K) remains an optional cheap
+probe.
