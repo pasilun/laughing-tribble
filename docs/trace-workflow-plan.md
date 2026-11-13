@@ -142,3 +142,28 @@ and cupboards, duplicates); 16 walls added or joined, all at positions from the 
 - The draft read the whole sheet (other flats too): 80 walls outside the fixture's area, which a real user would not
   want. `trace` needs a region (the part of the sheet the user asks for).
 - A time limit: a whole sheet takes over a minute; `trace` should work in a region or in steps.
+
+### Trial finished (revision 14)
+
+Walls of all three flats reviewed, then the opening reader (which no longer fails: the "fetch failed" fix holds) over
+17 walls, its 31 proposals judged against the drawing, the doubtful ones removed.
+
+| | Draft | Walls by the method | Finished (rev 14) | Target |
+|---|---|---|---|---|
+| Wall length within 100 mm | 44.6 % | 73.5 % | **77.0 %** | 85 % |
+| Traced length on a real wall | 79.2 % | 96.8 % | **99.6 %** | 90 % |
+| Median offset | 5 mm | 8 mm | 5 mm | |
+| Doorways found | – | – | **5 of 23** (3 extra) | 15 |
+| Windows found | – | – | **1 of 7** (3 extra) | 7 |
+
+About 30 calls in all. Precision is now excellent; recall is limited by short wall pieces in the wet rooms and closets.
+
+**Openings are the gap.** The reader's proposals for exterior walls ("centre mark, width estimated" at 700 mm) land
+beside the real windows, and it misses most doorways drawn as hollow stretches between cross bars. Within the rule
+(no positions read off a picture) the method has no way to add an opening the reader does not offer: `edit` takes an
+offset, which Claude can only read off the picture. So T-07 (reading the three doorway markings, and windows as the
+whole stretch between reveals, with offsets from the ink) is what decides the doorway and window score, and is the next
+step. Until then a user's Claude either leaves doorways out or breaks the rule.
+
+**Bias:** the trial was run by the same Claude that built the fixture and knew where its doors are. It used that
+knowledge only to choose which proposals to keep, never to place anything; a fair test is T-08 (a fresh agent).
