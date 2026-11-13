@@ -9,6 +9,7 @@ import { SCAN_ACTIONS } from '../registries'
 import { toToolResult, type ToolResult } from '../result'
 import type { Finding, Next } from '../types'
 import type { Args } from './index'
+import { candidates } from './candidates'
 import { passed, unpack } from './legacy'
 
 const fail = (findings: Finding[], id?: string): ToolResult =>
@@ -29,6 +30,7 @@ export async function scan(args: Args): Promise<ToolResult> {
   const rev = await loadPlan(id)
   if (!rev) return fail([notFound(id)], id)
   const n = rev.meta.n
+  if (entry.name === 'candidates') return candidates(id, rev.plan, n, given, typeof args.max_tokens === 'number' ? args.max_tokens : undefined)
 
   const call = { ...given, plan_id: id, ...(entry.proposes ? { base_revision: n, apply: true } : {}) }
   const { result, taken } = await capture(rev.plan, n, async () => (await handleScanTool(entry.tool, call)) ?? { content: [], isError: true })

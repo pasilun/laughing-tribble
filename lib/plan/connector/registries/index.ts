@@ -58,6 +58,7 @@ export type ActionEntry = Entry & { tool: string; proposes?: boolean }
 export const SCAN_ACTIONS = new Registry<ActionEntry>('scan', 'skanningsåtgärd', [
   { name: 'profile', tool: 'plan_scan_profile', summary: 'Ink profile along a line in the source: where the walls cross it' },
   { name: 'diff', tool: 'plan_scan_diff', summary: 'What differs between two sources' },
+  { name: 'candidates', tool: '', summary: 'Numbered wall candidates in a region (args.region [x, y, w, h] mm, at most 6 × 6 m) that the plan does not have, each with its edit operation: judge them by eye, add the walls' },
   { name: 'detect_walls', tool: 'plan_scan_detect_walls', summary: 'Wall candidates found in the source' },
   { name: 'missing_walls', tool: 'plan_scan_missing_walls', summary: 'Drawn walls that the plan does not have' },
   { name: 'snap_walls', tool: 'plan_scan_snap_walls', proposes: true, summary: 'Proposal: walls moved onto the drawn walls' },

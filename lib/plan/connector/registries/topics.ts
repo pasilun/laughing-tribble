@@ -48,6 +48,9 @@ Never type a position read off a picture into a saved element: point roughly, an
 3. Then room by room, in small regions (about 4 x 4 m). In each: is every drawn wall in the plan, at the drawn thickness,
    ending where the drawing ends it? Is every wall in the plan really drawn (not a fixture, text or a symbol)?
    Remove what is not a wall, add what is missing by rough ends and snap it, fix ends and thickness.
+   scan (action "candidates", args.region [x, y, w, h]) shows the walls the drawing has in a region that the plan
+   lacks, numbered; say which numbers are walls and pass their op from data.candidates to edit. A wall it does not
+   offer: give rough ends to scan (action "snap_walls", args.walls) and save the result.
 4. Doorways: read them from the drawing's markings (below), wall by wall. Where a room has no marked doorway, look
    again before you guess, and ask the person rather than invent one.
 5. Verify each room: view the overlay again, and check (scope "audit") for what still differs from the drawing.

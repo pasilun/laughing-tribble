@@ -20,6 +20,8 @@ export type ViewOptions = {
   view?: 'fore' | 'efter'
   // Openings to point out (review images): numbered label and colour by id.
   marks?: Record<string, { label: string; color: string }>
+  // Wall candidates to choose from: drawn dashed in blue with their number.
+  candidates?: Array<{ n: number; a: Pt; b: Pt; thickness: number }>
 }
 
 export async function scanView(planId: string, plan: Plan, r: Raster, rect: Rect, opts: ViewOptions = {}): Promise<{ png: Buffer; scale: number }> {
@@ -146,6 +148,12 @@ function overlaySvg(plan: Plan, rect: Rect, k: number, w: number, h: number, opt
         parts.push(`<text x="${(H.x + Lf.x) / 2 + 4}" y="${(H.y + Lf.y) / 2}" font-size="11" fill="#7c3aed">${o.id}</text>`)
       }
     }
+  }
+  for (const c of opts.candidates ?? []) {
+    const q = wallQuad({ id: '', a: c.a, b: c.b, thickness: c.thickness, phase: 'existing' }).map(P)
+    parts.push(`<polygon points="${q.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" fill="#0284c7" fill-opacity="0.18" stroke="#0284c7" stroke-width="2" stroke-dasharray="6 4"/>`)
+    const m = P({ x: (c.a.x + c.b.x) / 2, y: (c.a.y + c.b.y) / 2 })
+    parts.push(`<circle cx="${m.x}" cy="${m.y}" r="12" fill="#0284c7"/><text x="${m.x}" y="${m.y + 4}" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">${c.n}</text>`)
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="Liberation Sans">${parts.join('')}</svg>`
 }
