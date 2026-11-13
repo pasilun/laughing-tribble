@@ -62,6 +62,8 @@ export function resolveSource(plan: Plan, sourceId?: string): Raster {
     return check(s)
   }
   if (!sourceId && plan.sources?.length === 1) return check(plan.sources[0])
+  const primary = !sourceId ? plan.sources?.find((s) => s.primary && s.view !== 'elevation') : undefined
+  if (primary) return check(primary)
   if (plan.underlay) return check({ id: 'underlay', ...plan.underlay } as Underlay & { id: string })
   if (plan.sources?.length) throw new Error(`ange source_id (${plan.sources.map((s) => s.id).join(', ')})`)
   throw new Error('planen har ingen källritning')

@@ -169,6 +169,7 @@ export type Source = {
   calibration?: string       // how mmPerPx was set, e.g. "pdf 1:50" or "3 mått, ±0,8 %"
   year?: number              // when the drawing was made: older ones show the building as it was
   view?: 'plan' | 'elevation' // elevation: a facade, x along the facade, y up the building
+  primary?: boolean          // the source the plan is drawn against: used when a tool is not told which source
 }
 
 export type Plan = {

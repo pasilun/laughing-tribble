@@ -29,6 +29,8 @@ const MAX_REVIEW_ITEMS = 8
 export function sourceIdOf(plan: Plan, id?: string): string | undefined {
   if (id) return id
   const list = (plan.sources ?? []).filter((s) => s.view !== 'elevation')
+  const primary = list.find((s) => s.primary)
+  if (primary) return primary.id
   return (list.find((s) => s.role === 'archive') ?? list[0])?.id ?? (plan.underlay ? 'underlay' : undefined)
 }
 
