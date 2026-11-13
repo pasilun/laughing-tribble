@@ -82,3 +82,37 @@ cost.
 Cards T-01 to T-07 go to the build runner (`work/cards/`, Haiku implements, Opus reviews), written from code
 prototyped first, as for the connector batches. T-08 is run from a session with the Agent tool. Nothing here changes
 the connector contract: the tool list stays frozen.
+
+## Hand trial, cellar drawing (2026-11-13, after T-01 to T-04)
+
+Plan `kallare-handtest-av-sparningsf-4e8e43488b98556b`: the cellar drawing (calibrated, primary), a fresh draft from
+`source` "trace", then the walls by the method, done by Claude in a session with the production connector.
+
+**Calls for the walls:** 4 candidate views (6 × 6 m regions), 3 snaps, 6 edits: 13 calls, no coordinate typed except
+two rough ends that the snap fitted and one bend point (see below).
+
+**What worked**
+- Answering by number. 18 candidates judged; 1 accepted as is, 3 turned into a mass (a chimney block), 2 confirmed a
+  wall that needed joining, the rest rejected (an edge of an existing wall, stair treads, the outside stair). Positions
+  all came from the ink.
+- Judging in small regions with the drawing under the plan: the stair treads that the draft had as three walls were
+  obvious at once, and so was the chimney block.
+- Unknown names and limits answered clearly (`candidates` before the deploy, a region over 6 × 6 m).
+
+**What the trial found missing**
+1. **Too-short walls.** The candidates skip anything that overlaps an existing wall, so the missing part of a wall that
+   is too short (the east wall stopped 2 m short at both ends; a dividing wall had a 2 m gap) was never offered. Fix:
+   offer the parts of a detected piece that extend beyond an existing wall's ends, as "extend wall X to …".
+2. **Re-fitting an existing wall.** `snap_walls` with `walls` only adds, so extending a wall takes an edit and then a
+   snap by id. Fix: let `walls` carry an existing id and treat it as an update, or say so in the guide.
+3. **Curved walls.** None in the model; the curved wall became a straight part and an angled part. The bend's lower
+   end was read off the picture (about y 6400), which the rule forbids. A snap that fits a straight wall at any angle
+   to a stretch of ink, given rough ends, would close this.
+4. **Draft walls that are not walls.** Most of the work was spotting wrong walls already in the draft (stair treads),
+   which the candidates do not show. T-06 should list, per piece, the draft walls to look at first: short, parallel,
+   evenly spaced ones (treads), walls inside a room with free ends, walls the audit finds no ink for.
+5. **Openings still fail** on this drawing with "fetch failed" (`UND_ERR_SOCKET`, Sentry PLAN-TOOL-2), in `trace` and
+   in `scan` "openings" over all walls. Needs fixing before T-07.
+
+**Verdict for the checkpoint:** answering by number is faster and safer than editing coordinates, and keeps the rule.
+Before T-06 and T-07, add 1 and 2 (small), and fix 5.
