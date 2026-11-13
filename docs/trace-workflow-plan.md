@@ -116,3 +116,29 @@ two rough ends that the snap fitted and one bend point (see below).
 
 **Verdict for the checkpoint:** answering by number is faster and safer than editing coordinates, and keeps the rule.
 Before T-06 and T-07, add 1 and 2 (small), and fix 5.
+
+## Scored trial on the 1999 survey (2026-11-13)
+
+Plan `gnejsen-152-154-sparningstest--91c5c5f2d4b5c139`: the straightened survey `a00` (the whole sheet, not the crop),
+`source` "trace", then the walls of 152–154 by the method, by Claude without the maintainer's help, in production.
+Scored with `lib/plan/bench/score.ts` against the fixture, counting traced walls inside the fixture's area
+(x 19000–30100, y 7500–21300). Walls only; doorways were not reached.
+
+| | Draft (`trace`) | After the method | Fixture benchmark (crop, `trace` only) |
+|---|---|---|---|
+| Wall length within 100 mm | 44.6 % | **73.5 %** | 61.9 % |
+| Within 50 mm | 41.8 % | 68.6 % | 55 % |
+| Traced length on a real wall (100 mm) | 79.2 % | **96.8 %** | 84.1 % |
+| Median offset | 5 mm | 8 mm | 12 mm |
+
+**Calls:** 5 candidate views, 3 snaps, 5 edits (13 calls) for about 60 % of the floor area of the fixture. The draft took
+longer than 60 s on the whole sheet (about 40 Mpx) and timed out for the client, though it finished and saved.
+
+**What the method fixed:** 12 draft "walls" deleted (room labels "102 vent", "Tamb.", "102 vent" in 154, kitchen counters
+and cupboards, duplicates); 16 walls added or joined, all at positions from the ink (candidates or snaps from rough ends).
+
+**What is left (to reach the 85 % target):**
+- Not reviewed: the south half of 154 (the dining room and the large rooms) and 152's south-west; and the doorways.
+- The draft read the whole sheet (other flats too): 80 walls outside the fixture's area, which a real user would not
+  want. `trace` needs a region (the part of the sheet the user asks for).
+- A time limit: a whole sheet takes over a minute; `trace` should work in a region or in steps.
