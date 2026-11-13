@@ -73,6 +73,21 @@ export const SOURCE_ACTIONS = new Registry<ActionEntry>('source', 'källåtgärd
   { name: 'register', tool: 'plan_scan_register', summary: 'Align a source to another source' },
   { name: 'trace', tool: '', summary: 'A first draft from a source: calibrates, finds walls, openings and windows. args: { source_id?, printed_outer_mm?, dimensions? }' },
 ])
+// How archive drawings show things, as found while tracing real ones. The guide topic "trace" lists them; a new one is
+// added here and shows the same day.
+export const CONVENTIONS = new Registry<Entry>('conventions', 'konvention', [
+  { name: 'doorway-cross-bars', summary: 'A doorway in a solid or outlined wall: a hollow stretch between two short cross bars' },
+  { name: 'doorway-dashed', summary: 'A doorway shown as a dashed stretch of wall (the wall continues as dashes across the opening)' },
+  { name: 'doorway-ticks', summary: 'A doorway in a double-line wall: a gap in both lines between two ticks' },
+  { name: 'door-swing-unknown', summary: 'Old surveys rarely show which way a door opens: add the doorway as an opening, not a door with hinge and swing' },
+  { name: 'window-sill-lines', summary: 'A window in an exterior wall: thin sill lines across the wall core between chamfered reveals, or a hollow stretch in a wall drawn solid' },
+  { name: 'riser-circle', summary: 'A round symbol beside a wet room is a riser (stam): solid, drawn as a mass, not floor space' },
+  { name: 'tapered-wall-mass', summary: 'A thick wall with a sloping side (beside a stairwell) is a mass, not a straight wall' },
+  { name: 'fixtures-not-walls', summary: 'Counters, WC bowls, basins, bathtubs, stoves and the boxes drawn inside closets are fixtures: never walls' },
+  { name: 'text-not-walls', summary: 'Room names, numbers and their underlines are text: never walls' },
+  { name: 'dashed-boundary', summary: 'A dashed line through a room with no wall thickness is a boundary or ceiling line, not a wall' },
+])
+
 export const MANAGE_ACTIONS = new Registry<Entry & { needsId: boolean }>('manage', 'hanteringsåtgärd', [
   { name: 'create_site', needsId: false, summary: 'A new site plan from a property designation. args: { designation }' },
   { name: 'create', needsId: false, summary: 'A new document. args: { name, template?: "empty" | "demo" }' },
@@ -92,5 +107,5 @@ export const TEMPLATES = new Registry<Entry>('templates', 'mall', [
 // Every family, by its English key. The guide's `vocabulary` topic is written from this.
 export const FAMILIES: Record<string, Registry<Entry>> = {
   operations: OPERATIONS as Registry<Entry>, site_operations: SITE_OPERATIONS, parts: PARTS, list: LIST_KINDS, views: VIEWS, checks: CHECKS,
-  formats: FORMATS, exports: EXPORTS, sheets: SHEETS, scan: SCAN_ACTIONS, source: SOURCE_ACTIONS, manage: MANAGE_ACTIONS as Registry<Entry>, topics: TOPICS as Registry<Entry>,
+  formats: FORMATS, exports: EXPORTS, sheets: SHEETS, scan: SCAN_ACTIONS, source: SOURCE_ACTIONS, conventions: CONVENTIONS, manage: MANAGE_ACTIONS as Registry<Entry>, topics: TOPICS as Registry<Entry>,
 }

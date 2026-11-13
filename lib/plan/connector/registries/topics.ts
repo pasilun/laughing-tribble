@@ -38,6 +38,23 @@ const actionsDoc = (reg: Registry<Entry>, extra: Record<string, string>) =>
 const TRACE_DOC = '  args:\n    source_id: string – default: the drawing that was uploaded\n    printed_outer_mm: { width, length } – the outside size printed on the drawing, in mm\n    dimensions: [{ a: {x,y}, b: {x,y}, mm }] – printed dimension lines with rough end points in plan mm (view shows a grid)\n  Saves a new revision: walls, openings and windows. Not with dry_run.'
 const LINK_DOC = '  No args. The person opens the link and adds the drawing; the revision grows.'
 
+const TRACE = `Tracing a scanned drawing: Claude decides what is there, the drawing decides where.
+Never type a position read off a picture into a saved element: point roughly, and let the engine fit it to the ink
+(scan, action "snap_walls"), or use a printed dimension.
+
+1. Calibrate and draft: source (action "trace") with the outer size printed on the drawing.
+2. Outline first: exterior walls, the stair, the walls to the neighbours. Look at view (view "overlay", a region of a
+   few metres) and compare every wall with the drawing.
+3. Then room by room, in small regions (about 4 x 4 m). In each: is every drawn wall in the plan, at the drawn thickness,
+   ending where the drawing ends it? Is every wall in the plan really drawn (not a fixture, text or a symbol)?
+   Remove what is not a wall, add what is missing by rough ends and snap it, fix ends and thickness.
+4. Doorways: read them from the drawing's markings (below), wall by wall. Where a room has no marked doorway, look
+   again before you guess, and ask the person rather than invent one.
+5. Verify each room: view the overlay again, and check (scope "audit") for what still differs from the drawing.
+6. Ask the person one short list of what the drawing cannot answer. Then rooms, title block and export.
+If a plan has several drawings, mark the one it is drawn against with edit
+({"op":"update","kind":"source","id":"…","patch":{"primary":true}}): views and scans use it when none is named.`
+
 export const TOPICS = new Registry<TopicEntry>('topics', 'ämne', [
   { name: 'work', summary: 'The working order', text: () => ({ summary: WORK }) },
   { name: 'ops', summary: 'The operations of edit, with fields and examples',
@@ -53,6 +70,11 @@ export const TOPICS = new Registry<TopicEntry>('topics', 'ämne', [
     text: (families) => ({ summary: `Anropa source med id, base_revision, action och args. Sparar en ny revision; med dry_run sparas inget (inte för add och trace).\n\n${actionsDoc(families.source, { upload_link: LINK_DOC, trace: TRACE_DOC })}`, data: { actions: families.source.names() } }) },
   { name: 'sites', summary: 'Site plans: a property seen from above',
     text: (families) => ({ summary: `En tomt har id som börjar med "site:" (till exempel site:lovinge-3-2). get, view, edit, list (what "sites") och manage (share, delete, restore, create_site) tar det. check, scan, source och export gäller bara planritningar.\nKoordinater är lokala meter: x öster, y norr om fastighetens sydvästra hörn.\n\nOperationer för edit på en tomt: ${families.site_operations.names().join(', ')}\n${families.site_operations.entries.map((e) => `- ${e.summary}`).join('\n')}\nExempel: { "op": "add", "item": { "type": "area", "name": "Växthus", "kind": "byggnad", "status": "idé", "rect": { "x": 30, "y": 112, "w": 6, "d": 4 } } }\nView-alternativ: options.underlay är "flyg", "karta" eller utelämnat.`, data: { operations: families.site_operations.names() } }) },
+  { name: 'trace', summary: 'How to trace a scanned drawing into a plan, and how archive drawings show things',
+    text: (families) => ({
+      summary: `${TRACE}\n\nHow archive drawings show things:\n${families.conventions.entries.map((e) => `- ${e.name}: ${e.summary}`).join('\n')}`,
+      data: { conventions: families.conventions.entries.map((e) => ({ name: e.name, summary: e.summary })) },
+    }) },
   { name: 'findings', summary: 'The shape of a finding and the standard codes', text: () => ({ summary: FINDINGS }) },
 ])
 export const WORK_TEXT = WORK

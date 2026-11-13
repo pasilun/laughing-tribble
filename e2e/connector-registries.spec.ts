@@ -7,11 +7,11 @@ test('parts are the six parts of a plan', () => {
 
 test('list kinds and topics', () => {
   expect(LIST_KINDS.names()).toEqual(['plans', 'revisions', 'sites'])
-  expect(TOPICS.names()).toEqual(['work', 'ops', 'vocabulary', 'scan', 'source', 'sites', 'findings'])
+  expect(TOPICS.names()).toEqual(['work', 'ops', 'vocabulary', 'scan', 'source', 'sites', 'trace', 'findings'])
 })
 
 test('families are listed by their English keys', () => {
-  expect(Object.keys(FAMILIES)).toEqual(['operations', 'site_operations', 'parts', 'list', 'views', 'checks', 'formats', 'exports', 'sheets', 'scan', 'source', 'manage', 'topics'])
+  expect(Object.keys(FAMILIES)).toEqual(['operations', 'site_operations', 'parts', 'list', 'views', 'checks', 'formats', 'exports', 'sheets', 'scan', 'source', 'conventions', 'manage', 'topics'])
 })
 
 test('every family names itself by its key', () => {
