@@ -198,12 +198,16 @@ from rough positions and fitted them with `snap_walls`. Run 1 drew the whole are
 wall and its window methods found nothing on the exterior walls: windows score well, but by breaking the rule. Neither
 found the doorways drawn as hollow stretches; both asked whether dashed stretches are doorways.
 
-**Faults found in the connector:**
-- `scan` "snap_walls" with new rough walls (`args.walls`) answered "Internal error" three times; it only worked after
-  the walls were added with `edit` and snapped by id.
-- `edit` answered "Internal error" once, though the revision was saved; once a 502 with nothing saved, after which
-  `get` briefly said "document not found".
-- `get` warns that the source is not calibrated although it has a scale and is the primary source.
+**Faults found in the connector** (traced in Sentry afterwards, fixed in the next commit):
+- The three "Internal error" answers from `scan` "snap_walls" were not about snapping: the database (Turso) answered
+  HTTP 502 for a few minutes (PLAN-TOOL-3; Sentry dropped the two repeats as duplicates), and a 502 was not treated as
+  temporary, so the read was not repeated. The same outage gave run 1 its failed `edit`. Reads now count 502–504 as
+  temporary, are repeated three more times over about two seconds, and then say plainly that the store is down.
+- The `edit` that answered "Internal error" after saving failed while drawing its picture: the test plans were
+  imported with an empty title block, and the sheet could not print a missing field (PLAN-TOOL-4). Fixed.
+- `get` said "kalibrera med plan_scan_calibrate", an old tool name; it now names `source` (action "calibrate"). The
+  warning itself is right: the sheet had a scale but was not calibrated against printed dimensions (the setup skipped
+  that step on purpose).
 
 **What it says.** Without being led, Sonnet does not find the trace workflow (T-03's guide topic is not where it starts).
 Walls are close to the target in a good run; doorways are the gap, as in the hand trial, and windows are only found by
