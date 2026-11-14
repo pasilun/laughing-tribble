@@ -39,6 +39,7 @@ export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: s
   // A wall stored on a face is measured on its centre line in the view; a fix written from that view would
   // put the stored wall half a thickness off, so such a wall gets no fix (the plan as given is kept).
   const onFace = hasFaceWalls(plan)
+  const stored = plan
   plan = centreLines(plan)
   const items: AuditItem[] = []
   const sid = sourceIdOf(plan, opts.sourceId)
@@ -100,8 +101,10 @@ export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: s
       if (o.kind === 'window' || o.through) continue
       const wall = plan.walls.find((w) => w.id === o.wallId)
       if (!wall) continue
+      // The check reads the centre-line view; the message quotes the offset as stored, which is what the user finds in the file.
+      const offset = stored.openings.find((x) => x.id === o.id)?.offset ?? o.offset
       if (showsWall(g, r, plan, wall, o.offset, o.width) === true)
-        items.push({ id: `opening:${o.id}`, level: 'warning', text: `${o.kind === 'door' ? 'Dörren' : 'Öppningen'} ${o.id} i ${wall.id} (offset ${o.offset}, bredd ${o.width}): ritningen visar hel vägg där. Flytta den, eller ta bort den om den inte finns.` })
+        items.push({ id: `opening:${o.id}`, level: 'warning', text: `${o.kind === 'door' ? 'Dörren' : 'Öppningen'} ${o.id} i ${wall.id} (offset ${offset}, bredd ${o.width}): ritningen visar hel vägg där. Flytta den, eller ta bort den om den inte finns.` })
     }
     const doors = stretch.length ? { ops: [] as Op[], readings: [] } : readDoors(g, r, plan)
     for (const op of doors.ops) {
