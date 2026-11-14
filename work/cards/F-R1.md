@@ -2,7 +2,7 @@
 id: F-R1
 title: "Checkpoint: walls on faces, step 1 (F-01…F-03)"
 tier: R
-status: ready
+status: in_progress
 depends: [F-01, F-02, F-03]
 spec: ["docs/v2-engine-plan.md §3", "spikes/face-walls/README.md", "work/CLAUDE.md"]
 attempts: 0
