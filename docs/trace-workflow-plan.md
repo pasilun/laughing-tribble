@@ -167,3 +167,44 @@ step. Until then a user's Claude either leaves doorways out or breaks the rule.
 
 **Bias:** the trial was run by the same Claude that built the fixture and knew where its doors are. It used that
 knowledge only to choose which proposals to keep, never to place anything; a fair test is T-08 (a fresh agent).
+
+### Correction (2026-11-14): how the trial was scored
+
+The numbers above counted only walls with both ends inside the fixture's area, which leaves out the exterior walls
+that run on past the three flats. Cutting each wall at the area's edge instead (`scripts/score-1999.ts`, mode `clip`,
+the rule used from now on) gives for revision 14: **94.9 %** of wall length within 100 mm, 97.9 % on a real wall,
+doorways 7 of 23 (3 extra), windows 3 of 7 (4 extra). On walls the method already passes the 85 % target.
+
+## Baseline: Sonnet with today's connector (2026-11-14)
+
+Step 1 of `docs/v2-engine-plan.md`, run from a session with no API key: two fresh Sonnet agents, each with only the
+ten connector tools, no repository, nobody to ask, and the user's request "draw the existing walls, doorways and
+windows of flats 152–154" with their rough area. Each got a plan with only the straightened sheet `a00` (already at
+scale, so no calibration). Scored with `scripts/score-1999.ts` (clip).
+
+| | Run 1 | Run 2 | Hand trial (method, rev 14) | Target |
+|---|---|---|---|---|
+| Wall length within 100 mm | 83.7 % | 67.7 % | 94.9 % | 85 % |
+| Traced length on a real wall | 84.7 % | 91.1 % | 97.9 % | 90 % |
+| Median offset | 10 mm | 5 mm | 5 mm | |
+| Doorways | 2 of 23 | 2 of 23 | 7 of 23 | 15 |
+| Windows | 7 of 7 (1 extra) | 6 of 7 (1 extra) | 3 of 7 | 7 |
+| Tool calls | 24 | 25 | about 30 | |
+| Time | 3.1 min | 3.2 min | | |
+
+**What the agents did.** Neither made a draft with `source` "trace" nor followed the trace method; both drew the walls
+from rough positions and fitted them with `snap_walls`. Run 1 drew the whole area; run 2 left out the west part
+(x 19 000–22 600). Both read the window positions off the picture, because the opening reader proposed gaps in solid
+wall and its window methods found nothing on the exterior walls: windows score well, but by breaking the rule. Neither
+found the doorways drawn as hollow stretches; both asked whether dashed stretches are doorways.
+
+**Faults found in the connector:**
+- `scan` "snap_walls" with new rough walls (`args.walls`) answered "Internal error" three times; it only worked after
+  the walls were added with `edit` and snapped by id.
+- `edit` answered "Internal error" once, though the revision was saved; once a 502 with nothing saved, after which
+  `get` briefly said "document not found".
+- `get` warns that the source is not calibrated although it has a scale and is the primary source.
+
+**What it says.** Without being led, Sonnet does not find the trace workflow (T-03's guide topic is not where it starts).
+Walls are close to the target in a good run; doorways are the gap, as in the hand trial, and windows are only found by
+reading the picture.
