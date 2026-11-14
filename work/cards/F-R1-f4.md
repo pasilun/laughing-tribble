@@ -2,7 +2,7 @@
 id: F-R1-f4
 title: "Audit quotes the stored opening offset"
 tier: H
-status: ready
+status: in_progress
 depends: []
 spec: ["work/cards/F-R1.md (defect 4)"]
 files: [lib/plan/assist/audit.ts, e2e/faces-audit.spec.ts]
