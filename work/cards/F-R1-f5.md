@@ -2,7 +2,7 @@
 id: F-R1-f5
 title: "Refusal names the connector action"
 tier: H
-status: in_progress
+status: done
 depends: []
 spec: ["work/cards/F-R1.md (defect 5)"]
 files: [lib/plan/scan/tools.ts, lib/plan/connector/handlers/scan.ts, lib/plan/connector/handlers/source.ts]

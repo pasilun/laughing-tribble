@@ -1,6 +1,7 @@
 import { applyOps, type Op } from '../../domain/ops'
 import { capture } from '../../scan/kit'
-import { handleScanTool } from '../../scan/tools'
+import { FACE_UNSAFE, handleScanTool } from '../../scan/tools'
+import { faceWallsUnsupported, hasFaceWalls } from '../../domain/faces'
 import { loadPlan } from '../../service'
 import { PLANS } from '../../storage/docs'
 import { answer } from '../answer'
@@ -31,6 +32,8 @@ export async function scan(args: Args): Promise<ToolResult> {
   if (!rev) return fail([notFound(id)], id)
   const n = rev.meta.n
   if (entry.name === 'candidates') return candidates(id, rev.plan, n, given, typeof args.max_tokens === 'number' ? args.max_tokens : undefined)
+  // Refused here, in the connector's words, so the refusal names the action and not the old tool.
+  if (FACE_UNSAFE.has(entry.tool) && hasFaceWalls(rev.plan)) return fail([invalidOperation(faceWallsUnsupported(`scan (action "${entry.name}")`))], id)
 
   const call = { ...given, plan_id: id, ...(entry.proposes ? { base_revision: n, apply: true } : {}) }
   const { result, taken } = await capture(rev.plan, n, async () => (await handleScanTool(entry.tool, call)) ?? { content: [], isError: true })

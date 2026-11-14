@@ -5,6 +5,7 @@ import { loadPlan } from '../../service'
 import { PLANS } from '../../storage/docs'
 import { answer, finding } from '../answer'
 import { changedList } from '../changes'
+import { faceWallsUnsupported, hasFaceWalls } from '../../domain/faces'
 import { badArgument, invalidOperation, notFound, staleRevision } from '../findings'
 import { SOURCE_ACTIONS } from '../registries'
 import { modernWords } from '../wording'
@@ -44,6 +45,8 @@ export async function source(args: Args): Promise<ToolResult> {
   if (typeof args.base_revision !== 'number') return fail([badArgument('base_revision', 'krävs')], id, n)
   if (args.base_revision !== n) return fail([staleRevision(args.base_revision, n)], id, n)
   if (dry && (name === 'add' || name === 'trace')) return fail([badArgument('dry_run', `går inte för åtgärden ${name}`)], id, n)
+  // Refused here, in the connector's words, so the refusal names the action and not the old tool.
+  if (name === 'trace' && hasFaceWalls(before.plan)) return fail([invalidOperation(faceWallsUnsupported('source (action "trace")'))], id, n)
 
   let text: string
   let images: ImageBlock[] = []

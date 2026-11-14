@@ -18,7 +18,7 @@ export const SCAN_TOOLS = TOOLS.map(({ name, description, inputSchema }) => ({ n
 // The readers that measure ink across a wall or write wall geometry or openings back still assume a wall centred on
 // its stored line. Until they read a wall's body, they refuse a plan with walls stored on a face rather than write
 // something half a thickness off.
-const FACE_UNSAFE = new Set(['plan_scan_missing_walls', 'plan_scan_snap_walls', 'plan_scan_openings', 'plan_openings_report', 'plan_scan_elevation', 'plan_scan_doors'])
+export const FACE_UNSAFE = new Set(['plan_scan_missing_walls', 'plan_scan_snap_walls', 'plan_scan_openings', 'plan_openings_report', 'plan_scan_elevation', 'plan_scan_doors'])
 
 export async function handleScanTool(name: string, args: Record<string, unknown>): Promise<Result | null> {
   const tool = TOOLS.find((t) => t.name === name)
