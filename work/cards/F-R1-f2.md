@@ -2,7 +2,7 @@
 id: F-R1-f2
 title: "finishPlan measures the envelope on the view"
 tier: H
-status: ready
+status: in_progress
 depends: []
 spec: ["work/cards/F-R1.md (defect 2)", "docs/v2-engine-plan.md §3 (Walls on faces)"]
 files: [lib/plan/assist/finish.ts, e2e/faces.spec.ts]
