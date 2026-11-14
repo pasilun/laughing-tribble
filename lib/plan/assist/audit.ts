@@ -8,7 +8,7 @@ import { showsWall } from '../scan/openings'
 import { loadGray, resolveSource } from '../scan/raster'
 import { snapWalls } from '../scan/snap'
 import type { Plan, Wall } from '../domain/types'
-import { centreLines, hasFaceWalls } from '../domain/faces'
+import { centreLines } from '../domain/faces'
 
 // plan_audit: the plan checked against the drawing it was traced from, by the server, so that
 // whoever draws it (a small model, or a large one reviewing) reads a short list of numbered
@@ -38,7 +38,7 @@ export function sourceIdOf(plan: Plan, id?: string): string | undefined {
 export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: string; printed?: { width: number; length: number } } = {}): Promise<AuditItem[]> {
   // A wall stored on a face is measured on its centre line in the view; a fix written from that view would
   // put the stored wall half a thickness off, so such a wall gets no fix (the plan as given is kept).
-  const onFace = hasFaceWalls(plan)
+  const onFace = (id: string) => !!plan.walls.find((w) => w.id === id)?.ref
   const stored = plan
   plan = centreLines(plan)
   const items: AuditItem[] = []
@@ -69,7 +69,7 @@ export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: s
       const dT = (s?.thickness ?? rep.thicknessMm) - w.thickness
       if (s && (moved > SHIFT_MM || Math.abs(dT) > THICKNESS_MM)) {
         const what = [moved > SHIFT_MM ? `ligger ${moved} mm från ritningen` : '', Math.abs(dT) > THICKNESS_MM ? `tjocklek ${w.thickness} mot ritningens ${s.thickness}` : ''].filter(Boolean).join(', ')
-        items.push(onFace
+        items.push(onFace(w.id)
           ? {
             id: `wall:${w.id}`,
             level: moved > 100 ? 'error' : 'warning',
