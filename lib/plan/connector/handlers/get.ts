@@ -1,4 +1,5 @@
 import { changedSince, links, summarisePlan, type Section } from '../../mcp/format'
+import { modernWords } from '../wording'
 import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
 import { answer } from '../answer'
@@ -68,7 +69,7 @@ export async function get(args: Args): Promise<ToolResult> {
   }
 
   // 6. Summary text
-  const summary = `Revision ${rev.meta.n} (${rev.meta.message})\n${body}\n\n${links(rev.plan, rev.meta.n)}`
+  const summary = modernWords(`Revision ${rev.meta.n} (${rev.meta.message})\n${body}\n\n${links(rev.plan, rev.meta.n)}`)
 
   // 7. Answer
   const plan = format === 'json' && rev.plan.underlay ? { ...rev.plan, underlay: { ...rev.plan.underlay, src: '…' } } : rev.plan

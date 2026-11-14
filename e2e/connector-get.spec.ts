@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { connector, makePlan } from './connector-helpers'
+import { readFileSync } from 'fs'
+import { connector, legacy, makePlan } from './connector-helpers'
 
 test('reads the whole listing as text, with one block and no picture', async ({ request }) => {
   const { id } = await makePlan(request, 'Läsning')
@@ -66,4 +67,22 @@ test('an unknown plan is not-found', async ({ request }) => {
   expect(r.structuredContent!.ok).toBe(false)
   expect(r.structuredContent!.findings![0].code).toBe('not-found')
   expect(r.isError).toBe(true)
+})
+
+test('the listing names the new tools, not the old ones (an uncalibrated source points to source "calibrate")', async ({ request }) => {
+  const { id, revision } = await makePlan(request, 'Läsning källa')
+  const added = await legacy(request, 'plan_source_add', { plan_id: id, base_revision: revision, id: 'a', role: 'archive', filename: 'a.png', data_base64: readFileSync('e2e/fixtures/cellar/kallare.png').toString('base64'), mm_per_px: 10, x: 0, y: 0 })
+  expect(added.isError, added.content[0].text).toBeFalsy()
+  const text = (await connector(request, 'get', { id })).content[0].text!
+  expect(text).toContain('source (action "calibrate")')
+  expect(text).not.toMatch(/\bplan_[a-z_]+\b/)
+})
+
+test('a plan imported with an empty title block still draws its sheet after an edit', async ({ request }) => {
+  const made = await connector(request, 'manage', { action: 'import', args: { name: `Tom ruta ${Date.now()}`, plan: { walls: [], sheet: { northAngle: 0, orientation: 'portrait', paper: 'A3', scale: 50, titleBlock: {} } } } })
+  expect(made.isError, made.content[0].text).toBeFalsy()
+  const { id, revision } = made.structuredContent!
+  const ed = await connector(request, 'edit', { id, base_revision: revision, image: true, ops: [{ op: 'add', kind: 'wall', item: { id: 'w1', a: { x: 0, y: 0 }, b: { x: 3000, y: 0 }, thickness: 100, phase: 'existing' } }] })
+  expect(ed.isError, ed.content[0].text).toBeFalsy()
+  expect(ed.content.some((c) => c.type === 'image')).toBe(true)
 })

@@ -129,12 +129,19 @@ export function isNetworkError(e: unknown): boolean {
     const err = x as { message?: string; code?: string }
     if (err.message === 'fetch failed' || /other side closed|socket hang up/i.test(err.message ?? '')) return true
     if (/^(ECONNRESET|ETIMEDOUT|EPIPE|UND_ERR_)/.test(String(err.code ?? ''))) return true
+    // The store's gateway answering 502, 503 or 504 (seen from Turso for a minute at a time): the request never ran.
+    const status = (x as { status?: unknown }).status
+    if ((typeof status === 'number' && status >= 502 && status <= 504) || /HTTP status 50[234]\b/.test(err.message ?? '')) return true
   }
   return false
 }
 
-// Reads repeated when the connection breaks (twice, after 200 and 400 ms), for any store. Writes are not repeated:
-// a write whose answer was lost may have happened.
+// What a person is told when a read still fails after the retries: the store, not the plan, is the problem.
+export const STORE_UNAVAILABLE = 'Lagringen svarar inte just nu (ett tillfälligt fel hos databasen). Inget ändrades; försök igen om en minut.'
+
+// Reads repeated when the connection breaks or the store's gateway fails (three more tries, after 0.25, 0.5 and 1 s),
+// for any store; a read that still fails becomes a plain message. Writes are not repeated: a write whose answer was
+// lost may have happened.
 export class Retrying implements Backend {
   constructor(private inner: Backend) {}
   private async again<T>(what: string, fn: () => Promise<T>): Promise<T> {
@@ -142,9 +149,10 @@ export class Retrying implements Backend {
       try {
         return await fn()
       } catch (e) {
-        if (attempt >= 3 || !isNetworkError(e)) throw e
+        if (!isNetworkError(e)) throw e
+        if (attempt >= 4) throw new PublicError(STORE_UNAVAILABLE, 503)
         console.warn(`${what} misslyckades (försök ${attempt}): ${describeError(e)}`)
-        await new Promise((r) => setTimeout(r, 200 * attempt))
+        await new Promise((r) => setTimeout(r, 250 * 2 ** (attempt - 1)))
       }
     }
   }
