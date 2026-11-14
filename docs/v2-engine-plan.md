@@ -77,7 +77,7 @@ Sizes are estimates. Almost all of it is TypeScript in v1.
 | # | Work | What it delivers | Size |
 |---|---|---|---|
 | 0 | Housekeeping | The dropped v2 cards marked as dropped; the plan documents on one branch | Done 2026-11-11 |
-| 1 | Baseline eval | `npm run eval:agent` with a real model on today's connector, so later changes can be compared | A few dollars of API use |
+| 1 | Baseline eval | Dropped 2026-11-14 (no API key for the app). The trace workflow's fresh-agent run (T-08) is done from a session instead | – |
 | 2 | The connector contract | The ten tools, one answer shape, registries, a generated guide, the frozen-list test, today's 37 tools mapped across | 25–35 cards. **First batch written: `work/cards/S2-01`…`S2-R1` (foundation, frozen list, endpoint, guide, edit, get, list).** Next: `check`, `view`, `manage`, `export`, `source`, `scan`, then removing the old tools |
 | 3 | Walls on faces, and better words | The reference side and the temporary centre-line view; the move of the 32 places to one body function, then the view deleted; operations that speak in faces; compass words for hinges and swings; openings anchored to a face; things named by position as well as by id; checks for stale dimensions and for text over walls | 20–28 cards |
 | 4 | Measurements as input | State a clear distance between two named faces; the plan's value reported against each; apply by moving a named face | 8–12 cards |
@@ -88,12 +88,13 @@ Sizes are estimates. Almost all of it is TypeScript in v1.
 
 **How it is built.** Cards live in `work/cards/`, the rules in `work/CLAUDE.md`, the runner in `work/RUNNER.md`; the two agents are `.claude/agents/v1-implementer.md` (Haiku) and `v1-reviewer.md` (Opus). Runs work on the branch `auto/v1-build`, which the runner creates. The scheduled runs are paused and no trigger exists for this runner yet.
 
-## 5. Decisions waiting on the maintainer
+## 5. Decisions (settled 2026-11-14)
 
-- **Laser readings:** an operation, or a source (a list of dimensions with provenance and tolerance, like a drawing)? The second fits "which source wins", which came up repeatedly.
-- **Conflicting measurements:** refuse to save, or save them and keep the last good drawing while the conflict is open?
-- **View links:** may anyone holding the link open it without signing in?
-- **The eval:** it needs an API key in the environment of the session that runs it.
+- **Laser readings are a source:** a list of dimensions with provenance and tolerance, like a drawing, so "which source wins" is answered the same way as for drawings.
+- **Conflicting measurements are saved and flagged:** the plan keeps the last good drawing and shows the open conflict until it is resolved.
+- **View links open without signing in,** with an expiry and a way to revoke them.
+- **No API key for the app:** the baseline eval (step 1) is dropped.
+- **Still open:** when the old tools are removed (after the maintainer is sure the ten tools work), and the doorway reader (T-07, parked).
 
 ## 6. What happens to v2
 
