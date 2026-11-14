@@ -112,7 +112,7 @@ export const FIND_TOOLS: ScanTool[] = [
   {
     name: 'plan_scan_snap_walls',
     description:
-      'Snaps walls onto the source drawing: give existing wall_ids and/or rough new walls (same fields as plan_edit add wall, ~±100 mm is enough). Cross-sections find the drawn wall, a line fit sets position and angle, the median sets thickness, and ends near another wall are joined at the centreline. Returns a report per wall (confidence, shift, thickness, scatter) and an overlay image. apply=false previews only.',
+      'Snaps walls onto the source drawing: give existing wall_ids and/or rough walls (same fields as plan_edit add wall, ~±100 mm is enough; a rough wall with an existing id re-fits that wall from the new ends, e.g. to extend it). Cross-sections find the drawn wall, a line fit sets position and angle, the median sets thickness, and ends near another wall are joined at the centreline. Returns a report per wall (confidence, shift, thickness, scatter) and an overlay image. apply=false previews only.',
     inputSchema: {
       type: 'object',
       properties: {

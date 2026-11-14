@@ -1,5 +1,6 @@
 import { along, bounds, polygonArea, wallLength, wallQuad, wallSegments } from './geometry'
 import type { Plan, Pt, Room, View } from './types'
+import { centreLines } from './faces'
 
 // Room areas from the walls: rasterise the walls shown in a view (openings
 // count as closed, so rooms don't leak through doors, except a passage marked
@@ -39,6 +40,7 @@ export function roomAreas(plan: Plan, view: View): Map<string, number> {
 // fitted and centred.
 export type Clear = { w: number; h: number; mid: Pt }
 export function roomSpaces(plan: Plan, view: View): { areas: Map<string, number>; includes: Map<string, string[]>; clear: Map<string, Clear> } {
+  plan = centreLines(plan)
   const includes = new Map<string, string[]>()
   const clear = new Map<string, Clear>()
   const areas = spaces(plan, view, includes, clear)
@@ -161,6 +163,7 @@ export type Space = { rooms: string[]; area: number; open: boolean; at: Pt } // 
 export type SpaceGrid = { spaces: Space[]; at: (p: Pt) => number }
 
 export function spaceGrid(plan: Plan, view: View): SpaceGrid | null {
+  plan = centreLines(plan)
   const walls = plan.walls.filter((w) => (view === 'fore' ? w.phase !== 'new' : w.phase !== 'demolish'))
   const g = walls.length ? rasterise(plan, view, walls) : null
   if (!g) return null

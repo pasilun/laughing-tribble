@@ -8,6 +8,7 @@ import { showsWall } from '../scan/openings'
 import { loadGray, resolveSource } from '../scan/raster'
 import { snapWalls } from '../scan/snap'
 import type { Plan, Wall } from '../domain/types'
+import { centreLines, hasFaceWalls } from '../domain/faces'
 
 // plan_audit: the plan checked against the drawing it was traced from, by the server, so that
 // whoever draws it (a small model, or a large one reviewing) reads a short list of numbered
@@ -35,6 +36,11 @@ export function sourceIdOf(plan: Plan, id?: string): string | undefined {
 }
 
 export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: string; printed?: { width: number; length: number } } = {}): Promise<AuditItem[]> {
+  // A wall stored on a face is measured on its centre line in the view; a fix written from that view would
+  // put the stored wall half a thickness off, so such a wall gets no fix (the plan as given is kept).
+  const onFace = hasFaceWalls(plan)
+  const stored = plan
+  plan = centreLines(plan)
   const items: AuditItem[] = []
   const sid = sourceIdOf(plan, opts.sourceId)
   const src = sid ? (plan.sources ?? []).find((s) => s.id === sid) : undefined
@@ -63,13 +69,19 @@ export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: s
       const dT = (s?.thickness ?? rep.thicknessMm) - w.thickness
       if (s && (moved > SHIFT_MM || Math.abs(dT) > THICKNESS_MM)) {
         const what = [moved > SHIFT_MM ? `ligger ${moved} mm från ritningen` : '', Math.abs(dT) > THICKNESS_MM ? `tjocklek ${w.thickness} mot ritningens ${s.thickness}` : ''].filter(Boolean).join(', ')
-        items.push({
-          id: `wall:${w.id}`,
-          level: moved > 100 ? 'error' : 'warning',
-          text: `Väggen ${w.id}: ${what}.`,
-          fix: [{ op: 'update', kind: 'wall', id: w.id, patch: { a: s.a, b: s.b, thickness: s.thickness } }],
-          fixText: `fäst mot ritningen: (${s.a.x},${s.a.y})→(${s.b.x},${s.b.y}) tj ${s.thickness}`,
-        })
+        items.push(onFace
+          ? {
+            id: `wall:${w.id}`,
+            level: moved > 100 ? 'error' : 'warning',
+            text: `Väggen ${w.id}: ${what}. Väggen är kopplad till en rumsyta; ändra den för hand.`,
+          }
+          : {
+            id: `wall:${w.id}`,
+            level: moved > 100 ? 'error' : 'warning',
+            text: `Väggen ${w.id}: ${what}.`,
+            fix: [{ op: 'update', kind: 'wall', id: w.id, patch: { a: s.a, b: s.b, thickness: s.thickness } }],
+            fixText: `fäst mot ritningen: (${s.a.x},${s.a.y})→(${s.b.x},${s.b.y}) tj ${s.thickness}`,
+          })
       }
     }
     // The plan follows the printed dimensions; the scan may be stretched. Then the distance to the
@@ -89,8 +101,10 @@ export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: s
       if (o.kind === 'window' || o.through) continue
       const wall = plan.walls.find((w) => w.id === o.wallId)
       if (!wall) continue
+      // The check reads the centre-line view; the message quotes the offset as stored, which is what the user finds in the file.
+      const offset = stored.openings.find((x) => x.id === o.id)?.offset ?? o.offset
       if (showsWall(g, r, plan, wall, o.offset, o.width) === true)
-        items.push({ id: `opening:${o.id}`, level: 'warning', text: `${o.kind === 'door' ? 'Dörren' : 'Öppningen'} ${o.id} i ${wall.id} (offset ${o.offset}, bredd ${o.width}): ritningen visar hel vägg där. Flytta den, eller ta bort den om den inte finns.` })
+        items.push({ id: `opening:${o.id}`, level: 'warning', text: `${o.kind === 'door' ? 'Dörren' : 'Öppningen'} ${o.id} i ${wall.id} (offset ${offset}, bredd ${o.width}): ritningen visar hel vägg där. Flytta den, eller ta bort den om den inte finns.` })
     }
     const doors = stretch.length ? { ops: [] as Op[], readings: [] } : readDoors(g, r, plan)
     for (const op of doors.ops) {

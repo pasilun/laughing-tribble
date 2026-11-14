@@ -1,5 +1,6 @@
 import { cap, describeRef } from '../../domain/names'
 import { comparePlans } from '../../assist/compare'
+import { centreLines } from '../../domain/faces'
 import { PLANS } from '../../storage/docs'
 import { loadPlan } from '../../service'
 import { auditPlan } from '../../assist/audit'
@@ -49,7 +50,7 @@ export const compare: CheckEntry = { name: 'compare', summary: 'The plan against
     const cmp = comparePlans(c.plan, ref.plan, { matchMm: num(c.against.match_mm) })
     const out: Finding[] = []
     const name = (plan: Plan, id: string) => {
-      const d = describeRef(plan, id)
+      const d = describeRef(centreLines(plan), id)
       return d === id ? id : `${cap(d)} (${id})`
     }
     for (const w of cmp.walls) {

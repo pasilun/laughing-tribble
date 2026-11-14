@@ -128,6 +128,7 @@ export function validatePlan(plan: Plan): string[] {
   for (const w of plan.walls) {
     if (dist(w.a, w.b) < 1) errors.push(`vägg ${w.id}: har ingen längd`)
     if (!(w.thickness > 0)) errors.push(`vägg ${w.id}: tjocklek måste vara > 0`)
+    if (w.ref !== undefined && w.ref !== 'left' && w.ref !== 'right') errors.push(`vägg ${w.id}: ref är 'left' eller 'right' (vilken yta linjen är, sett från a mot b) eller utelämnas (mittlinje)`)
   }
   for (const m of plan.masses ?? []) {
     if (!Array.isArray(m.points) || m.points.length < 3) errors.push(`massa ${m.id}: behöver minst tre hörn`)
@@ -165,6 +166,8 @@ function applyOne(plan: Plan, op: Op): Plan {
       const list = (plan[key] ?? []) as Array<{ id: string }>
       if (!list.some((i) => i.id === op.id)) throw new Error(`${op.kind} ${op.id} finns inte`)
       if ('id' in op.patch && op.patch.id !== op.id) throw new Error('id kan inte ändras')
+      // Changing which line is stored would move the wall's body by half its thickness and break its joints.
+      if (op.kind === 'wall' && 'ref' in op.patch) throw new Error('ref kan inte ändras på en befintlig vägg (kroppen skulle flytta en halv tjocklek): ta bort väggen och lägg till den på nytt med ref')
       const next = { ...plan, [key]: list.map((i) => (i.id === op.id ? roundItem({ ...i, ...op.patch }) : i)) }
       if (op.kind !== 'wall' || !('a' in op.patch)) return next
       const before = plan.walls.find((w) => w.id === op.id)!

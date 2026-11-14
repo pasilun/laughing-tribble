@@ -42,15 +42,19 @@ const TRACE = `Tracing a scanned drawing: Claude decides what is there, the draw
 Never type a position read off a picture into a saved element: point roughly, and let the engine fit it to the ink
 (scan, action "snap_walls"), or use a printed dimension.
 
-1. Calibrate and draft: source (action "trace") with the outer size printed on the drawing.
+1. Calibrate and draft: source (action "trace") with the outer size printed on the drawing. When the sheet shows more
+   than the user wants (several flats, a whole floor), give args.region [x, y, w, h] in mm around the part they asked
+   for: only that part is traced, it is much faster, and the other flats stay out. Trace a large plan part by part.
 2. Outline first: exterior walls, the stair, the walls to the neighbours. Look at view (view "overlay", a region of a
    few metres) and compare every wall with the drawing.
 3. Then room by room, in small regions (about 4 x 4 m). In each: is every drawn wall in the plan, at the drawn thickness,
    ending where the drawing ends it? Is every wall in the plan really drawn (not a fixture, text or a symbol)?
    Remove what is not a wall, add what is missing by rough ends and snap it, fix ends and thickness.
    scan (action "candidates", args.region [x, y, w, h]) shows the walls the drawing has in a region that the plan
-   lacks, numbered; say which numbers are walls and pass their op from data.candidates to edit. A wall it does not
-   offer: give rough ends to scan (action "snap_walls", args.walls) and save the result.
+   lacks, numbered; say which numbers are walls and pass their op from data.candidates to edit. A wall in the plan that
+   stops short of where the drawing ends it is offered as "förläng" (kind "extend"): its op moves the wall's ends. A wall it does not
+   offer: give rough ends to scan (action "snap_walls", args.walls) and save the result. To move or extend a wall the
+   plan has, give its id with the new rough ends in args.walls: the wall is re-fitted, keeping its openings.
 4. Doorways: read them from the drawing's markings (below), wall by wall. Where a room has no marked doorway, look
    again before you guess, and ask the person rather than invent one.
 5. Verify each room: view the overlay again, and check (scope "audit") for what still differs from the drawing.

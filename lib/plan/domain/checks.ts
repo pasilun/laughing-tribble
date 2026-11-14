@@ -3,6 +3,7 @@ import { validatePlan } from './ops'
 import { cap, describeMass, describeOpening, describeRef, describeWall } from './names'
 import { fittingScale, layoutSheet } from './sheet'
 import type { Plan } from './types'
+import { centreLines } from './faces'
 
 // Checks a plan against what an anmälan for interior work needs to show.
 // These are flags for the user to act on — never a legal judgment.
@@ -27,6 +28,7 @@ const TITLE_FIELDS: Array<[keyof Plan['sheet']['titleBlock'], string]> = [
 // `plain`: items are named in words ("väggen mellan Hall och Kök (2,4 m)"), for a person reading the checks in the editor.
 // Without it they are named by id, which is what Claude needs to act on them.
 export function checkPlan(plan: Plan, opts: { plain?: boolean } = {}): Finding[] {
+  plan = centreLines(plan)
   const plain = !!opts.plain
   const out: Finding[] = []
   for (const e of validatePlan(plan)) out.push({ level: 'error', code: 'invalid', message: e })

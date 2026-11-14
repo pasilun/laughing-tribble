@@ -1,6 +1,7 @@
 import { add, along, bounds, dist, leftNormal, leafOffset, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
 import { roomShownIn, roomSpaces } from './rooms'
 import type { Fixture, Mass, Opening, Phase, Plan, Pt, SheetScale, View, Wall, Zone } from './types'
+import { centreLines } from './faces'
 
 // Renders a plan as a printable drawing sheet. All output coordinates are
 // paper millimetres, so the SVG prints at true scale at 100%.
@@ -38,6 +39,7 @@ export type SheetLayout = {
 }
 
 export function layoutSheet(plan: Plan): SheetLayout {
+  plan = centreLines(plan)
   const base = PAPER[plan.sheet.paper]
   const landscape = plan.sheet.orientation === 'landscape'
   const paperW = landscape ? base.w : base.h
@@ -60,6 +62,7 @@ export const SCALES: SheetScale[] = [50, 100, 150, 200]
 
 // The largest scale at which the plan fits the sheet's paper and orientation (null if none).
 export function fittingScale(plan: Plan): SheetScale | null {
+  plan = centreLines(plan)
   return SCALES.find((scale) => layoutSheet({ ...plan, sheet: { ...plan.sheet, scale } }).fits) ?? null
 }
 
@@ -711,6 +714,7 @@ function titleBlock(plan: Plan, view: View, L: SheetLayout): string {
 export type RenderOptions = { underlay?: boolean }
 
 export function renderSheet(plan: Plan, view: View, opts: RenderOptions = {}): string {
+  plan = centreLines(plan)
   const L = layoutSheet(plan)
   const body: string[] = []
   body.push(`<rect x="0" y="0" width="${f(L.paperW)}" height="${f(L.paperH)}" fill="#fff"/>`)

@@ -13,6 +13,9 @@ export type Wall = {
   a: Pt
   b: Pt
   thickness: number
+  // Which line a → b is: absent = the centre line; 'left' or 'right' = that face, seen from a towards b, with the body
+  // on the other side. A wall measured from a room keeps that face where it is when its thickness changes.
+  ref?: 'left' | 'right'
   phase: Phase
   loadBearing?: boolean
   fireRating?: string        // e.g. "EI60" for a fire-cell boundary
