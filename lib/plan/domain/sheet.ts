@@ -67,8 +67,9 @@ export function fittingScale(plan: Plan): SheetScale | null {
 
 const f = (v: number) => (Math.round(v * 1000) / 1000).toString()
 
-function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+// A missing text (an imported title block without a field) prints as nothing instead of failing the whole sheet.
+function esc(s: string | undefined): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function line(a: Pt, b: Pt, w: number, extra = ''): string {

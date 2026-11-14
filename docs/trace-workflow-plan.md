@@ -55,6 +55,9 @@ None of this changes the tool list; each is a new name in a registry or a new fi
 | T-05 | **Answer by number** | Operations for `edit`: keep a proposal (`accept`, by number from the last candidates view, snapped on the way in), drop a wall (`delete`, exists), add a wall from rough ends and snap it (`add` with `snap: true`), mark a wall as a mass, mark an element as checked. | M |
 | T-06 | **Pieces and progress** | `check` (scope "trace"): the plan split into pieces (outline, then rooms from the room grid, else tiles), each with unreviewed walls, open audit findings and unmarked doorways; `next` is the view of the first unfinished piece. Progress lives in the plan as a list of checked pieces with the revision they were checked at, so a later change reopens them. | M |
 | T-07 | **Doorway markings** | A `scan` action that reads the three doorway markings along one wall and proposes openings (the custom opening reader misses all three on the survey; this was the largest gap in the fixture work). | M |
+| T-09 | **Trace in a region** | `source` (action "trace") with `args.region`: only that part of the sheet; faster (a whole sheet timed out the client), and other flats on the sheet stay out. A large plan is traced part by part. | S |
+| T-10 | **Extend walls that stop short** | `candidates` also offers, as "extend", a wall of the plan that the drawing carries further (across doorway gaps, joined to the crossing wall), never past a joint or into the next wall on its line. | S |
+| T-11 | **Re-fit a wall by id** | `snap_walls` with a rough wall whose id the plan has re-fits that wall (an update keeping its openings), instead of failing on a duplicate id. | S |
 | T-08 | **The experiment** | A Sonnet agent with only the connector, no person, follows `guide` (topic "trace") on a fresh copy of the 1999 survey; its result is scored with `lib/plan/bench/score.ts`. Recorded: the scores, number of calls, image tokens, time, and every question it would have asked. | M |
 
 T-01 and T-02 are worth doing whatever happens; T-03 to T-07 are the workflow; T-08 decides whether it works.
@@ -167,3 +170,61 @@ step. Until then a user's Claude either leaves doorways out or breaks the rule.
 
 **Bias:** the trial was run by the same Claude that built the fixture and knew where its doors are. It used that
 knowledge only to choose which proposals to keep, never to place anything; a fair test is T-08 (a fresh agent).
+
+### Correction (2026-11-14): how the trial was scored
+
+The numbers above counted only walls with both ends inside the fixture's area, which leaves out the exterior walls
+that run on past the three flats. Cutting each wall at the area's edge instead (`scripts/score-1999.ts`, mode `clip`,
+the rule used from now on) gives for revision 14: **94.9 %** of wall length within 100 mm, 97.9 % on a real wall,
+doorways 7 of 23 (3 extra), windows 3 of 7 (4 extra). On walls the method already passes the 85 % target.
+
+## Baseline: Sonnet with today's connector (2026-11-14)
+
+Step 1 of `docs/v2-engine-plan.md`, run from a session with no API key: two fresh Sonnet agents, each with only the
+ten connector tools, no repository, nobody to ask, and the user's request "draw the existing walls, doorways and
+windows of flats 152–154" with their rough area. Each got a plan with only the straightened sheet `a00` (already at
+scale, so no calibration). Scored with `scripts/score-1999.ts` (clip).
+
+| | Run 1 | Run 2 | Hand trial (method, rev 14) | Target |
+|---|---|---|---|---|
+| Wall length within 100 mm | 83.7 % | 67.7 % | 94.9 % | 85 % |
+| Traced length on a real wall | 84.7 % | 91.1 % | 97.9 % | 90 % |
+| Median offset | 10 mm | 5 mm | 5 mm | |
+| Doorways | 2 of 23 | 2 of 23 | 7 of 23 | 15 |
+| Windows | 7 of 7 (1 extra) | 6 of 7 (1 extra) | 3 of 7 | 7 |
+| Tool calls | 24 | 25 | about 30 | |
+| Time | 3.1 min | 3.2 min | | |
+
+**What the agents did.** Neither made a draft with `source` "trace" nor followed the trace method; both drew the walls
+from rough positions and fitted them with `snap_walls`. Run 1 drew the whole area; run 2 left out the west part
+(x 19 000–22 600). Both read the window positions off the picture, because the opening reader proposed gaps in solid
+wall and its window methods found nothing on the exterior walls: windows score well, but by breaking the rule. Neither
+found the doorways drawn as hollow stretches; both asked whether dashed stretches are doorways.
+
+**Faults found in the connector** (traced in Sentry afterwards, fixed in the next commit):
+- The three "Internal error" answers from `scan` "snap_walls" were not about snapping: the database (Turso) answered
+  HTTP 502 for a few minutes (PLAN-TOOL-3; Sentry dropped the two repeats as duplicates), and a 502 was not treated as
+  temporary, so the read was not repeated. The same outage gave run 1 its failed `edit`. Reads now count 502–504 as
+  temporary, are repeated three more times over about two seconds, and then say plainly that the store is down.
+- The `edit` that answered "Internal error" after saving failed while drawing its picture: the test plans were
+  imported with an empty title block, and the sheet could not print a missing field (PLAN-TOOL-4). Fixed.
+- `get` said "kalibrera med plan_scan_calibrate", an old tool name; it now names `source` (action "calibrate"). The
+  warning itself is right: the sheet had a scale but was not calibrated against printed dimensions (the setup skipped
+  that step on purpose).
+
+**What it says.** Without being led, Sonnet does not find the trace workflow (T-03's guide topic is not where it starts).
+Walls are close to the target in a good run; doorways are the gap, as in the hand trial, and windows are only found by
+reading the picture.
+
+## Order from 2026-11-14
+
+Decided with the maintainer after the baseline. Cards are in `work/cards/`, each written from code prototyped and run
+first (all tests passed, and the six cards applied in order onto `main` rebuild the prototype exactly).
+
+1. **T-09, T-10, T-11** (small, from the trials): trace in a region, extend walls that stop short, re-fit a wall by id.
+   On the 1999 fixture as drawn, T-10 offers no extension anywhere (a test keeps it so).
+2. **Step 3 of `docs/v2-engine-plan.md` alongside** (cards F-01 to F-03 and checkpoint F-R1, after T-11).
+3. **T-07 and the window reader** when the maintainer unparks them: prototyped first, then a card.
+4. **T-06 last:** a method worth leading a client through needs the openings to work first.
+5. **T-05 dropped:** `candidates` plus `edit` already answer by number. **T-08 is the baseline above,** rerun after
+   each batch with `scripts/score-1999.ts`.

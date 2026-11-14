@@ -36,3 +36,17 @@ test('reads are repeated when the connection breaks; writes and other errors are
   await expect(bad.read('k')).rejects.toThrow('saknas')
   expect(reads).toBe(1)
 })
+
+test('a 502 from the gateway of the store is temporary; a read that keeps failing says so plainly', async () => {
+  const { Retrying, PublicError, STORE_UNAVAILABLE } = await import('@/lib/plan/storage/storage')
+  // As @libsql/client throws it: a LibsqlError wrapping an HttpServerError with the status.
+  const gateway = () => new Error('SERVER_ERROR: Server returned HTTP status 502', { cause: Object.assign(new Error('Server returned HTTP status 502'), { status: 502 }) })
+  expect(isNetworkError(gateway())).toBe(true)
+  expect(isNetworkError(Object.assign(new Error('Server returned HTTP status 500'), { status: 500 }))).toBe(false)
+  let reads = 0
+  const down = { async read(): Promise<Buffer | null> { reads++; throw gateway() }, async write() { return true }, async remove() {}, async keys() { return [] } }
+  const err = await new Retrying(down).read('k').catch((e) => e)
+  expect(err).toBeInstanceOf(PublicError)
+  expect(err.message).toBe(STORE_UNAVAILABLE)
+  expect(reads).toBe(4)
+})
