@@ -1,4 +1,5 @@
 import { wallDir, wallLength } from '../domain/geometry'
+import { centreLines } from '../domain/faces'
 import type { Opening, Plan, Pt, Wall } from '../domain/types'
 
 // Compares a plan with a reference plan of the same floor (e.g. one built
@@ -51,8 +52,9 @@ export function comparePlans(planIn: Plan, refIn: Plan, opts: { matchMm?: number
   // Compare one state: before (default) leaves out what is new, after what is demolished.
   const keep = (phase: string) => (opts.view === 'efter' ? phase !== 'demolish' : phase !== 'new')
   const only = (p: Plan): Plan => ({ ...p, walls: p.walls.filter((w) => keep(w.phase)), openings: p.openings.filter((o) => keep(o.phase)) })
-  const plan = only(planIn)
-  const ref = only(refIn)
+  // Measured on the centre-line view, so a wall stored on a face is compared where it is drawn.
+  const plan = only(centreLines(planIn))
+  const ref = only(centreLines(refIn))
   const P = new Map(plan.walls.map((w) => [w.id, w]))
   const R = new Map(ref.walls.map((w) => [w.id, w]))
   const shared = [...R.keys()].filter((id) => P.has(id) && vertical(P.get(id)!) === vertical(R.get(id)!))

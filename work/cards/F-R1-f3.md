@@ -2,7 +2,7 @@
 id: F-R1-f3
 title: "comparePlans and the compare check read the view"
 tier: H
-status: in_progress
+status: done
 depends: []
 spec: ["work/cards/F-R1.md (defect 3)", "docs/v2-engine-plan.md §3 (Walls on faces)"]
 files: [lib/plan/assist/compare.ts, lib/plan/connector/checks/index.ts, e2e/faces-compare.spec.ts]
