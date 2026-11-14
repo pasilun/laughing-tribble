@@ -1,5 +1,6 @@
 import { checkPlan, type Finding } from '../domain/checks'
 import { bounds, wallQuad } from '../domain/geometry'
+import { centreLines } from '../domain/faces'
 import { applyOps, type Op } from '../domain/ops'
 import { reviewPlan } from './review'
 import { fittingScale, SCALES } from '../domain/sheet'
@@ -51,7 +52,9 @@ function bestSheet(plan: Plan): Pick<Sheet, 'scale' | 'orientation'> | null {
 }
 
 // Outer faces of the exterior walls (all walls when none is marked).
-function envelope(plan: Plan) {
+// Measured on the centre-line view, so a face-referenced wall's body is where it is drawn.
+function envelope(input: Plan) {
+  const plan = centreLines(input)
   const walls = plan.walls.some((w) => w.exterior) ? plan.walls.filter((w) => w.exterior) : plan.walls
   const pts = walls.flatMap(wallQuad)
   return {

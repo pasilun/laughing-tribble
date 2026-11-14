@@ -7,6 +7,8 @@ import { renderSheet } from '@/lib/plan/domain/sheet'
 import { checkPlan } from '@/lib/plan/domain/checks'
 import { planDxf } from '@/lib/plan/export'
 import { reviewPlan } from '@/lib/plan/assist/review'
+import { finishPlan } from '@/lib/plan/assist/finish'
+import { demoPlan } from '@/lib/plan/domain/demo'
 import type { Plan, Wall } from '@/lib/plan/domain/types'
 
 // Walls stored on a face (wall.ref) and the centre-line view the rest of the code reads. lgh154-face.json is lgh 154
@@ -87,4 +89,18 @@ test('the sheet, the checks, the rooms and the DXF read a face-referenced plan t
   expect([...roomAreas(p, 'fore')]).toEqual([...roomAreas(v, 'fore')])
   expect(planDxf(p, 'fore').equals(planDxf(v, 'fore'))).toBe(true)
   expect(reviewPlan(p)).toEqual(reviewPlan(v))
+})
+
+test('finishPlan measures the outer size of a face-referenced room on the centre-line view', () => {
+  // A 4000 × 3000 mm room: the four walls stored on their inner faces, 300 mm thick, body outwards (ref right).
+  const ext = { exterior: true, phase: 'existing' as const, thickness: 300, ref: 'right' as const }
+  const walls: Wall[] = [
+    { id: 'n', a: { x: 0, y: 0 }, b: { x: 4000, y: 0 }, ...ext },
+    { id: 'e', a: { x: 4000, y: 0 }, b: { x: 4000, y: 3000 }, ...ext },
+    { id: 's', a: { x: 4000, y: 3000 }, b: { x: 0, y: 3000 }, ...ext },
+    { id: 'w', a: { x: 0, y: 3000 }, b: { x: 0, y: 0 }, ...ext },
+  ]
+  const p: Plan = { ...demoPlan(), walls, openings: [], fixtures: [], dimensions: [], masses: [], rooms: [] }
+  // Each outer face is 300 mm outside its stored inner face: 4000 + 2 × 300 by 3000 + 2 × 300.
+  expect(finishPlan(p).done).toContain('Yttermått: 4600 × 3600 mm utvändigt')
 })
