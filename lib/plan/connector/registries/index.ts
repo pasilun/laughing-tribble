@@ -61,7 +61,7 @@ export const SCAN_ACTIONS = new Registry<ActionEntry>('scan', 'skanningsåtgärd
   { name: 'candidates', tool: '', summary: 'Numbered wall candidates in a region (args.region [x, y, w, h] mm, at most 6 × 6 m) that the plan does not have, each with its edit operation: judge them by eye, add the walls' },
   { name: 'detect_walls', tool: 'plan_scan_detect_walls', summary: 'Wall candidates found in the source' },
   { name: 'missing_walls', tool: 'plan_scan_missing_walls', summary: 'Drawn walls that the plan does not have' },
-  { name: 'snap_walls', tool: 'plan_scan_snap_walls', proposes: true, summary: 'Proposal: walls moved onto the drawn walls' },
+  { name: 'snap_walls', tool: 'plan_scan_snap_walls', proposes: true, summary: 'Proposal: walls fitted to the drawn walls. args: { wall_ids?, walls? } (walls: rough ends; an existing id re-fits that wall from the new ends)' },
   { name: 'openings', tool: 'plan_scan_openings', proposes: true, summary: 'Proposal: doors and windows read from the plan view' },
   { name: 'elevation', tool: 'plan_scan_elevation', proposes: true, summary: 'Proposal: windows read from a facade drawing' },
   { name: 'doors', tool: 'plan_scan_doors', proposes: true, summary: 'Proposal: which way the doors open' },

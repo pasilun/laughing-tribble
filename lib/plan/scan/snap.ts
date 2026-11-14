@@ -256,16 +256,23 @@ export function snapWalls(
 ): { ops: Op[]; reports: SnapReport[]; walls: Wall[] } {
   const reports: SnapReport[] = []
   const snapped: Wall[] = []
-  const targets: Array<{ wall: Wall; isNew: boolean }> = []
+  // `before` is the wall as the plan has it; `wall` is where the fit starts (a rough wall given for an existing id).
+  const targets: Array<{ wall: Wall; isNew: boolean; before?: Wall }> = []
   for (const id of input.ids ?? []) {
     const w = plan.walls.find((x) => x.id === id)
     if (!w) {
       reports.push({ id, ok: false, confidence: 0, sections: 0, shiftMm: 0, angleDeg: 0, thicknessMm: 0, rmsMm: 0, note: 'väggen finns inte' })
       continue
     }
-    targets.push({ wall: w, isNew: false })
+    targets.push({ wall: w, isNew: false, before: w })
   }
-  for (const w of input.add ?? []) targets.push({ wall: { ...w, phase: w.phase ?? 'existing', thickness: w.thickness || 120 }, isNew: true })
+  for (const w of input.add ?? []) {
+    // A rough wall with the id of a wall the plan has re-fits that wall from the new rough ends (to extend it, or move
+    // it to another stretch of ink): an update that keeps its other fields and its openings, not a second wall.
+    const had = plan.walls.find((x) => x.id === w.id)
+    if (had) targets.push({ wall: { ...had, a: w.a, b: w.b, thickness: w.thickness || had.thickness }, isNew: false, before: had })
+    else targets.push({ wall: { ...w, phase: w.phase ?? 'existing', thickness: w.thickness || 120 }, isNew: true })
+  }
 
   for (const { wall } of targets) {
     const skip = plan.openings
@@ -285,8 +292,8 @@ export function snapWalls(
   // Unsnapped walls joined to a moved end follow it; the explicit updates
   // below then set the snapped walls exactly.
   joined.forEach((w, i) => {
-    const { wall: orig, isNew } = targets[i]
-    if (isNew) return
+    const { before: orig, isNew } = targets[i]
+    if (isNew || !orig) return
     for (const end of ['a', 'b'] as const)
       if (others.some((o) => dist(o.a, orig[end]) <= 1 || dist(o.b, orig[end]) <= 1)) ops.push({ op: 'moveVertex', from: orig[end], to: w[end] })
   })

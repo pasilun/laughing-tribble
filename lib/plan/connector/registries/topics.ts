@@ -53,7 +53,8 @@ Never type a position read off a picture into a saved element: point roughly, an
    scan (action "candidates", args.region [x, y, w, h]) shows the walls the drawing has in a region that the plan
    lacks, numbered; say which numbers are walls and pass their op from data.candidates to edit. A wall in the plan that
    stops short of where the drawing ends it is offered as "förläng" (kind "extend"): its op moves the wall's ends. A wall it does not
-   offer: give rough ends to scan (action "snap_walls", args.walls) and save the result.
+   offer: give rough ends to scan (action "snap_walls", args.walls) and save the result. To move or extend a wall the
+   plan has, give its id with the new rough ends in args.walls: the wall is re-fitted, keeping its openings.
 4. Doorways: read them from the drawing's markings (below), wall by wall. Where a room has no marked doorway, look
    again before you guess, and ask the person rather than invent one.
 5. Verify each room: view the overlay again, and check (scope "audit") for what still differs from the drawing.
