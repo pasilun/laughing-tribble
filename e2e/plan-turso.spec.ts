@@ -9,7 +9,7 @@ import { hashKey } from '@/lib/plan/auth/access'
 import { copyPages, type Source } from '@/lib/plan/storage/migrate-store'
 import { createPlan, editPlan } from '@/lib/plan/service'
 import { getAsset, getRevision, listPlansAndTrash, putAsset, saveRevision } from '@/lib/plan/storage/store'
-import { ConflictError, storageKind, storageProbe, systemBackend, useTursoForTests } from '@/lib/plan/storage/storage'
+import { ConflictError, storageKind, storageProbe, systemBackend, tursoBackend, useTursoForTests } from '@/lib/plan/storage/storage'
 import { forgetAccess } from '@/lib/plan/storage/docs'
 import { PLANS } from '@/lib/plan/storage/docs'
 import { addShare } from '@/lib/plan/storage/shares'
@@ -130,7 +130,8 @@ test('copying another store into Turso: every file, in pages, safe to repeat, re
       return files.get(k) ?? null
     },
   }
-  const target = systemBackend() as TursoBackend
+  // The Turso store itself: systemBackend() wraps it in Retrying, which has no count().
+  const target = tursoBackend()
 
   // a first stretch that stops after one page, then the rest from the cursor
   const first = await copyPages(source, target, { limit: 10, budgetMs: 0 })
