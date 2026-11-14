@@ -44,7 +44,8 @@ export function summarisePlan(plan: Plan, only?: Section[]): string {
     const flags = [w.loadBearing && 'bärande', w.fireRating && `brand ${w.fireRating}${w.fireRatingAfter !== undefined ? `→${w.fireRatingAfter || 'ingen'}` : ''}`, w.apartmentBoundary && 'lgh-skiljande']
       .filter(Boolean)
       .join(', ')
-    lines.push(`- ${w.id}: (${w.a.x},${w.a.y})→(${w.b.x},${w.b.y}) längd ${Math.round(wallLength(w))} tj ${w.thickness} ${w.phase}${flags ? ` [${flags}]` : ''}`)
+    const line = w.ref ? ` linjen är ${w.ref === 'left' ? 'vänster' : 'höger'} yta` : ''
+    lines.push(`- ${w.id}: (${w.a.x},${w.a.y})→(${w.b.x},${w.b.y}) längd ${Math.round(wallLength(w))} tj ${w.thickness}${line} ${w.phase}${flags ? ` [${flags}]` : ''}`)
   }
   if (plan.masses?.length) {
     lines.push(`Massor (${plan.masses.length}):`)
