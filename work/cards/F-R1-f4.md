@@ -6,7 +6,7 @@ status: in_progress
 depends: []
 spec: ["work/cards/F-R1.md (defect 4)"]
 files: [lib/plan/assist/audit.ts, e2e/faces-audit.spec.ts]
-attempts: 0
+attempts: 1
 ---
 Do: `lib/plan/assist/audit.ts` line ~95, the opening message quotes the offset of the centre-line view. Take the offset from the input plan's opening instead (the stored one), so the message matches what the user will find in the file. Do not change anything else in that file.
 
