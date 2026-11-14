@@ -72,7 +72,7 @@ export const SOURCE_ACTIONS = new Registry<ActionEntry>('source', 'källåtgärd
   { name: 'calibrate', tool: 'plan_scan_calibrate', summary: 'Fit the scale to known distances' },
   { name: 'calibrate_dimensions', tool: 'plan_scan_dimension', summary: 'Calibrate and straighten from printed dimension lines' },
   { name: 'register', tool: 'plan_scan_register', summary: 'Align a source to another source' },
-  { name: 'trace', tool: '', summary: 'A first draft from a source: calibrates, finds walls, openings and windows. args: { source_id?, printed_outer_mm?, dimensions? }' },
+  { name: 'trace', tool: '', summary: 'A first draft from a source: calibrates, finds walls, openings and windows. args: { source_id?, printed_outer_mm?, dimensions?, region? } (region [x, y, w, h] mm: only that part of the sheet, e.g. one flat; faster, and other flats stay out)' },
 ])
 // How archive drawings show things, as found while tracing real ones. The guide topic "trace" lists them; a new one is
 // added here and shows the same day.

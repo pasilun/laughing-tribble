@@ -42,7 +42,9 @@ const TRACE = `Tracing a scanned drawing: Claude decides what is there, the draw
 Never type a position read off a picture into a saved element: point roughly, and let the engine fit it to the ink
 (scan, action "snap_walls"), or use a printed dimension.
 
-1. Calibrate and draft: source (action "trace") with the outer size printed on the drawing.
+1. Calibrate and draft: source (action "trace") with the outer size printed on the drawing. When the sheet shows more
+   than the user wants (several flats, a whole floor), give args.region [x, y, w, h] in mm around the part they asked
+   for: only that part is traced, it is much faster, and the other flats stay out. Trace a large plan part by part.
 2. Outline first: exterior walls, the stair, the walls to the neighbours. Look at view (view "overlay", a region of a
    few metres) and compare every wall with the drawing.
 3. Then room by room, in small regions (about 4 x 4 m). In each: is every drawn wall in the plan, at the drawn thickness,

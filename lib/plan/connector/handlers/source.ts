@@ -53,7 +53,11 @@ export async function source(args: Args): Promise<ToolResult> {
     const po = given.printed_outer_mm as { width?: unknown; length?: unknown } | undefined
     const printed = po && typeof po.width === 'number' && typeof po.length === 'number' ? { width: po.width, length: po.length } : undefined
     const dims = Array.isArray(given.dimensions) ? (given.dimensions as Array<{ a: { x: number; y: number }; b: { x: number; y: number }; mm: number; label?: string }>) : undefined
-    const out = await autoTrace(id, { sourceId: typeof given.source_id === 'string' ? given.source_id : undefined, printed, dimensions: dims })
+    const box = given.region as unknown
+    if (box !== undefined && (!Array.isArray(box) || box.length !== 4 || !box.every((x) => typeof x === 'number') || box[2] <= 0 || box[3] <= 0))
+      return fail([badArgument('args.region', 'ska vara [x, y, w, h] i mm: den del av ritningen som ska ritas av')], id, n)
+    const region = Array.isArray(box) ? { x: box[0] as number, y: box[1] as number, w: box[2] as number, h: box[3] as number } : undefined
+    const out = await autoTrace(id, { sourceId: typeof given.source_id === 'string' ? given.source_id : undefined, printed, dimensions: dims, region })
     text = modernWords(out.text)
     isError = out.isError === true
     failedSteps = out.failed ?? []

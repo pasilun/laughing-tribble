@@ -23,7 +23,14 @@ export type TraceArgs = {
   printed?: { width: number; length: number }
   // Or exact end points of printed dimensions (see plan_scan_dimension).
   dimensions?: Array<{ a: Pt; b: Pt; mm: number; label?: string }>
+  // Only this part of the sheet, in plan mm: the walls found inside it are added and its openings read. Faster than the
+  // whole sheet, and other flats on the same sheet stay out. Without it the house outline found on the sheet is used.
+  region?: { x: number; y: number; w: number; h: number }
 }
+
+// The part of the wall inside the region: for walls that run on past it (an exterior wall shared with the next flat).
+const inRegion = (w: { a: Pt; b: Pt }, q: { x: number; y: number; w: number; h: number }) =>
+  Math.max(w.a.x, w.b.x) >= q.x && Math.min(w.a.x, w.b.x) <= q.x + q.w && Math.max(w.a.y, w.b.y) >= q.y && Math.min(w.a.y, w.b.y) <= q.y + q.h
 
 // `failed` names the steps that could not be done; what was done before them is saved.
 export type Traced = { text: string; png?: Buffer; isError?: boolean; failed?: string[] }
@@ -182,16 +189,26 @@ export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced
   let reportsBad: string[] = []
   const r: Raster = resolveSource(rev!.plan, sourceId)
   const g = await loadGray(planId, r)
-  if (rev!.plan.walls.length === 0) {
-    // Only the house: not the scale bar, the title or specks on the sheet.
-    const box = houseBox(detectWalls(g, r, { maxProposals: 1000 }))
-    const rect = box ? { x: box.x0 - 400, y: box.y0 - 400, w: box.x1 - box.x0 + 800, h: box.y1 - box.y0 + 800 } : undefined
+  const region = args.region
+  const inside = region ? rev!.plan.walls.filter((w) => inRegion(w, region)) : rev!.plan.walls
+  if (inside.length === 0) {
+    // Only the region asked for, or else only the house: not the scale bar, the title or specks on the sheet.
+    const box = region ? undefined : houseBox(detectWalls(g, r, { maxProposals: 1000 }))
+    const rect = region ?? (box ? { x: box.x0 - 400, y: box.y0 - 400, w: box.x1 - box.x0 + 800, h: box.y1 - box.y0 + 800 } : undefined)
     // A wall is found in pieces (broken by doors and crossing walls): join the pieces first, then drop what is still
     // short. Dropping short pieces first loses most of every wall that a door or a crossing wall interrupts.
     const props = detectWalls(g, r, { rect, maxProposals: 1000 })
+    // New ids that do not clash with the walls already in the plan (outside the region).
+    const used = new Set(rev!.plan.walls.map((w) => w.id))
+    let k = 0
+    const nextId = () => {
+      do k++
+      while (used.has(`w${k}`))
+      return `w${k}`
+    }
     const walls = mergeStacked(joinPieces(props.map((p) => ({ a: p.a, b: p.b, thickness: p.thickness })), 60))
       .filter((p) => Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y) >= MIN_WALL)
-      .map((p, i): Wall => ({ id: `w${i + 1}`, ...p, phase: 'existing' }))
+      .map((p): Wall => ({ id: nextId(), ...p, phase: 'existing' }))
     if (!walls.length) decide.push('Inga väggar hittades i källan. Titta på bilden (plan_view) och lägg in väggarna för hand med plan_edit.')
     else {
       const snapped = snapWalls(g, r, rev!.plan, { ids: [], add: walls }, {})
@@ -225,7 +242,8 @@ export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced
       }
       const ops: Op[] = snapped.ops.filter((o) => !(o.op === 'add' && o.kind === 'wall' && bad.has(o.item.id)))
       const kept = snapped.walls.filter((w) => !bad.has(w.id))
-      ops.push(...exteriorIds(kept).map((id): Op => ({ op: 'update', kind: 'wall', id, patch: { exterior: true } })))
+      // In a region the outline of the whole house is not seen, so which walls are facades is left to the person.
+      if (!region) ops.push(...exteriorIds(kept).map((id): Op => ({ op: 'update', kind: 'wall', id, patch: { exterior: true } })))
       const res = await editPlan(planId, ops, rev!.meta.n, 'claude', 'Väggar från ritningen (plan_trace)')
       if (res.status !== 200) return { text: `Ingen ändring sparades:\n${res.errors.join('\n')}`, isError: true }
       await reload()
@@ -236,11 +254,13 @@ export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced
         decide.push(`${bad.size} möjliga väggar var för osäkra och lades inte in: ${lost.join(', ')}. Titta i bilden: finns väggen, lägg in den med plan_edit och kör plan_audit.`)
       }
     }
-  } else done.push(`Planen hade redan ${rev!.plan.walls.length} väggar – de behölls`)
+  } else done.push(region ? `Området hade redan ${inside.length} väggar – de behölls` : `Planen hade redan ${rev!.plan.walls.length} väggar – de behölls`)
 
   // 3. Openings and doors.
   if (rev!.plan.walls.length) {
-    const opened = await handleScanTool('plan_scan_openings', { plan_id: planId, source_id: sourceId, base_revision: rev!.meta.n, apply: true })
+    // In a region, only its walls: the openings of the rest of the plan stay as they are.
+    const wallIds = region ? rev!.plan.walls.filter((w) => inRegion(w, region)).map((w) => w.id) : undefined
+    const opened = await handleScanTool('plan_scan_openings', { plan_id: planId, source_id: sourceId, base_revision: rev!.meta.n, apply: true, ...(wallIds ? { wall_ids: wallIds } : {}) })
     if (opened?.isError) failed.push(`Öppningar kunde inte läsas: ${textOf(opened).split('\n')[0]}`)
     await reload()
     const doors = await handleScanTool('plan_scan_doors', { plan_id: planId, source_id: sourceId, base_revision: rev!.meta.n, apply: true })
@@ -267,8 +287,9 @@ export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced
     const plan = rev!.plan
     const xs = plan.walls.flatMap((w) => [w.a.x, w.b.x])
     const ys = plan.walls.flatMap((w) => [w.a.y, w.b.y])
-    if (xs.length) {
-      const m = 600
+    const m = 600
+    if (region) png = (await scanView(planId, plan, resolveSource(plan, sourceId), { x: region.x - m, y: region.y - m, w: region.w + 2 * m, h: region.h + 2 * m }, { overlay: true, view: 'fore', maxPx: 1400 })).png
+    else if (xs.length) {
       png = (await scanView(planId, plan, resolveSource(plan, sourceId), { x: Math.min(...xs) - m, y: Math.min(...ys) - m, w: Math.max(...xs) - Math.min(...xs) + 2 * m, h: Math.max(...ys) - Math.min(...ys) + 2 * m }, { overlay: true, view: 'fore', maxPx: 1400 })).png
     }
   } catch {
