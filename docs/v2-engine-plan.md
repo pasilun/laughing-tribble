@@ -79,7 +79,7 @@ Sizes are estimates. Almost all of it is TypeScript in v1.
 | 0 | Housekeeping | The dropped v2 cards marked as dropped; the plan documents on one branch | Done 2026-11-11 |
 | 1 | Baseline eval | A real model on today's connector, so later changes can be compared. No API key in the app (2026-11-14): run from a session with a subagent instead of `npm run eval:agent` | A session's usage |
 | 2 | The connector contract | The ten tools, one answer shape, registries, a generated guide, the frozen-list test, today's 37 tools mapped across | 25–35 cards. **First batch written: `work/cards/S2-01`…`S2-R1` (foundation, frozen list, endpoint, guide, edit, get, list).** Next: `check`, `view`, `manage`, `export`, `source`, `scan`, then removing the old tools |
-| 3 | Walls on faces, and better words | The reference side and the temporary centre-line view; the move of the 32 places to one body function, then the view deleted; operations that speak in faces; compass words for hinges and swings; openings anchored to a face; things named by position as well as by id; checks for stale dimensions and for text over walls | 20–28 cards |
+| 3 | Walls on faces, and better words | The reference side and the temporary centre-line view; the move of the 32 places to one body function, then the view deleted; operations that speak in faces; compass words for hinges and swings; openings anchored to a face; things named by position as well as by id; checks for stale dimensions and for text over walls | 20–28 cards. **First batch written (2026-11-14): `work/cards/F-01`…`F-03`, checkpoint `F-R1`** (see "Step 3, first batch" below) |
 | 4 | Measurements as input | State a clear distance between two named faces; the plan's value reported against each; apply by moving a named face | 8–12 cards |
 | 5 | The measurement kernel | Measurements checked against each other in chains; conflicts with both chains; what to measure next. Later: a new apartment drawn from measurements alone | 15–25 cards, after a spike |
 | 6 | View link for the phone | Dropped 2026-11-14 | – |
@@ -87,6 +87,23 @@ Sizes are estimates. Almost all of it is TypeScript in v1.
 **Why this order.** The contract comes first so that steps 3–5 add vocabulary without touching the tool list. Faces come before measurements because a measurement names two faces. The kernel comes last because turning an existing traced plan into the kernel's terms is untested.
 
 **How it is built.** Cards live in `work/cards/`, the rules in `work/CLAUDE.md`, the runner in `work/RUNNER.md`; the two agents are `.claude/agents/v1-implementer.md` (Haiku) and `v1-reviewer.md` (Opus). Runs work on the branch `auto/v1-build`, which the runner creates. The scheduled runs are paused and no trigger exists for this runner yet.
+
+### Step 3, first batch (written 2026-11-14)
+
+Step 1 of the move in section 3, as three cards prototyped and run first, after the trace cards T-09 to T-11:
+
+| Card | What | Why |
+|---|---|---|
+| F-01 | `wall.ref` ('left' or 'right': the stored line is that face) and `centreLines(plan)` in `lib/plan/domain/faces.ts`, tested on the spike's lgh 154 | The model and the view, with nothing reading them yet: no risk to existing plans (a plan without `ref` is its own view) |
+| F-02 | The sheet, checks, rooms, DXF, scan views, review and audit read the view; the scan readers that write walls or openings, `trace` and `candidates` refuse a plan with face walls | Every picture, area and check is right for a face wall. The readers that measure ink across a wall are the doubtful ones (section 3), so they refuse rather than write something half a thickness off |
+| F-03 | `edit` validates `ref` and refuses changing it on an existing wall; `get` lists it; the guide explains it | Only now can a client draw a wall from a room face, once everything that shows it is right |
+| F-R1 | Checkpoint (Opus): every reader through the view, every writer refusing, the editor with a face wall, and **the list of the 32 places** as file:line | That list is the input for the next batch: moving the places to one body function, then the scan readers, then the editor |
+
+Not in this batch: converting an existing centre-line wall to a face (it breaks joints; it belongs with "operations
+that speak in faces"), the editor, and the readers of the drawing on face walls.
+
+**Order of all ready cards.** The runner takes the first ready card whose `depends` are done, so the dependencies set
+the order: T-09 → T-10 → T-11 → F-01 → F-02 → F-03 → F-R1.
 
 ## 5. Decisions (settled 2026-11-14)
 
