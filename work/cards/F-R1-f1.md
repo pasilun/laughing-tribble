@@ -2,7 +2,7 @@
 id: F-R1-f1
 title: "Audit wall fixes refuse face-referenced walls"
 tier: H
-status: ready
+status: in_progress
 depends: []
 spec: ["work/cards/F-R1.md (defect 1)", "docs/v2-engine-plan.md §3 (Walls on faces)"]
 files: [lib/plan/assist/audit.ts, e2e/faces-audit.spec.ts]
