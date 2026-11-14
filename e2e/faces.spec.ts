@@ -3,6 +3,10 @@ import { readFileSync } from 'fs'
 import { centreLines, centreShift } from '@/lib/plan/domain/faces'
 import { validatePlan } from '@/lib/plan/domain/ops'
 import { roomAreas } from '@/lib/plan/domain/rooms'
+import { renderSheet } from '@/lib/plan/domain/sheet'
+import { checkPlan } from '@/lib/plan/domain/checks'
+import { planDxf } from '@/lib/plan/export'
+import { reviewPlan } from '@/lib/plan/assist/review'
 import type { Plan, Wall } from '@/lib/plan/domain/types'
 
 // Walls stored on a face (wall.ref) and the centre-line view the rest of the code reads. lgh154-face.json is lgh 154
@@ -73,4 +77,14 @@ test('an opening stays where it is drawn when the view moves its wall\'s a-end',
   // The face's a-end is at x 0; the view runs the centre line to the west wall's centre line, 100 mm further west.
   expect(n.a.x).toBe(-100)
   expect(n.a.x + v.openings![0].offset).toBe(1000)
+})
+
+test('the sheet, the checks, the rooms and the DXF read a face-referenced plan through the view', () => {
+  const p = face()
+  const v = centreLines(p)
+  expect(renderSheet(p, 'fore')).toBe(renderSheet(v, 'fore'))
+  expect(checkPlan(p)).toEqual(checkPlan(v))
+  expect([...roomAreas(p, 'fore')]).toEqual([...roomAreas(v, 'fore')])
+  expect(planDxf(p, 'fore').equals(planDxf(v, 'fore'))).toBe(true)
+  expect(reviewPlan(p)).toEqual(reviewPlan(v))
 })

@@ -6,9 +6,10 @@ import { joinPieces, mergeStacked, type Piece } from '../../scan/pieces'
 import { loadGray, resolveSource } from '../../scan/raster'
 import { scanView } from '../../scan/view'
 import { answer } from '../answer'
-import { badArgument } from '../findings'
+import { badArgument, invalidOperation } from '../findings'
 import { toToolResult, type ToolResult } from '../result'
 import type { Finding } from '../types'
+import { faceWallsUnsupported, hasFaceWalls } from '../../domain/faces'
 
 // Walls the drawing shows in a region that the plan does not have yet, numbered, for Claude to judge by eye: which are
 // walls, which are fixtures, text or symbols. Each comes with the edit operation that adds it at the position found in
@@ -147,6 +148,7 @@ function extended(w: Wall, lo: number, hi: number): { a: Pt; b: Pt } {
 
 export async function candidates(id: string, plan: Plan, revision: number, given: Record<string, unknown>, maxTokens?: number): Promise<ToolResult> {
   const fail = (f: Finding) => toToolResult(answer({ ok: false, id, revision, findings: [f] }), { summary: f.message })
+  if (hasFaceWalls(plan)) return fail(invalidOperation(faceWallsUnsupported('scan (action "candidates")')))
   const sid = sourceIdOf(plan, typeof given.source_id === 'string' ? given.source_id : undefined)
   if (!sid) return fail(badArgument('args.source_id', 'planen har ingen källritning'))
   let r

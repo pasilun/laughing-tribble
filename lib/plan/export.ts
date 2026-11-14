@@ -6,6 +6,7 @@ import { add, along, leftNormal, leafOffset, scale, wallDir } from './domain/geo
 import { roomShownIn } from './domain/rooms'
 import { dimensionsIn, fireRatingIn, hasChanges, layoutSheet, massPieces, renderSheet, viewTitle, visibleIn, wallPieces } from './domain/sheet'
 import type { Plan, Pt, View } from './domain/types'
+import { centreLines } from './domain/faces'
 
 const FONT_DIR = path.join(process.cwd(), 'lib/plan/fonts')
 const PT_PER_MM = 72 / 25.4
@@ -70,6 +71,7 @@ const LAYERS: Array<[string, number, string]> = [
 ]
 
 export function planDxf(plan: Plan, view: View): Buffer {
+  plan = centreLines(plan)
   const out: Array<string | number> = []
   const g = (...pairs: Array<string | number>) => out.push(...pairs)
   const P = (p: Pt) => ({ x: p.x, y: -p.y })

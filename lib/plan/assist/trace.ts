@@ -11,6 +11,7 @@ import { handleScanTool } from '../scan/tools'
 import { scanView } from '../scan/view'
 import { editPlan, loadPlan } from '../service'
 import type { Pt, Wall } from '../domain/types'
+import { faceWallsUnsupported, hasFaceWalls } from '../domain/faces'
 
 // plan_trace: the whole mechanical part of tracing a drawing in one call, with the
 // same defaults a careful person would use – calibrate against the printed outside
@@ -112,6 +113,7 @@ function houseBox(props: Prop[]): { x0: number; x1: number; y0: number; y1: numb
 export async function autoTrace(planId: string, args: TraceArgs): Promise<Traced> {
   let rev = await loadPlan(planId)
   if (!rev) return { text: `Planen ${planId} finns inte`, isError: true }
+  if (hasFaceWalls(rev.plan)) return { text: faceWallsUnsupported('plan_trace'), isError: true }
   const sourceId = sourceIdOf(rev.plan, args.sourceId)
   if (!sourceId) return { text: 'Planen har ingen källritning. Anropa plan_upload_link och be användaren ladda upp ritningen först.', isError: true }
   const done: string[] = []

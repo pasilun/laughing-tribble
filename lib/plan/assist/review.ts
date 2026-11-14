@@ -3,6 +3,7 @@ import type { Finding } from '../domain/checks'
 import { spaceGrid, type Space } from '../domain/rooms'
 import { structureFindings } from '../domain/structure'
 import type { Opening, Plan, Room, View, Wall } from '../domain/types'
+import { centreLines } from '../domain/faces'
 
 // Reads a plan the way an architect walks it: who enters where, which room
 // each door joins, whether every room can be reached and makes sense for its
@@ -37,6 +38,7 @@ const MIN_ENTRANCE = 700 // an 8M door of the 1930s; new flats need more
 const TOLERANCE = 20 // drawing and tracing accuracy
 
 export function reviewPlan(plan: Plan, view: View = 'fore'): Review {
+  plan = centreLines(plan)
   const findings: Finding[] = []
   const grid = spaceGrid(plan, view)
   if (!grid) return { findings, flats: [], links: [], spaces: [] }

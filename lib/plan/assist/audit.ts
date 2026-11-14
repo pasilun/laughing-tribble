@@ -8,6 +8,7 @@ import { showsWall } from '../scan/openings'
 import { loadGray, resolveSource } from '../scan/raster'
 import { snapWalls } from '../scan/snap'
 import type { Plan, Wall } from '../domain/types'
+import { centreLines } from '../domain/faces'
 
 // plan_audit: the plan checked against the drawing it was traced from, by the server, so that
 // whoever draws it (a small model, or a large one reviewing) reads a short list of numbered
@@ -35,6 +36,7 @@ export function sourceIdOf(plan: Plan, id?: string): string | undefined {
 }
 
 export async function auditPlan(planId: string, plan: Plan, opts: { sourceId?: string; printed?: { width: number; length: number } } = {}): Promise<AuditItem[]> {
+  plan = centreLines(plan)
   const items: AuditItem[] = []
   const sid = sourceIdOf(plan, opts.sourceId)
   const src = sid ? (plan.sources ?? []).find((s) => s.id === sid) : undefined

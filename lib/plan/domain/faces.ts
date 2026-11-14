@@ -66,6 +66,10 @@ export function hasFaceWalls(plan: Pick<Plan, 'walls'>): boolean {
   return plan.walls.some((w) => w.ref)
 }
 
+// What a tool that does not handle face-referenced walls yet answers.
+export const faceWallsUnsupported = (what: string) =>
+  `${what} hanterar ännu inte väggar som lagras på en yta (ref), och planen har sådana väggar. Inget ändrades. Rita och kontrollera dem med edit, view och check; läsningen av ritningen kommer i ett senare steg.`
+
 // The plan as the centre-line code reads it: every wall on its centre line, without ref. An opening is measured from
 // its wall's a-end; where the view moved that end along the wall, the offset grows by the same length, so the opening
 // stays where it is drawn.

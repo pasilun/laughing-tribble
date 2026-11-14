@@ -4,6 +4,7 @@ import sharp from 'sharp'
 import { wallQuad } from '../domain/geometry'
 import type { Plan, Pt } from '../domain/types'
 import { loadPng, toPx, type Raster } from './raster'
+import { centreLines } from '../domain/faces'
 
 // A crop of a source drawing in plan millimetres, with a labelled mm grid
 // and optionally the plan's walls drawn on top — what Claude looks at to
@@ -25,6 +26,7 @@ export type ViewOptions = {
 }
 
 export async function scanView(planId: string, plan: Plan, r: Raster, rect: Rect, opts: ViewOptions = {}): Promise<{ png: Buffer; scale: number }> {
+  plan = centreLines(plan)
   const maxPx = opts.maxPx ?? 1400
   // Pixel crop of the source, clamped to the image.
   const p0 = toPx(r, { x: rect.x, y: rect.y })
