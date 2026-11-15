@@ -129,3 +129,41 @@ median offset ≤ 15 mm, no false walls from text.** Then the whole crop: at lea
 - Can the archive rescan one sheet (A00:24) in grey at 400–600 dpi? It would show how much of the merging is the scan
   rather than the drawing.
 - Should the remaining sheets in the Drive folder be indexed (floor, year) now, or only when a stage needs them?
+
+## Results so far (2026-11-15, prototypes in `scripts/wallbench/`)
+
+Run with `npx tsx scripts/wallbench/<script>.mts <tile>`; each writes a picture (fixture green, trace red, orange where
+they agree). Scores are wall length within 100 mm of a fixture wall, on the tile only.
+
+**What the pictures showed.** Almost every wall of the 1999 survey is drawn as two thin outlines, one per room, with
+the white wall body between them (the big room of 154: two lines 17 px apart, the wall centred in the gap). The old
+detector looks for solid bands, so it misses these walls or locks onto one outline. Text and fixtures cause only a few
+false walls; most of the loss is missing walls.
+
+**W1 (cleaning), tried first and set aside.** Keeping only ink in long straight runs removes handwriting (as hoped),
+but changes nothing for the detector (same 10 walls, same score): text is not what it trips on. A thickness filter
+(solid bands only) loses real walls, since partitions are drawn 4–6 px thick, as thin as lettering. Cleaning stays a
+possible later step against false walls from fixtures; it is not where the gain is.
+
+**W3 (pairing) first, and it is the gain.** `pairs.mts`: find long axis-aligned lines (runs ≥ 340 mm with gaps ≤ 3 px
+bridged, runs of neighbouring rows merged), pair facing lines 40–520 mm apart whose core is empty (centre in the gap,
+the gap as thickness), keep unpaired bands ≥ 9 px thick and ≥ 700 mm long.
+
+| Tile | Old detector | Pairing (all pairs) | Pairing + old detector where uncovered |
+|---|---|---|---|
+| 154 west (tuned on) | 62 % | 78 % | **84 %** (precision 81 %) |
+| 152 wet rooms (tuned on) | 37 % | 60 % | **66 %** (precision 63 %) |
+| 153 kitchen and east (held back) | 70 % | 64 % | **88 %** (precision 78 %) |
+| Middle strip (held back) | 56 % | 72 % | **72 %** (precision 71 %) |
+
+Pairing with only the single nearest partner per line (mutual nearest) was worse (56 % on 154 west): a facade with
+hatch lines has nearer lines than the outer face. Median offset falls from 12–50 mm to 7–25 mm where pairs are found.
+Both reader kinds together beat either alone on every tile, held-back ones included.
+
+**What is wrong now** (from the pictures): (1) outlines only 3–4 px apart (the central wall of 152) are neither a pair
+(gap below the minimum) nor a band (each line too thin): merge lines closer than the minimum gap into one thick line
+first; (2) false walls from the underline of lettering, the lines through a WC bowl or sink, and a dashed centre line
+paired with a room outline: check the ink coverage of each paired line along the wall (dashes and text strokes are
+broken), and reject a line that touches lettering; (3) `joinPieces` bridges gaps of up to 2 m between unrelated short
+pieces on one line (a false wall across a kitchen): join only across doorway-sized gaps and only pieces that are walls
+by themselves; (4) the dashed partition at y 16 700 in 154 is still missed.
