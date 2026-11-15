@@ -228,3 +228,24 @@ its gaps and the two fronts met in the middle. Next: where two census rooms touc
 boundary, that boundary is an unclosed wall: take its rough ends, look for collinear dashes along it, and propose the
 wall (rough ends to `snap_walls`, which fits it to the ink). This should also find the dashed partition that is still
 missed.
+
+### Three models, same tile and census prompt (2026-11-15)
+
+Sonnet, Opus and Haiku annotated flat 154 west with the same prompt (one run each; marks in `scripts/wallbench/marks/`,
+side-by-side pictures made with `scripts/wallbench/montage.mts`). One run per model on one tile cannot separate a model
+effect from run-to-run noise; read it as "does the method survive a weak annotator".
+
+| | Sonnet | Opus | Haiku |
+|---|---|---|---|
+| Census entries (6 rooms in the tile) | 6 | 6 | **15** |
+| Kitchen run boxed end to end | yes | yes (longer) | no |
+| WC from the bowl | yes | yes | yes |
+| Window hatching erased as "stair treads" | no | no | **yes** |
+| Wall recall / precision (100 mm) | 79 % / 93 % | 73 % / 85 % | 72 % / 95 % |
+| Dashed partition at y≈330 | missed | missed | found (not by skill) |
+
+Findings: Opus gave no gain over Sonnet. Its two extra false verticals come from boxing a dashed line but not the
+cupboard bar beside it. Haiku's census and boxes are the weakest; its 95 % precision is the engine's wall-body guard
+dropping four of its junk points. The engine guards (wall bodies, lines inside rooms) matter more than the model. All
+three get the Kök/Matvrå boundary wrong the same way (the fill leaks through the dashed partition), and all three leave
+the cupboard column at the top left as a false wall: those are engine problems, not annotation problems.

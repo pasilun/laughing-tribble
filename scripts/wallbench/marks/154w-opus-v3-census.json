@@ -1,0 +1,35 @@
+{"census": [
+{"name": "Kök", "evidence": "handwritten Kök (?) plus kitchen unit run and stove circle", "at": [150, 210]},
+{"name": "Matvrå", "evidence": "handwritten Matvrå", "at": [130, 432]},
+{"name": "Rum", "evidence": "handwritten Rum with area figures", "at": [540, 440]},
+{"name": "Badrum/WC", "evidence": "WC bowl and basin, cut by top edge", "at": [460, 50]},
+{"name": "?", "evidence": "small closed outline, no name (garderob)", "at": [635, 95]},
+{"name": "?", "evidence": "room cut by top edge with partial number", "at": [340, 70]}
+],
+"remove": [
+{"kind": "text", "box": [48, 85, 122, 120], "what": "number 102"},
+{"kind": "text", "box": [105, 197, 195, 228], "what": "Kök"},
+{"kind": "symbol", "box": [115, 257, 178, 322], "what": "circle with S (stove/riser)"},
+{"kind": "dashed", "box": [112, 328, 195, 342], "what": "horizontal dashed line"},
+{"kind": "dashed", "box": [180, 0, 193, 645], "what": "vertical dash-dot line"},
+{"kind": "dashed", "box": [236, 390, 250, 605], "what": "vertical dashed line"},
+{"kind": "text", "box": [45, 410, 230, 455], "what": "Matvrå"},
+{"kind": "text", "box": [38, 462, 203, 474], "what": "Matvrå underline"},
+{"kind": "text", "box": [448, 420, 645, 462], "what": "Rum"},
+{"kind": "text", "box": [430, 463, 622, 476], "what": "Rum underline"},
+{"kind": "text", "box": [508, 165, 702, 262], "what": "area figures and underline"},
+{"kind": "text", "box": [288, 0, 355, 25], "what": "partial number at top"},
+{"kind": "fixture", "box": [415, 5, 502, 85], "what": "WC bowl with number"},
+{"kind": "fixture", "box": [488, 48, 572, 118], "what": "basin"},
+{"kind": "symbol", "box": [548, 0, 592, 30], "what": "riser symbol at top"},
+{"kind": "fixture", "box": [32, 48, 95, 325], "what": "kitchen unit run along left wall"},
+{"kind": "fixture", "box": [205, 175, 258, 322], "what": "cupboard units"}
+],
+"rooms": [
+{"name": "Kök", "at": [140, 150]},
+{"name": "Matvrå", "at": [130, 520]},
+{"name": "Rum", "at": [400, 350]},
+{"name": "Badrum/WC", "at": [450, 112]},
+{"name": "?", "at": [635, 95]},
+{"name": "?", "at": [340, 80]}
+]}
