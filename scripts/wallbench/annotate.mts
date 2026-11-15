@@ -17,7 +17,7 @@ type Marks = { remove: Array<{ kind: string; box: number[] }>; rooms: Array<{ na
 // Inside a box, ink is erased unless it belongs to a straight horizontal or vertical run (gaps ≤ 2 px bridged) that
 // continues outside the box: a wall crossing the box always does; lettering, underlines and fixtures inside it do not,
 // even where they touch a wall.
-export function eraseInBoxes(b: Bits, boxes: number[][]): Uint8Array {
+export function eraseInBoxes(b: Bits, boxes: number[][], BEYOND = Math.round(300 / CASE.mm_per_px)): Uint8Array {
   const out = b.d.slice()
   const inBox = (x: number, y: number, [x0, y0, x1, y1]: number[]) => x >= x0 && x <= x1 && y >= y0 && y <= y1
   for (const box of boxes) {
@@ -26,15 +26,17 @@ export function eraseInBoxes(b: Bits, boxes: number[][]): Uint8Array {
       for (let x = Math.max(0, x0); x <= Math.min(b.w - 1, x1); x++) {
         if (!b.d[y * b.w + x]) continue
         // walk the horizontal and the vertical run through this pixel; keep it if either leaves the box
+        // The run must continue at least BEYOND px outside the box: a wall crossing the box does; an underline that
+        // only touches a wall at its end stops inside that wall's thickness.
         const leaves = (dx: number, dy: number) => {
           for (const sgn of [-1, 1]) {
-            let X = x, Y = y, gap = 0
+            let X = x, Y = y, gap = 0, outside = 0
             while (true) {
               X += dx * sgn; Y += dy * sgn
-              if (X < 0 || Y < 0 || X >= b.w || Y >= b.h) return true
+              if (X < 0 || Y < 0 || X >= b.w || Y >= b.h) return outside > 0
               if (b.d[Y * b.w + X]) gap = 0
               else if (++gap > 2) break
-              if (!inBox(X, Y, box) && gap === 0) return true
+              if (!inBox(X, Y, box) && gap === 0 && ++outside >= BEYOND) return true
             }
           }
           return false
@@ -171,8 +173,16 @@ if (process.argv[1]?.endsWith('annotate.mts')) {
   const marks = JSON.parse(readFileSync(marksFile, 'utf8')) as Marks
   const b = await tileBits(TILES[tile])
   // A dashed line can be a wall drawn with an opening: dashed boxes are not erased.
-  const cleaned = eraseInBoxes(b, marks.remove.filter((r) => r.kind !== 'dashed').map((r) => r.box))
-  const lab = fillRooms(cleaned, b.w, b.h, marks.rooms.map((r) => r.at))
+  // Text boxes (words with their underlines): a run is kept only if it continues 300 mm beyond the box, so an underline
+  // that touches a wall goes. Fixture and symbol boxes: any run that leaves the box is kept, since fixtures are drawn
+  // hard against walls and the wall's short stretches inside the box must survive.
+  const strict = eraseInBoxes(b, marks.remove.filter((r) => r.kind === 'text').map((r) => r.box))
+  const cleaned = eraseInBoxes({ ...b, d: strict }, marks.remove.filter((r) => r.kind === 'fixture' || r.kind === 'symbol').map((r) => r.box), 1)
+  // Rooms are filled on the raw drawing: lettering and fixtures are islands the fill flows around, and the wall
+  // outlines are whole (erasing near a wall can open a hole the fill would leak through into the wall's body).
+  const lab = fillRooms(b.d, b.w, b.h, marks.rooms.map((r) => r.at))
+  // The size test measures the room without its fixtures and lettering (the cleaned ink): a WC full of fixtures is small
+  // on the raw drawing but not a wall body.
   const dropped = dropWallBodies(lab, distanceToInk(cleaned, b.w, b.h), marks.rooms.length)
   if (dropped.length) console.log('room points inside a wall body, dropped:', dropped.map((l) => `${marks.rooms[l - 1].name} ${JSON.stringify(marks.rooms[l - 1].at)}`).join('; '))
   // Picture 1: the marks. Kept ink black, erased ink orange, rooms tinted, boxes outlined, seeds as dots.

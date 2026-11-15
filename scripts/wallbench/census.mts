@@ -9,8 +9,9 @@ const [tile = '154w', file] = process.argv.slice(2)
 const marks = JSON.parse(readFileSync(file, 'utf8')) as { remove: Array<{ kind: string; box: number[]; what?: string }>; rooms: Array<{ name: string; at: number[] }> }
 const b = await tileBits(TILES[tile])
 const cleaned = eraseInBoxes(b, marks.remove.filter((r) => r.kind !== 'dashed').map((r) => r.box))
-const lab = fillRooms(cleaned, b.w, b.h, marks.rooms.map((r) => r.at))
+const lab = fillRooms(b.d, b.w, b.h, marks.rooms.map((r) => r.at))
 dropWallBodies(lab, distanceToInk(cleaned, b.w, b.h), marks.rooms.length)
+
 const k = CASE.mm_per_px
 const area = new Map<number, number>()
 for (const l of lab) if (l) area.set(l, (area.get(l) ?? 0) + 1)
