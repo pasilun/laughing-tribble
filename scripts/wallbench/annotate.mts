@@ -96,6 +96,34 @@ export function fillRooms(d: Uint8Array, w: number, h: number, seeds: number[][]
   return lab
 }
 
+// Distance to the nearest ink pixel (chamfer 3-4, in pixels).
+export function distanceToInk(d: Uint8Array, w: number, h: number): Float32Array {
+  const D = new Float32Array(w * h).fill(1e6)
+  for (let i = 0; i < d.length; i++) if (d[i]) D[i] = 0
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 1e6 : D[y * w + x])
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x
+    D[i] = Math.min(D[i], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + 1.4, at(x + 1, y - 1) + 1.4)
+  }
+  for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) {
+    const i = y * w + x
+    D[i] = Math.min(D[i], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + 1.4, at(x - 1, y + 1) + 1.4)
+  }
+  return D
+}
+
+// A filled region that is long and thin is the body of a wall (the white between two outlines), not a room: the
+// largest circle that fits in it is small (≤ `maxR` px) and its area is many times that circle's square. A small compact
+// room (a closet) has the same width but a compact shape and is kept. Returns the labels dropped.
+export function dropWallBodies(lab: Int16Array, dist: Float32Array, n: number, maxR = 26, elong = 3): number[] {
+  const area = new Float64Array(n + 1), rmax = new Float64Array(n + 1)
+  for (let i = 0; i < lab.length; i++) if (lab[i]) { area[lab[i]]++; rmax[lab[i]] = Math.max(rmax[lab[i]], dist[i]) }
+  const drop: number[] = []
+  for (let l = 1; l <= n; l++) if (area[l] && rmax[l] <= maxR && area[l] / (4 * rmax[l] * rmax[l]) > elong) drop.push(l)
+  for (let i = 0; i < lab.length; i++) if (drop.includes(lab[i])) lab[i] = 0
+  return drop
+}
+
 // A wall is between rooms unless both sides, along most of its length, lie in the same room.
 export function sameRoomBothSides(b: Bits, lab: Int16Array, wl: Wall): boolean {
   const a = toPx(b, wl.a.x, wl.a.y), c = toPx(b, wl.b.x, wl.b.y)
@@ -115,6 +143,16 @@ export function sameRoomBothSides(b: Bits, lab: Int16Array, wl: Wall): boolean {
     }
     return 0
   }
+  // The centre line itself: a real wall's body is ink, or white enclosed between two outlines, which no fill from a room
+  // point reaches. A candidate whose centre line mostly lies in a labelled room is a line inside that room.
+  let inRoom = 0, onCentre = 0
+  for (let i = 0; i <= n; i++) {
+    const X = Math.round(a.x + ((c.x - a.x) * i) / n), Y = Math.round(a.y + ((c.y - a.y) * i) / n)
+    if (X < 0 || Y < 0 || X >= b.w || Y >= b.h) continue
+    onCentre++
+    if (lab[Y * b.w + X]) inRoom++
+  }
+  if (onCentre >= 3 && inRoom / onCentre > 0.5) return true
   for (let i = 0; i <= n; i++) {
     const px = a.x + ((c.x - a.x) * i) / n, py = a.y + ((c.y - a.y) * i) / n
     const l1 = vertical ? at(px - reach, py) : at(px, py - reach)
@@ -135,6 +173,8 @@ if (process.argv[1]?.endsWith('annotate.mts')) {
   // A dashed line can be a wall drawn with an opening: dashed boxes are not erased.
   const cleaned = eraseInBoxes(b, marks.remove.filter((r) => r.kind !== 'dashed').map((r) => r.box))
   const lab = fillRooms(cleaned, b.w, b.h, marks.rooms.map((r) => r.at))
+  const dropped = dropWallBodies(lab, distanceToInk(cleaned, b.w, b.h), marks.rooms.length)
+  if (dropped.length) console.log('room points inside a wall body, dropped:', dropped.map((l) => `${marks.rooms[l - 1].name} ${JSON.stringify(marks.rooms[l - 1].at)}`).join('; '))
   // Picture 1: the marks. Kept ink black, erased ink orange, rooms tinted, boxes outlined, seeds as dots.
   const edge = new Uint8Array(b.w * b.h)
   for (const { box: [x0, y0, x1, y1] } of marks.remove) for (let x = Math.max(0, x0); x <= Math.min(b.w - 1, x1); x++) for (let y = Math.max(0, y0); y <= Math.min(b.h - 1, y1); y++) if (x === x0 || x === x1 || y === y0 || y === y1) edge[y * b.w + x] = 1

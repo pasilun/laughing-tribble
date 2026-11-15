@@ -1,0 +1,27 @@
+{"remove": [
+{"kind":"text","box":[50,86,122,120],"what":"102 label top-left"},
+{"kind":"text","box":[105,190,195,230],"what":"handwritten 4kk"},
+{"kind":"symbol","box":[115,258,178,322],"what":"circle riser/stove"},
+{"kind":"dashed","box":[180,0,192,600],"what":"vertical dashed line"},
+{"kind":"dashed","box":[113,328,192,344],"what":"horizontal dashed line"},
+{"kind":"text","box":[45,410,236,475],"what":"Hotvo text with underline"},
+{"kind":"text","box":[430,420,646,476],"what":"Rum text with underline"},
+{"kind":"text","box":[508,165,706,262],"what":"102 vard / 40 m2 text and underline"},
+{"kind":"text","box":[288,0,382,24],"what":"top text with underline"},
+{"kind":"fixture","box":[424,12,502,86],"what":"basin/bowl top"},
+{"kind":"fixture","box":[488,45,578,120],"what":"sink/fixture top right"},
+{"kind":"fixture","box":[548,0,592,32],"what":"fixture top edge"},
+{"kind":"fixture","box":[40,135,95,235],"what":"left cupboards"},
+{"kind":"fixture","box":[207,177,262,256],"what":"radiator/cupboard with bar"}
+],
+"rooms": [
+{"name":"?","at":[50,70]},
+{"name":"Hall","at":[150,150]},
+{"name":"?","at":[233,296]},
+{"name":"Rum","at":[130,365]},
+{"name":"Rum","at":[350,300]},
+{"name":"?","at":[340,80]},
+{"name":"?","at":[450,127]},
+{"name":"Garderob","at":[638,95]},
+{"name":"outside","at":[300,626]}
+]}

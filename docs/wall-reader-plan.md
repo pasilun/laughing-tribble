@@ -167,3 +167,41 @@ paired with a room outline: check the ink coverage of each paired line along the
 broken), and reject a line that touches lettering; (3) `joinPieces` bridges gaps of up to 2 m between unrelated short
 pieces on one line (a false wall across a kitchen): join only across doorway-sized gaps and only pieces that are walls
 by themselves; (4) the dashed partition at y 16 700 in 154 is still missed.
+
+## The annotator experiment (2026-11-15, flat 154 west)
+
+Idea (from the maintainer): let a model look at the tile first and mark what is not wall (text, fixtures, symbols,
+dashed lines) and give a point inside every room, then use those marks as a filter and a guide for the detector. The
+model decides *what* things are; the ink decides *where* (its boxes and points are rough and never become geometry).
+`scripts/wallbench/grid.mts` makes the picture the annotator sees (a grid in tile px), `annotate.mts` applies its marks.
+
+**How the marks are used** (all deterministic):
+1. *Remove boxes:* ink inside a box is erased unless it belongs to a straight run that leaves the box (a wall crossing
+   a box always does; lettering and an underline touching a wall do not). Boxes of kind "dashed" are not erased (a
+   dashed line can be a wall with an opening).
+2. *Room points:* a fill from all points at once through white paper. A region that is long and thin (largest
+   inscribed circle ≤ 26 px ≈ 220 mm, area > 3 × its circle's square) is the white body of a wall, not a room, and is
+   dropped whatever the annotator called it. (The first attempts put an "outside" point inside the south wall's window
+   niche; the fill ran along the wall body.)
+3. *Walls vs rooms:* a candidate wall is dropped when both its sides lie in the same room (a counter, an underline) or
+   when its centre line mostly lies in a labelled room (the white core of a real wall is enclosed by its two outlines
+   and no fill from a room point reaches it; a line inside a room is leaked into through dashes).
+
+**Result on flat 154 west** (a fresh Sonnet annotator that never saw the fixture; recall and precision at 100 mm):
+
+| | Recall | Precision |
+|---|---|---|
+| Pairing + old detector, no marks | 84 % | 81 % |
+| + remove boxes (attempt 1 / attempt 2) | 86 % / 84 % | 78 % / 83 % |
+| + rooms (attempt 1 / attempt 2) | 80 % / 79 % | 88 % / **95 %** |
+
+**What the maintainer saw in attempt 1, and what changed for attempt 2:** it boxed only part of the kitchen units along
+the west wall, gave no point to the small rooms (WC, garderob) and boxed a room as a fixture, and a point landed in the
+south wall. Attempt 2 got written conventions: a run of kitchen units is one fixture, boxed end to end; a small closed
+outline without inner detail is a room, even a tiny one, and gets a point, never a box. It then gave a point to
+nearly every closed outline. It still boxed only the middle of the kitchen run, and misnamed rooms (names are not used).
+Both observations are general conventions and belong in the trace guide's registry of drawing conventions.
+
+**Open:** a second pass in which the annotator sees its own marks drawn on the picture and fixes what it missed (the
+"judge every step" loop that built the fixture); the false vertical at x≈487 (a cupboard bar paired with an outline);
+the dashed partition at y≈330 is still missed; four tiles instead of one.
