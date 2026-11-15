@@ -1,0 +1,26 @@
+{"remove": [
+{"kind":"text","box":[50,85,125,125],"what":"number 102"},
+{"kind":"fixture","box":[40,148,90,235],"what":"cupboard/counter boxes left"},
+{"kind":"text","box":[105,190,197,230],"what":"handwritten 4H"},
+{"kind":"symbol","box":[117,257,178,320],"what":"circle riser symbol"},
+{"kind":"fixture","box":[207,177,260,255],"what":"radiator"},
+{"kind":"fixture","box":[207,267,262,320],"what":"fixture box"},
+{"kind":"dashed","box":[183,0,194,600],"what":"vertical dashed line"},
+{"kind":"dashed","box":[115,328,200,343],"what":"horizontal dashed line"},
+{"kind":"text","box":[40,410,235,475],"what":"Hall text with underline"},
+{"kind":"text","box":[290,0,380,25],"what":"text at top"},
+{"kind":"fixture","box":[410,5,500,85],"what":"basin/WC top"},
+{"kind":"fixture","box":[490,45,575,120],"what":"fixture top right"},
+{"kind":"fixture","box":[550,0,590,35],"what":"fixture top"},
+{"kind":"fixture","box":[585,55,690,138],"what":"cupboard box top right"},
+{"kind":"text","box":[510,167,703,260],"what":"numbers with underline"},
+{"kind":"text","box":[430,420,645,478],"what":"Rum text with underline"}
+],
+"rooms": [
+{"name":"?","at":[150,100]},
+{"name":"Hall","at":[120,380]},
+{"name":"?","at":[100,540]},
+{"name":"Rum","at":[400,300]},
+{"name":"?","at":[325,75]},
+{"name":"outside","at":[350,640]}
+]}
