@@ -1,0 +1,7 @@
+{
+  "source": "Maintainer's markup on the step-1 picture, 2026-11-15: entrance circled, split to the neighbouring flat drawn as a line. Read off the picture at about ±150 mm; the west and south sides follow the basplan's flat outline.",
+  "outline": [[20600, 15660], [22550, 15660], [22550, 14250], [24600, 14250], [24600, 15650], [26320, 15650], [26320, 20780], [20600, 20780]],
+  "entrance": [22800, 14950],
+  "entrance_room": "the narrow northern room (entry hall)",
+  "not_this_flat": ["the bathroom with the D-shaped tub and the closet east of it, north of y 15650 and east of x 24600"]
+}

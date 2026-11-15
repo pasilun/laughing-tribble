@@ -249,3 +249,26 @@ cupboard bar beside it. Haiku's census and boxes are the weakest; its 95 % preci
 dropping four of its junk points. The engine guards (wall bodies, lines inside rooms) matter more than the model. All
 three get the Kök/Matvrå boundary wrong the same way (the fill leaks through the dashed partition), and all three leave
 the cupboard column at the top left as a false wall: those are engine problems, not annotation problems.
+
+## Top-down: understand the flat first (2026-11-15, maintainer's direction)
+
+Order: (1) understand the flat at a high level (conventions, outline, entrance, rooms, neighbours), (2) clean the ink in a
+few passes guided by that, (3) hand the cleaned image to the wall finder, steered by the rooms (a wall where two rooms
+meet, none inside a room), (4) compare the result with step 1 and look at it with fresh eyes as a flat. Sonnet only. Every
+step produces a picture for the maintainer to judge (`scripts/wallbench/step1viz.mts`; the flat picture with a grid in
+plan mm from `flatgrid.mts`).
+
+**Step 1 on flat 154, two runs** (answers in `scripts/wallbench/steps/`; the maintainer's outline and entrance, marked on
+the first picture, in `steps/154-step1-reference.json`):
+- Run 1 (no rules about what belongs to a flat): west, south and east sides right; took in two of the neighbour's rooms
+  in the north-east; entrance guessed on the east wall; north strip named by guess.
+- Run 2 (general rules: one entrance from the stair, a room belongs to the flat only if reached from inside it, mark
+  uncertain rooms): worse. It dropped the whole north part (entry hall, WC) as uncertain, put the entrance on the west
+  wall, and concluded the flat might be only the big room.
+
+**Lesson:** the model cannot see this drawing's door markings (gaps and ticks, no swings), and reasoning about ownership
+without doors goes wrong either way; drawing outlines and rectangles is the part models are weakest at. **Next:** split
+step 1 into geometry by the engine and judgement by the model: the engine divides the white paper into enclosed regions
+(cut at doorway-wide gaps) and numbers them on the picture; the model answers by number which regions are the flat,
+which is the entry hall, the name of each, and which are the neighbour's or the stair. The outline then follows exactly
+from the chosen regions.

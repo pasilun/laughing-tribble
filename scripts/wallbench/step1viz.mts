@@ -1,6 +1,6 @@
 // Draws a step-1 answer (outline, rooms, neighbours, entrance, convention examples) over the flat picture, plus the
 // basplan's flat outline as a thin grey reference.
-//   npx tsx scripts/wallbench/step1viz.mts <step1.json> <flat.png> <x> <y> <w> <h> <scale> <out.png>
+//   npx tsx scripts/wallbench/step1viz.mts <step1.json> <flat.png> <x> <y> <w> <h> <scale> <out.png> [reference.json]
 import { readFileSync } from 'fs'
 import sharp from 'sharp'
 import { CASE, tileBits } from './common.mjs'
@@ -16,9 +16,13 @@ const meta = await sharp(flat).metadata()
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const colours = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#9a6324', '#808000', '#469990', '#000075']
 const parts: string[] = []
-// Reference: the basplan's flat 154 zone (today's state; close to 1999 at the outline).
-const ref = [[20599, 15659], [22597, 15659], [22597, 14342], [24462, 14342], [24462, 15659], [26308, 15659], [26308, 20403], [20599, 20403]]
-parts.push(`<polygon points="${ref.map(([a, c]) => `${X(a)},${Y(c)}`).join(' ')}" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="8 6"/>`)
+// Reference: the maintainer's outline and entrance (steps/154-step1-reference.json), as a thick grey dashed line.
+const refFile = process.argv[10]
+if (refFile) {
+  const r = JSON.parse(readFileSync(refFile, 'utf8')) as { outline: number[][]; entrance?: number[] }
+  parts.push(`<polygon points="${r.outline.map(([a, c]) => `${X(a)},${Y(c)}`).join(' ')}" fill="none" stroke="#555" stroke-width="5" stroke-dasharray="12 8" opacity="0.7"/>`)
+  if (r.entrance) parts.push(`<circle cx="${X(r.entrance[0])}" cy="${Y(r.entrance[1])}" r="18" fill="none" stroke="#555" stroke-width="4" stroke-dasharray="6 4"/>`)
+}
 s.rooms.forEach((r, i) => {
   const c = colours[i % colours.length]
   const [x0, y0, x1, y1] = r.rect
@@ -38,7 +42,7 @@ if (s.entrance) parts.push(`<circle cx="${X(s.entrance[0])}" cy="${Y(s.entrance[
 s.conventions.forEach((c) => parts.push(`<rect x="${+X(c.at[0]) - 5}" y="${+Y(c.at[1]) - 5}" width="10" height="10" fill="#ffcc00" stroke="#000"/><text x="${+X(c.at[0]) + 8}" y="${+Y(c.at[1]) + 16}" font-size="12" font-family="sans-serif" fill="#000" stroke="#ffcc00" stroke-width="3" paint-order="stroke">${esc(c.what)}</text>`))
 const legend = `<g transform="translate(10,${(meta.height ?? 0) - 92})"><rect width="430" height="84" fill="#fff" stroke="#999"/>` +
   `<line x1="10" y1="16" x2="50" y2="16" stroke="#d000d0" stroke-width="4"/><text x="58" y="21" font-size="13" font-family="sans-serif">outline (step 1)</text>` +
-  `<line x1="210" y1="16" x2="250" y2="16" stroke="#777" stroke-width="2" stroke-dasharray="8 6"/><text x="258" y="21" font-size="13" font-family="sans-serif">basplan outline (reference)</text>` +
+  `<line x1="210" y1="16" x2="250" y2="16" stroke="#555" stroke-width="4" stroke-dasharray="12 8"/><text x="258" y="21" font-size="13" font-family="sans-serif">your outline + entrance</text>` +
   `<line x1="10" y1="40" x2="50" y2="40" stroke="#0a0" stroke-width="3"/><text x="58" y="45" font-size="13" font-family="sans-serif">door</text>` +
   `<line x1="110" y1="40" x2="150" y2="40" stroke="#06c" stroke-width="5" stroke-dasharray="2 5"/><text x="158" y="45" font-size="13" font-family="sans-serif">open</text>` +
   `<line x1="210" y1="40" x2="250" y2="40" stroke="#c00" stroke-width="1.5" stroke-dasharray="6 4"/><text x="258" y="45" font-size="13" font-family="sans-serif">wall only</text>` +
