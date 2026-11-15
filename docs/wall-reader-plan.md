@@ -205,3 +205,26 @@ Both observations are general conventions and belong in the trace guide's regist
 **Open:** a second pass in which the annotator sees its own marks drawn on the picture and fixes what it missed (the
 "judge every step" loop that built the fixture); the false vertical at x≈487 (a cupboard bar paired with an outline);
 the dashed partition at y≈330 is still missed; four tiles instead of one.
+
+### Attempt 3: a room census first (maintainer's idea)
+
+The annotator lists the rooms it expects from the evidence before marking anything: one room per handwritten name,
+one WC per toilet bowl (a WC often has no label), one closet per empty closed outline, with the count; then one point
+per census entry, then the boxes. `scripts/wallbench/census.mts` tabulates, per filled room, the labels and fixtures
+inside it and its size, so each region gets a type from its evidence.
+
+| Attempt | Recall | Precision | What the pictures showed |
+|---|---|---|---|
+| 1: marks only | 80 % | 88 % | kitchen run partly boxed; WC and garderob without points; a point in the south wall |
+| 2: + conventions | 79 % | **95 %** | points for nearly every outline; kitchen run still partly boxed; names wrong |
+| 3: + census | 79 % | 93 % | **kitchen run boxed end to end**, WC found by its bowl, names match the evidence, six regions for six census entries |
+
+Checks the census allows (deterministic): a region with no label and no fixture under about 0.4 m² is a cupboard, not a
+room (the 0.1 m² rectangle); a region with a bowl is a WC; the number of filled regions should equal the census count.
+
+**New finding (from the picture):** the kitchen and the Matvrå regions were separated at y≈500, not at the wall at
+y≈660. The wall is a thick dashed partition (the annotator boxed it as "dashed, not a wall"); the fill leaked through
+its gaps and the two fronts met in the middle. Next: where two census rooms touch with no ink along their common
+boundary, that boundary is an unclosed wall: take its rough ends, look for collinear dashes along it, and propose the
+wall (rough ends to `snap_walls`, which fits it to the ink). This should also find the dashed partition that is still
+missed.
