@@ -272,3 +272,37 @@ step 1 into geometry by the engine and judgement by the model: the engine divide
 (cut at doorway-wide gaps) and numbers them on the picture; the model answers by number which regions are the flat,
 which is the entry hall, the name of each, and which are the neighbour's or the stair. The outline then follows exactly
 from the chosen regions.
+
+## Paused (2026-11-16): where the work stands
+
+**Step 1 by the model does not work on this drawing** (three Sonnet runs, three different wrong answers about which
+rooms are the flat and where the entrance is: it cannot see the door markings or read the handwriting). Step 1 was done
+by hand instead, on the engine's numbered regions (`steps/154-step1-manual.json`); in the product that is one or two
+answers from the user per flat.
+
+**Step 1a (engine) works:** `regions.mts` divides the paper into regions split at doorway-wide necks, using only the wall
+network as barriers (ink pieces at least 2 m across, plus rows of thick dashes, which are walls drawn dashed; lettering,
+specks and thin lines left out).
+
+**The whole flat from confirmed rooms** (`flat.mts`, flat 154, scored against the fixture's walls of the flat):
+
+| | Recall (100 mm) | Precision |
+|---|---|---|
+| Raw drawing (pairing + old detector), walls of the flat | 83 % | 90 % |
+| Wall network only as ink | **95 %** | 67 % |
+| + room rules (wall bodies from step 1 not counted as spaces) | **95 %** | **80 %** |
+| + cutting candidates where they run inside a room | 83 % | 80 % (dropped) |
+
+**The six false walls left** (from the per-wall listing, `DEBUG=1`), and what each needs:
+1. A wall drawn on the outline of the stair, x 22671, the full height of the tile, beside the real wall at 22664 with
+   thickness 68: a duplicate of a real wall on one of its outlines. Needs: merge a thin candidate into a thicker one
+   on the same line within half its thickness.
+2. The stair wall at y 15656 run on from 20061 to 26770: right in the west, extended across the hall and bathroom.
+   Needs: joins across gaps only where the gap is a doorway between two different rooms.
+3. A horizontal at y 15303 across the hall (the underline of a number that the regions treat as a wall).
+4. Two verticals at x 22178 and 22455 in the kitchen (the cupboard column; one side is a region-less cupboard cell).
+5. A horizontal at y 17008 in the big room (a room number's underline, 374 mm "thick").
+
+Items 3–5 are lettering and furniture that the wall network keeps because they touch a wall: the annotator's boxes
+(which worked on the tile) are the tool for them. Next when resumed: put the annotator's text and fixture boxes into
+`flat.mts`, fix items 1–2, then run the held-back tiles and the whole crop with no tuning.

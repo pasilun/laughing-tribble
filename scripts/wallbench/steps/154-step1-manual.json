@@ -1,0 +1,15 @@
+{
+  "source": "Step 1 done by hand (2026-11-15) on the numbered regions of steps/154-regions.json, from the maintainer's outline and entrance and the 1999 fixture.",
+  "rooms": [
+    { "name": "Hall", "regions": [7, 13] },
+    { "name": "WC", "regions": [3] },
+    { "name": "Bad", "regions": [8, 14] },
+    { "name": "Skåp", "regions": [16] },
+    { "name": "Passage", "regions": [15], "uncertain": "touches the east wall" },
+    { "name": "Kök", "regions": [12, 20] },
+    { "name": "Matvrå", "regions": [21, 24] },
+    { "name": "Rum", "regions": [22] }
+  ],
+  "entrance": { "into": 7, "from": 1 },
+  "not_this_flat": { "stair": [1], "neighbour north-east": [2, 4, 5, 6, 9, 17], "neighbour west": [10, 18, 19, 23], "wall bodies": [11, 26, 27, 28], "outside": [25] }
+}

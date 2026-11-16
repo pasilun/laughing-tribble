@@ -60,5 +60,5 @@ export async function picture(w: number, h: number, colour: (i: number) => [numb
     rgb[i * 3 + 1] = g
     rgb[i * 3 + 2] = bb
   }
-  await sharp(rgb, { raw: { width: w, height: h, channels: 3 } }).resize(w * scale, h * scale, { kernel: 'nearest' }).png().toFile(file)
+  await sharp(rgb, { raw: { width: w, height: h, channels: 3 } }).resize(Math.round(w * scale), Math.round(h * scale), { kernel: 'nearest' }).png().toFile(file)
 }

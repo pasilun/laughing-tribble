@@ -9,13 +9,13 @@ import sharp from 'sharp'
 import { CASE, tileBits } from './common.mjs'
 import { distanceToInk } from './annotate.mjs'
 
-const [x, y, w, h, scale = '1.6', outPng = 'regions.png', outJson = 'regions.json', ratioArg = '0.7', minPeakArg = '150'] = process.argv.slice(2)
+export type Region = { id: number; n: number; peakMm: number; at: [number, number]; areaM2: number; box: [number, number, number, number] }
+export async function computeRegions(x: number, y: number, w: number, h: number, ratio = 0.7, minPeakMm = 110, minPieceMm = 2000) {
 const b = await tileBits([Number(x), Number(y), Number(w), Number(h)])
 const k = CASE.mm_per_px
 // Barriers are the wall network only: the walls of a floor form a few large connected pieces of ink; lettering,
 // underlines, dashes, specks and loose symbols are small separate pieces and are left out (a fixture touching a wall
 // stays, and the regions simply go round it).
-const minPieceMm = Number(process.argv[11] ?? '2000')
 const walls = new Uint8Array(b.d.length)
 type Piece = { pix: number[]; x0: number; y0: number; x1: number; y1: number }
 const small: Piece[] = []
@@ -92,7 +92,6 @@ for (const i of order) {
   }
 }
 // Merge regions across open passes, most open first.
-const ratio = Number(ratioArg)
 for (const [key, pass] of [...passes.entries()].sort((p, q) => q[1] - p[1])) {
   const [a, c] = key.split(',').map(Number)
   const ra = find(a), rc = find(c)
@@ -104,8 +103,7 @@ for (const [key, pass] of [...passes.entries()].sort((p, q) => q[1] - p[1])) {
 }
 for (let i = 0; i < N; i++) if (lab[i]) lab[i] = find(lab[i])
 // Regions: peak openness, area, bounding box; keep the ones a person could stand in.
-const minPeak = Number(minPeakArg) / k
-type Region = { id: number; n: number; peakMm: number; at: [number, number]; areaM2: number; box: [number, number, number, number] }
+const minPeak = minPeakMm / k
 const stats = new Map<number, { area: number; x0: number; y0: number; x1: number; y1: number }>()
 for (let i = 0; i < N; i++) {
   const l = lab[i]
@@ -127,6 +125,14 @@ const regions: Region[] = kept.map(([l, s], n) => {
   const i = peakAt[l], px = i % b.w, py = (i - px) / b.w
   return { id: l, n: n + 1, peakMm: Math.round(peak[l] * k), at: mm(px, py), areaM2: +(s.area * k * k / 1e6).toFixed(1), box: [...mm(s.x0, s.y0), ...mm(s.x1, s.y1)] as [number, number, number, number] }
 })
+  return { b, lab, regions, walls, peakAt }
+}
+
+if (process.argv[1]?.endsWith('regions.mts')) {
+const [xs, ys, ws, hs, scale = '1.6', outPng = 'regions.png', outJson = 'regions.json', ratioArg = '0.7', minPeakArg = '110', pieceArg = '2000'] = process.argv.slice(2)
+const { b, lab, regions, walls } = await computeRegions(Number(xs), Number(ys), Number(ws), Number(hs), Number(ratioArg), Number(minPeakArg), Number(pieceArg))
+const k = CASE.mm_per_px
+const x = xs, y = ys, w = ws, h = hs
 writeFileSync(outJson, JSON.stringify({ tile: [Number(x), Number(y), Number(w), Number(h)], regions }, null, 1))
 // Picture: each region tinted, its number at its most open point, ink black.
 const S = Number(scale)
@@ -151,5 +157,6 @@ const labels = regions.map((r) => {
 })
 const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${labels.join('')}</svg>`)
 await sharp(rgb, { raw: { width: W, height: H, channels: 3 } }).composite([{ input: svg }]).png().toFile(outPng)
-console.log(`${regions.length} regions (of ${stats.size} before the size filter)`)
+console.log(`${regions.length} regions`)
 for (const r of regions) console.log(`${String(r.n).padStart(2)}: ${r.areaM2} m², most open ${r.peakMm} mm from ink, at (${r.at})`)
+}
