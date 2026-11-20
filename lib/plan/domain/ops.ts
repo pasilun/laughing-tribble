@@ -124,6 +124,8 @@ export function validatePlan(plan: Plan): string[] {
     }
   }
   if (![50, 100, 150, 200].includes(plan.sheet.scale)) errors.push(`skala 1:${plan.sheet.scale} stöds inte (1:50, 1:100, 1:150, 1:200)`)
+  const parts = ['autoDims', 'roomAreas', 'legend', 'northArrow', 'scaleBar']
+  for (const h of plan.sheet.hide ?? []) if (!parts.includes(h)) errors.push(`sheet.hide: ${JSON.stringify(h)} finns inte; delar som kan döljas: ${parts.join(', ')}`)
   const walls = new Map(plan.walls.map((w) => [w.id, w]))
   for (const w of plan.walls) {
     if (dist(w.a, w.b) < 1) errors.push(`vägg ${w.id}: har ingen längd`)

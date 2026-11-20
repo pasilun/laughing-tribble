@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { dist, polygonArea, wallLength } from '@/lib/plan/domain/geometry'
 import type { Op } from '@/lib/plan/domain/ops'
-import type { FixtureKind, Phase, Plan, SheetScale, TitleBlock } from '@/lib/plan/domain/types'
+import type { FixtureKind, Phase, Plan, SheetPart, SheetScale, TitleBlock } from '@/lib/plan/domain/types'
 import type { Selection } from './Canvas'
 
 type Props = {
@@ -92,6 +92,15 @@ function Check({ label, value, onChange, testid }: { label: string; value: boole
   )
 }
 
+// The automatic parts of the sheet, each of which can be switched off (sheet.hide).
+const SHEET_PARTS: Array<[SheetPart, string]> = [
+  ['autoDims', 'Visa automatiska mått (nya öppningar, rivna väggar)'],
+  ['roomAreas', 'Visa rumsareor'],
+  ['legend', 'Visa teckenförklaring'],
+  ['northArrow', 'Visa norrpil'],
+  ['scaleBar', 'Visa skalstock'],
+]
+
 const PHASES: Array<[Phase, string]> = [
   ['existing', PHASE_LABEL.existing],
   ['demolish', PHASE_LABEL.demolish],
@@ -122,6 +131,9 @@ export function Inspector({ plan, selection, onOps, onDelete }: Props) {
         <Choice label="Status" value={w.phase} options={PHASES} testid="wall-phase" onChange={(v) => upd('wall', w.id, 'phase', { phase: v }, `Vägg: ${PHASE_LABEL[v].toLowerCase()}`)} />
         <Check label="Bärande" value={!!w.loadBearing} testid="wall-loadbearing" onChange={(v) => upd('wall', w.id, 'lb', { loadBearing: v }, v ? 'Markerade bärande' : 'Ej bärande')} />
         <Check label="Lägenhetsskiljande" value={!!w.apartmentBoundary} onChange={(v) => upd('wall', w.id, 'ab', { apartmentBoundary: v }, 'Lägenhetsskiljande')} />
+        {w.phase === 'demolish' && (
+          <Check label="Automatiskt längdmått på ritningen" value={!w.noAutoDim} testid="wall-auto-dim" onChange={(v) => upd('wall', w.id, 'autodim', { noAutoDim: v ? undefined : true }, v ? 'Automatiskt mått visas' : 'Automatiskt mått döljs')} />
+        )}
         <Text label="Brandklass före (t.ex. EI60)" value={w.fireRating ?? ''} testid="wall-fire" onChange={(v) => upd('wall', w.id, 'fire', { fireRating: v || undefined }, 'Ändrade brandklass')} />
         <Choice
           label="Brandcellsgräns efter"
@@ -157,6 +169,9 @@ export function Inspector({ plan, selection, onOps, onDelete }: Props) {
         <Num label={`Avstånd från vägg ${w?.id ?? ''} ände a (mm)`} value={o.offset} min={0} testid="opening-offset" onChange={(v) => upd('opening', o.id, 'offset', { offset: v }, 'Flyttade öppning')} />
         <Num label="Höjd (mm)" value={o.height ?? 0} min={0} testid="opening-height" onChange={(v) => upd('opening', o.id, 'height', { height: v || undefined }, 'Ändrade öppningshöjd')} />
         <Choice label="Status" value={o.phase} options={PHASES} onChange={(v) => upd('opening', o.id, 'phase', { phase: v }, `Öppning: ${PHASE_LABEL[v].toLowerCase()}`)} />
+        {o.phase === 'new' && (
+          <Check label="Automatiska mått på ritningen (bredd och läge)" value={!o.noAutoDim} testid="opening-auto-dim" onChange={(v) => upd('opening', o.id, 'autodim', { noAutoDim: v ? undefined : true }, v ? 'Automatiska mått visas' : 'Automatiska mått döljs')} />
+        )}
         {o.kind === 'door' && (
           <>
             <Choice label="Gångjärn" value={o.hinge ?? 'a'} options={[['a', 'Vid ände a'], ['b', 'Vid ände b']]} onChange={(v) => upd('opening', o.id, 'hinge', { hinge: v }, 'Ändrade gångjärn')} />
@@ -200,6 +215,7 @@ export function Inspector({ plan, selection, onOps, onDelete }: Props) {
         <Check label="Rummet försvinner efter ändringen" value={!!r.goneAfter} onChange={(v) => upd('room', r.id, 'gone', { goneAfter: v || undefined }, v ? 'Rummet tas bort efter' : 'Rummet finns kvar efter')} />
         <Check label="Rummet finns bara efter ändringen" value={!!r.newAfter} onChange={(v) => upd('room', r.id, 'new', { newAfter: v || undefined }, v ? 'Rummet tillkommer efter' : 'Rummet finns även före')} />
         <Text label="Lägenhet" value={r.apartment ?? ''} onChange={(v) => upd('room', r.id, 'apt', { apartment: v || undefined }, 'Ändrade lägenhet')} />
+        <Check label="Visa area på ritningen" value={!r.noArea} testid="room-show-area" onChange={(v) => upd('room', r.id, 'area', { noArea: v ? undefined : true }, v ? 'Arean visas' : 'Arean döljs')} />
         {r.polygon && <p className="text-xs text-zinc-500">Area {(polygonArea(r.polygon) / 1e6).toFixed(1).replace('.', ',')} m²</p>}
         {del}
       </div>
@@ -270,6 +286,21 @@ function SheetPanel({ plan, onOps }: { plan: Plan; onOps: Props['onOps'] }) {
         <Num label="Norrpil (grader)" value={plan.sheet.northAngle} onChange={(v) => onOps([{ op: 'setSheet', patch: { northAngle: v } }], 'sheet:north', 'Norrpil')} />
       </div>
       <Check label="Visa dörrarnas slagriktning" value={plan.sheet.doorSwings !== false} testid="sheet-door-swings" onChange={(v) => onOps([{ op: 'setSheet', patch: { doorSwings: v ? undefined : false } }], 'sheet:swings', v ? 'Dörrarnas slag visas' : 'Dörrarnas slag döljs')} />
+      {SHEET_PARTS.map(([part, label]) => {
+        const hide = plan.sheet.hide ?? []
+        return (
+          <Check
+            key={part}
+            label={label}
+            value={!hide.includes(part)}
+            testid={`sheet-show-${part}`}
+            onChange={(v) => {
+              const next = v ? hide.filter((x) => x !== part) : [...hide, part]
+              onOps([{ op: 'setSheet', patch: { hide: next.length ? next : undefined } }], `sheet:hide:${part}`, `${label}: ${v ? 'visas' : 'döljs'}`)
+            }}
+          />
+        )
+      })}
       <h3 className="pt-2 font-semibold">Ritningshuvud</h3>
       {TB_FIELDS.map(([key, label, ph]) => (
         <Text key={key} label={label} value={tb[key]} placeholder={ph} testid={`tb-input-${key}`} onChange={(v) => onOps([{ op: 'setTitleBlock', patch: { [key]: v } }], `tb:${key}`, `Ritningshuvud: ${label.toLowerCase()}`)} />

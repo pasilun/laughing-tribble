@@ -1,6 +1,6 @@
 import { add, along, bounds, dist, leftNormal, leafOffset, scale, wallDir, wallLength, wallQuad, wallSegments } from './geometry'
 import { roomShownIn, roomSpaces } from './rooms'
-import type { Fixture, Mass, Opening, Phase, Plan, Pt, SheetScale, View, Wall, Zone } from './types'
+import type { Fixture, Mass, Opening, Phase, Plan, Pt, SheetPart, SheetScale, View, Wall, Zone } from './types'
 import { centreLines } from './faces'
 
 // Renders a plan as a printable drawing sheet. All output coordinates are
@@ -494,16 +494,19 @@ function faceAfter(plan: Plan, w: Wall, t: number): number {
   return Math.min(wallLength(w), ...crossings(plan, w).map((c) => c.near).filter((v) => v >= t - 0.5))
 }
 
+// A part of the sheet the person has chosen to leave out (sheet.hide): every automatic annotation can be removed.
+const hidden = (plan: Plan, part: SheetPart) => !!plan.sheet.hide?.includes(part)
+
 // Dimensions generated from the model: each new opening (width and position)
 // and each demolished wall (length), so the changes are always measured. One that
 // a drawn dimension already gives (same span, either direction) is left out: the
 // drawn one is the person's, and the same figure twice is noise.
 function autoDimensions(plan: Plan, view: View, L: SheetLayout): string {
-  if (view !== 'efter') return ''
+  if (view !== 'efter' || hidden(plan, 'autoDims')) return ''
   const P = L.toPaper
   const candidates: Array<{ a: Pt; b: Pt; label: string }> = []
   for (const o of plan.openings) {
-    if (o.phase !== 'new') continue
+    if (o.phase !== 'new' || o.noAutoDim) continue
     const w = plan.walls.find((x) => x.id === o.wallId)
     if (!w) continue
     const n = leftNormal(wallDir(w))
@@ -574,7 +577,7 @@ function renderRooms(plan: Plan, view: View, L: SheetLayout): string {
       const w = room ? room.w * L.k - ROOM_PAD : Infinity
       const h = room ? room.h * L.k - ROOM_PAD : Infinity
       const size = Math.max(T, Math.min(NAME, w / (name.length * 0.6)))
-      const area = areas.get(r.id)
+      const area = r.noArea || hidden(plan, 'roomAreas') ? undefined : areas.get(r.id)
       const more = includes.get(r.id)
       const labels = area === undefined ? [] : more ? [`${fmtArea(area)} inkl. ${more.join(', ')}`, fmtArea(area)] : [fmtArea(area)]
       const label = size + 0.6 + T <= h ? labels.find((l) => l.length * T * 0.55 <= w) : undefined
@@ -734,9 +737,9 @@ export function renderSheet(plan: Plan, view: View, opts: RenderOptions = {}): s
   body.push(`<g data-testid="plan-rooms">${renderRooms(plan, view, L)}</g>`)
   body.push(`<g data-testid="dims">${renderDimensions(plan, view, L)}${autoDimensions(plan, view, L)}</g>`)
   body.push(renderNotes(plan, view, L))
-  body.push(northArrow(plan, L))
-  body.push(scaleBar(plan, L))
-  body.push(legend(view, L, plan))
+  if (!hidden(plan, 'northArrow')) body.push(northArrow(plan, L))
+  if (!hidden(plan, 'scaleBar')) body.push(scaleBar(plan, L))
+  if (!hidden(plan, 'legend')) body.push(legend(view, L, plan))
   body.push(titleBlock(plan, view, L))
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${f(L.paperW)}mm" height="${f(L.paperH)}mm" viewBox="0 0 ${f(L.paperW)} ${f(L.paperH)}" data-view="${view}" data-scale="${plan.sheet.scale}">` +

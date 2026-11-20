@@ -21,7 +21,7 @@ export async function traceTile(tile: string, method: string, opts: { run?: numb
   const img = await fullImage()
   const bits = { w: img.w, h: img.h, d: new Uint8Array(img.w * img.h), x0: 0, y0: 0 }
   for (let i = 0; i < bits.d.length; i++) bits.d[i] = img.data[i] < 128 ? 1 : 0
-  let ink = bits.d
+  let ink: Uint8Array = bits.d
   if (method === 'runs') ink = clean(bits, opts.run ?? 400, opts.gap ?? 2)
   if (method === 'solid') ink = solidLayer(bits, opts.thick ?? 40, opts.len ?? 340)
   const g = { w: img.w, h: img.h, data: new Uint8Array(img.w * img.h) }

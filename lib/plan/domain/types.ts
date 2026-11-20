@@ -59,6 +59,7 @@ export type Opening = {
   inset?: number             // door: the leaf hangs this far (mm) in from the face it swings to; default 0 (at the face). In a thick wall the frame sits further in, so the leaf reaches less far into the room.
   through?: boolean          // an open passage: no wall, door or frame in this stretch, so the rooms either side are one space
   beam?: string              // a documented beam carrying the wall above, e.g. "INP 22 (K-ritning 1936)"
+  noAutoDim?: boolean        // a new opening's width and position are dimensioned automatically; true leaves both out
   evidence?: Evidence[]      // the drawings that show it, and how it was read
 }
 
@@ -101,6 +102,7 @@ export type Room = {
   at: Pt                     // label position
   apartment?: string
   polygon?: Pt[]             // optional outline, used for area
+  noArea?: boolean           // the area under the name is computed and printed automatically; true leaves it out
 }
 
 export type Dimension = {
@@ -134,12 +136,17 @@ export type TitleBlock = {
 // 1:50 and 1:100 for permit drawings; 1:150 and 1:200 fit a whole floor on one sheet.
 export type SheetScale = 50 | 100 | 150 | 200
 
+export type SheetPart = 'autoDims' | 'roomAreas' | 'legend' | 'northArrow' | 'scaleBar'
+
 export type Sheet = {
   paper: 'A4' | 'A3'
   orientation: 'landscape' | 'portrait'
   scale: SheetScale
   northAngle: number         // degrees clockwise from sheet up
   doorSwings?: boolean       // false: doors drawn as a closed leaf, no swing arc (overview sheets); default true
+  // Automatic parts of the sheet to leave out, on every sheet: "autoDims" (the dimensions of new openings and
+  // demolished walls), "roomAreas" (areas under room names), "legend", "northArrow", "scaleBar". Default: none.
+  hide?: SheetPart[]
   titleBlock: TitleBlock
 }
 
